@@ -6,9 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   CHARACTER_BIBLE,
   analyzeTikTokUrl,
-  createKlingVideoTask,
   generateScriptFromPrompt,
-  getKlingVideoStatus,
   synthesizeSpeechStateless
 } from "./lib/maou-engine.js";
 
@@ -78,50 +76,8 @@ const server = http.createServer(async (req, res) => {
         elevenlabsVoiceId: process.env.ELEVENLABS_VOICE_ID || CHARACTER_BIBLE.defaultVoiceId,
         hasElevenlabsEnvKey: Boolean(process.env.ELEVENLABS_API_KEY),
         hasGeminiEnvKey: Boolean(process.env.GEMINI_API_KEY),
-        hasKlingEnvKey: Boolean(process.env.KLING_API_KEY),
         character: CHARACTER_BIBLE
       });
-    }
-
-    if (pathname === "/api/kling-create" && req.method === "POST") {
-      const body = await readJsonBody(req);
-      const result = await createKlingVideoTask({
-        prompt: body?.prompt || "",
-        klingApiKey: body?.klingApiKey || "",
-        type: body?.type || "text2video",
-        imageBase64: body?.imageBase64 || "",
-        modelName: body?.modelName || "kling-v2-6",
-        duration: body?.duration || "5",
-        aspectRatio: body?.aspectRatio || "9:16",
-        mode: body?.mode || "std"
-      });
-      return sendJson(res, 200, result);
-    }
-
-    if (pathname === "/api/kling-status" && req.method === "POST") {
-      const body = await readJsonBody(req);
-      if (!body?.taskId) return sendJson(res, 400, { error: "taskId diperlukan." });
-      const result = await getKlingVideoStatus({
-        taskId: body.taskId,
-        type: body.type || "text2video",
-        klingApiKey: body.klingApiKey || ""
-      });
-      return sendJson(res, 200, result);
-    }
-
-    if (pathname === "/api/kling-proxy" && req.method === "GET") {
-      const targetUrl = parsedUrl.searchParams.get("url") || "";
-      if (!targetUrl.startsWith("https://")) {
-        return sendJson(res, 400, { error: "URL video tidak valid." });
-      }
-      const upstream = await fetch(targetUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
-      if (!upstream.ok) return sendJson(res, 502, { error: `HTTP ${upstream.status}` });
-      const buf = Buffer.from(await upstream.arrayBuffer());
-      res.writeHead(200, {
-        "Content-Type": upstream.headers.get("content-type") || "video/mp4",
-        "Access-Control-Allow-Origin": "*"
-      });
-      return res.end(buf);
     }
 
     if (pathname === "/api/analyze-tiktok" && req.method === "POST") {

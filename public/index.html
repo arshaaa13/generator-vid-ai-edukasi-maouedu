@@ -121,7 +121,7 @@
       </div>
 
       <div class="card">
-        <label class="field-label">🎛️ Pengaturan Animasi Kling 3D & Audio</label>
+        <label class="field-label">🎛️ Pengaturan Animasi & Audio</label>
         <div class="toggle-list">
           <label class="toggle-item">
             <input type="checkbox" id="toggleMcOverlay" checked />
@@ -139,19 +139,9 @@
             <input type="checkbox" id="toggleBgm" checked />
             <span>Musik Latar Santai</span>
           </label>
-          <label class="toggle-item">
-            <input type="checkbox" id="toggleAutoKling" />
-            <span>🎥 Auto-Render Semua Scene ke <strong>Kling AI 3D</strong> saat buat video</span>
-          </label>
         </div>
 
         <div class="action-stack">
-          <button class="btn btn-crimson btn-full" id="generateAllKlingBtn">
-            🎥 Generate Semua Klip 3D (Kling AI)
-          </button>
-          <button class="btn btn-secondary btn-full" id="animateMcKlingBtn">
-            ✨ Animasiin Host MC 2D (Kling Image-to-Video)
-          </button>
           <button class="btn btn-gold btn-full" id="exportVideoBtn">
             ⬇️ Render & Download Video (9:16)
           </button>
@@ -233,14 +223,6 @@
           <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy..." />
           <small class="field-hint">
             Jika tidak diisi (atau limit), sistem otomatis memakai <strong>Riset Wikipedia ID + AI Gratis</strong> agar tetap jalan di Vercel.
-          </small>
-        </div>
-
-        <div class="field-group">
-          <label class="field-label">🎥 Kling AI API Key (Untuk Render Video 3D Asli & Animasi MC)</label>
-          <input type="password" id="klingApiKeyInput" placeholder="api-key-kling-..." />
-          <small class="field-hint">
-            Bisa diisi di sini (tersimpan lokal di browser) atau dipasang sebagai <code>KLING_API_KEY</code> (Secret) di Vercel Environment Variables.
           </small>
         </div>
       </div>

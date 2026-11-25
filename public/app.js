@@ -66,9 +66,6 @@ const toggleMcOverlay = document.getElementById("toggleMcOverlay");
 const toggleYellowSubtitles = document.getElementById("toggleYellowSubtitles");
 const toggleSfx = document.getElementById("toggleSfx");
 const toggleBgm = document.getElementById("toggleBgm");
-const toggleAutoKling = document.getElementById("toggleAutoKling");
-const generateAllKlingBtn = document.getElementById("generateAllKlingBtn");
-const animateMcKlingBtn = document.getElementById("animateMcKlingBtn");
 
 // Local browser settings (never sent to GitHub)
 function getLocalKeys() {
@@ -76,8 +73,7 @@ function getLocalKeys() {
     elevenlabsVoiceId:
       localStorage.getItem("maou_el_voice") || serverConfig.elevenlabsVoiceId || "cPoqAvGWCPfCfyPMwe4z",
     elevenlabsApiKey: localStorage.getItem("maou_el_key") || "",
-    geminiApiKey: localStorage.getItem("maou_gemini_key") || "",
-    klingApiKey: localStorage.getItem("maou_kling_key") || ""
+    geminiApiKey: localStorage.getItem("maou_gemini_key") || ""
   };
 }
 
@@ -323,10 +319,6 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
     autoBuildVideoBtn.textContent = "✨ Buat Video Otomatis";
     autoBuildVideoBtn.disabled = false;
 
-    if (toggleAutoKling?.checked) {
-      generateAllKlingClips();
-    }
-
     if (autoPlayAfter) {
       playFullVideo();
     }
@@ -385,11 +377,7 @@ function renderSceneList() {
     card.className = `scene-card ${index === activeSceneIndex ? "active" : ""}`;
     const hasAudio = sceneAudioBuffers.has(index);
     const clipInfo = sceneVideoClips.get(index);
-    const clipBadge = clipInfo?.videoEl
-      ? "🎥 Klip 3D Siap"
-      : clipInfo?.status === "processing"
-      ? "⏳ Render Kling..."
-      : "";
+    const clipBadge = clipInfo?.videoEl ? "🎥 Klip MP4 Siap" : "";
 
     card.innerHTML = `
       <div class="scene-card-top">
@@ -417,16 +405,12 @@ function renderSceneList() {
           ${hasAudio ? "✅ Suara Siap" : "⚪ Belum direkam"}
         </span>
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
-          <button class="btn btn-crimson btn-sm kling-scene-btn" data-idx="${index}" title="Render video 3D scene ini dengan Kling AI">🎥 Kling 3D</button>
           <label class="btn btn-secondary btn-sm" style="cursor:pointer;" title="Upload klip MP4 sendiri">
             📁 MP4
             <input type="file" accept="video/mp4,video/webm" class="upload-scene-mp4 hidden" data-idx="${index}" />
           </label>
           <button class="btn btn-secondary btn-sm play-single-btn" data-idx="${index}">🔊 Tes</button>
         </div>
-      </div>
-      <div class="audio-status" id="klingStatus_${index}" style="margin-top:2px;">
-        ${clipInfo?.message || ""}
       </div>
     `;
 
@@ -480,14 +464,6 @@ function renderSceneList() {
     });
   });
 
-  document.querySelectorAll(".kling-scene-btn").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const idx = Number(btn.dataset.idx);
-      await generateKlingClipForScene(idx);
-    });
-  });
-
   document.querySelectorAll(".upload-scene-mp4").forEach((inp) => {
     inp.addEventListener("change", async (e) => {
       const idx = Number(e.target.dataset.idx);
@@ -509,7 +485,7 @@ function renderSceneList() {
 }
 
 // ============================================================================
-// KLING AI 3D VIDEO GENERATION & MC IMAGE-TO-VIDEO ENGINE
+// LOCAL MP4 CLIP HELPER
 // ============================================================================
 function loadVideoElement(srcUrl) {
   return new Promise((resolve, reject) => {
@@ -537,162 +513,6 @@ function drawCoverVideo(ctx, videoEl, x, y, w, h) {
   const dx = x + (w - dw) / 2;
   const dy = y + (h - dh) / 2;
   ctx.drawImage(videoEl, dx, dy, dw, dh);
-}
-
-async function pollKlingTask(taskId, type, klingApiKey, onProgress) {
-  const maxAttempts = 60; // up to ~5 minutes
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    await new Promise((r) => setTimeout(r, 5000));
-    const resp = await fetch("/api/kling-status", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskId, type, klingApiKey })
-    });
-    const data = await resp.json();
-    if (!resp.ok || data.error) throw new Error(data.error || "Gagal cek status Kling AI.");
-    if (onProgress) onProgress(data.status, attempt * 5);
-
-    if (data.status === "succeed" && data.proxiedVideoUrl) {
-      return data;
-    }
-    if (data.status === "failed") {
-      throw new Error(data.statusMsg || "Render Kling AI gagal.");
-    }
-  }
-  throw new Error("Waktu tunggu render Kling AI habis (timeout).");
-}
-
-async function generateKlingClipForScene(index) {
-  if (!currentScript?.scenes?.[index]) return;
-  const scene = currentScript.scenes[index];
-  const keys = getLocalKeys();
-  const statusEl = document.getElementById(`klingStatus_${index}`);
-
-  const setSceneKlingMsg = (msg, status = "processing") => {
-    const prev = sceneVideoClips.get(index) || {};
-    sceneVideoClips.set(index, { ...prev, status, message: msg });
-    if (statusEl) statusEl.textContent = msg;
-  };
-
-  setSceneKlingMsg("⏳ Mengirim scene ke Kling AI 3D...", "processing");
-
-  try {
-    const createResp = await fetch("/api/kling-create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: scene.klingPrompt || `${currentScript.topic} - ${scene.componentLabel}`,
-        klingApiKey: keys.klingApiKey,
-        type: "text2video",
-        duration: "5",
-        aspectRatio: "9:16",
-        mode: "std"
-      })
-    });
-    const createData = await createResp.json();
-    if (!createResp.ok || createData.error) {
-      throw new Error(createData.error || "Gagal membuat tugas Kling AI.");
-    }
-
-    setSceneKlingMsg(
-      `⏳ Kling AI (${createData.modelUsed}) sedang merender video 3D... (0s)`,
-      "processing"
-    );
-
-    const finished = await pollKlingTask(
-      createData.taskId,
-      "text2video",
-      keys.klingApiKey,
-      (st, sec) => {
-        setSceneKlingMsg(
-          `⏳ Kling AI (${createData.modelUsed}): ${st} (${sec} detik)...`,
-          "processing"
-        );
-      }
-    );
-
-    const videoEl = await loadVideoElement(finished.proxiedVideoUrl);
-    sceneVideoClips.set(index, {
-      videoEl,
-      url: finished.proxiedVideoUrl,
-      rawUrl: finished.videoUrl,
-      taskId: createData.taskId,
-      status: "succeed",
-      message: `✅ Klip 3D Kling AI (${createData.modelUsed}) Siap!`
-    });
-    activeSceneIndex = index;
-    renderSceneList();
-    updateActiveSceneUI();
-  } catch (e) {
-    setSceneKlingMsg(`❌ Kling Error: ${e.message}`, "failed");
-  }
-}
-
-async function generateAllKlingClips() {
-  if (!currentScript?.scenes?.length) return;
-  generateAllKlingBtn.disabled = true;
-  generateAllKlingBtn.textContent = "⏳ Merender Klip 3D di Kling AI...";
-  try {
-    // Run 2 at a time to stay friendly with Kling API concurrency limits
-    for (let i = 0; i < currentScript.scenes.length; i += 2) {
-      const batch = [generateKlingClipForScene(i)];
-      if (i + 1 < currentScript.scenes.length) {
-        batch.push(generateKlingClipForScene(i + 1));
-      }
-      await Promise.all(batch);
-    }
-  } finally {
-    generateAllKlingBtn.disabled = false;
-    generateAllKlingBtn.textContent = "🎥 Generate Semua Klip 3D (Kling AI)";
-  }
-}
-
-async function animateMcWithKling() {
-  animateMcKlingBtn.disabled = true;
-  animateMcKlingBtn.textContent = "⏳ Mengirim MC Raja Iblis ke Kling...";
-  try {
-    const keys = getLocalKeys();
-    const imgResp = await fetch("/assets/mc_default.jpg");
-    const blob = await imgResp.blob();
-    const base64 = await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(String(reader.result || ""));
-      reader.readAsDataURL(blob);
-    });
-
-    const createResp = await fetch("/api/kling-create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "image2video",
-        imageBase64: base64,
-        klingApiKey: keys.klingApiKey,
-        duration: "5",
-        mode: "std"
-      })
-    });
-    const createData = await createResp.json();
-    if (!createResp.ok || createData.error) {
-      throw new Error(createData.error || "Gagal mengirim MC ke Kling AI.");
-    }
-
-    const finished = await pollKlingTask(
-      createData.taskId,
-      "image2video",
-      keys.klingApiKey,
-      (st, sec) => {
-        animateMcKlingBtn.textContent = `⏳ Animasi MC di Kling (${sec}s)...`;
-      }
-    );
-
-    mcAnimatedVideo = await loadVideoElement(finished.proxiedVideoUrl);
-    animateMcKlingBtn.textContent = "✅ Host MC 2D Anime Bergerak (Kling)!";
-  } catch (e) {
-    alert("Kling Image-to-Video MC error: " + e.message);
-    animateMcKlingBtn.textContent = "✨ Animasiin Host MC 2D (Kling Image-to-Video)";
-  } finally {
-    animateMcKlingBtn.disabled = false;
-  }
 }
 
 function updateActiveSceneUI() {
@@ -1364,7 +1184,7 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
   drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 18);
   ctx.clip();
 
-  // Draw Kling-animated MC Raja Iblis anime video if available, else Live2D-animated portrait!
+  // Draw animated MC video if uploaded, else Live2D-animated portrait
   if (mcAnimatedVideo && mcAnimatedVideo.readyState >= 2) {
     drawCoverVideo(ctx, mcAnimatedVideo, cardX, cardY, cardW, cardH);
   } else {
@@ -1640,7 +1460,7 @@ function startRenderLoop() {
     if (currentScript?.scenes?.length) {
       const scene = currentScript.scenes[activeSceneIndex] || currentScript.scenes[0];
 
-      // 1. Play REAL Kling AI 3D MP4 video if rendered (or uploaded), else lively 2.5D Toon Preview!
+      // 1. Play uploaded MP4 clip if attached, else lively 2.5D Toon animation
       const clip = sceneVideoClips.get(activeSceneIndex);
       if (clip?.videoEl && clip.videoEl.readyState >= 2) {
         drawCoverVideo(ctx, clip.videoEl, 0, 0, canvas.width, canvas.height);
@@ -1763,14 +1583,12 @@ async function initStudio() {
     document.getElementById("elevenlabsVoiceIdInput").value = keys.elevenlabsVoiceId;
     document.getElementById("elevenlabsApiKeyInput").value = keys.elevenlabsApiKey;
     document.getElementById("geminiApiKeyInput").value = keys.geminiApiKey;
-    document.getElementById("klingApiKeyInput").value = keys.klingApiKey;
 
     const hasEl = serverConfig.hasElevenlabsEnvKey || Boolean(keys.elevenlabsApiKey);
-    const hasKling = serverConfig.hasKlingEnvKey || Boolean(keys.klingApiKey);
     document.getElementById("voiceStatusDot").classList.toggle("active-el", hasEl);
     document.getElementById("voiceStatusLabel").textContent = hasEl
-      ? `ElevenLabs + ${hasKling ? "Kling 3D Siap" : "2.5D Toon Siap"}`
-      : `Suara Cowok + ${hasKling ? "Kling 3D Siap" : "2.5D Toon Siap"}`;
+      ? `ElevenLabs Active (${keys.elevenlabsVoiceId})`
+      : `Suara Cowok Bariton Siap (${keys.elevenlabsVoiceId})`;
   } catch {}
 
   startRenderLoop();
@@ -1882,8 +1700,6 @@ addSceneBtn.addEventListener("click", () => {
 });
 
 exportVideoBtn.addEventListener("click", exportFullVideo);
-generateAllKlingBtn.addEventListener("click", generateAllKlingClips);
-animateMcKlingBtn.addEventListener("click", animateMcWithKling);
 
 // Modals
 const settingsModal = document.getElementById("settingsModal");
@@ -1910,19 +1726,16 @@ document.getElementById("saveSettingsBtn").addEventListener("click", () => {
   const voiceId = document.getElementById("elevenlabsVoiceIdInput").value.trim() || "cPoqAvGWCPfCfyPMwe4z";
   const elKey = document.getElementById("elevenlabsApiKeyInput").value.trim();
   const gemKey = document.getElementById("geminiApiKeyInput").value.trim();
-  const klingKey = document.getElementById("klingApiKeyInput").value.trim();
 
   localStorage.setItem("maou_el_voice", voiceId);
   localStorage.setItem("maou_el_key", elKey);
   localStorage.setItem("maou_gemini_key", gemKey);
-  localStorage.setItem("maou_kling_key", klingKey);
 
   const hasEl = serverConfig.hasElevenlabsEnvKey || Boolean(elKey);
-  const hasKling = serverConfig.hasKlingEnvKey || Boolean(klingKey);
   document.getElementById("voiceStatusDot").classList.toggle("active-el", hasEl);
   document.getElementById("voiceStatusLabel").textContent = hasEl
-    ? `ElevenLabs + ${hasKling ? "Kling 3D Siap" : "2.5D Toon Siap"}`
-    : `Suara Cowok + ${hasKling ? "Kling 3D Siap" : "2.5D Toon Siap"}`;
+    ? `ElevenLabs Active (${voiceId})`
+    : `Suara Cowok Bariton Siap (${voiceId})`;
 
   sceneAudioBuffers.clear();
   settingsModal.classList.add("hidden");
