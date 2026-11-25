@@ -491,11 +491,20 @@ async function ensureSceneAudio(index) {
     };
     sceneAudioBuffers.set(index, entry);
     if (st) {
-      st.textContent =
-        data.provider === "elevenlabs"
-          ? `✅ ElevenLabs (${data.voiceId})`
-          : "✅ Suara Cowok Bariton Siap";
-      st.classList.add("ready");
+      if (data.provider === "elevenlabs") {
+        st.textContent = `✅ ElevenLabs (${data.voiceId})`;
+        st.classList.add("ready");
+      } else if (data.elevenlabsError) {
+        st.textContent = `⚠️ ElevenLabs Error (pakai fallback): ${data.elevenlabsError.slice(0, 55)}`;
+        st.classList.remove("ready");
+      } else {
+        st.textContent = "✅ Suara Cowok Bariton Siap";
+        st.classList.add("ready");
+      }
+    }
+    if (data.elevenlabsError) {
+      const lbl = document.getElementById("voiceStatusLabel");
+      if (lbl) lbl.textContent = `ElevenLabs Error: cek izin/kuota API key`;
     }
     return entry;
   }
