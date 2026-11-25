@@ -6,6 +6,7 @@ export async function GET() {
       elevenlabsVoiceId: process.env.ELEVENLABS_VOICE_ID || CHARACTER_BIBLE.defaultVoiceId,
       hasElevenlabsEnvKey: Boolean(process.env.ELEVENLABS_API_KEY),
       hasGeminiEnvKey: Boolean(process.env.GEMINI_API_KEY),
+      hasKlingEnvKey: Boolean(process.env.KLING_API_KEY),
       character: CHARACTER_BIBLE
     });
   } catch (error) {
