@@ -13,6 +13,8 @@ let currentScript = null;
 let activeSceneIndex = 0;
 let activePhraseIndex = 0;
 let isPlaying = false;
+let stage3d = null;
+let stage3dReady = false;
 let audioCtx = null;
 let analyserNode = null;
 let analyserData = null;
@@ -58,6 +60,7 @@ const nextSceneBtn = document.getElementById("nextSceneBtn");
 const addSceneBtn = document.getElementById("addSceneBtn");
 
 // Toggles
+const toggle3dMode = document.getElementById("toggle3dMode");
 const toggleMcOverlay = document.getElementById("toggleMcOverlay");
 const toggleYellowSubtitles = document.getElementById("toggleYellowSubtitles");
 const toggleSfx = document.getElementById("toggleSfx");
@@ -1242,7 +1245,7 @@ function drawSelamatStamp(ctx, scene, tSec) {
   const W = canvas.width;
 
   ctx.save();
-  ctx.translate(W / 2, 102);
+  ctx.translate(W / 2, 152);
   ctx.rotate(-0.08);
   const scale = 1 + Math.sin(tSec * 5) * 0.03;
   ctx.scale(scale, scale);
@@ -1377,16 +1380,77 @@ function drawTopVideoHeader(ctx, scene) {
   ctx.restore();
 }
 
+function draw3dCalloutBadge(ctx, scene) {
+  if (!scene.componentLabel) return;
+  const W = canvas.width;
+  const tagText = `●  ${scene.componentLabel.toUpperCase()}`;
+  ctx.save();
+  ctx.font = "800 13.5px 'Plus Jakarta Sans', sans-serif";
+  const tw = Math.min(W - 44, ctx.measureText(tagText).width + 28);
+  const tx = (W - tw) / 2;
+  const ty = 72;
+
+  drawRoundedRect(ctx, tx, ty, tw, 34, 10);
+  ctx.fillStyle = scene.phase === "TAPI" ? "#e11d48" : scene.phase === "CLIMAX" ? "#10b981" : "#f59e0b";
+  ctx.fill();
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = "#090a0f";
+  ctx.stroke();
+
+  ctx.fillStyle = scene.phase === "TAPI" ? "#ffffff" : "#090a0f";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(tagText, W / 2, ty + 17, tw - 16);
+  ctx.restore();
+}
+
+function init3dEngine() {
+  import("/scene3d.js")
+    .then(({ Maou3DStage }) => {
+      stage3d = new Maou3DStage(canvas.width, canvas.height);
+      stage3dReady = true;
+    })
+    .catch((err) => {
+      console.warn("3D WebGL engine unavailable, using 2D fallback:", err);
+      stage3dReady = false;
+    });
+}
+
 function startRenderLoop() {
+  init3dEngine();
+
   function frame(now) {
     const tSec = now / 1000;
     if (currentScript?.scenes?.length) {
       const scene = currentScript.scenes[activeSceneIndex] || currentScript.scenes[0];
-      drawEducationalDiagramStage(ctx, scene, tSec);
-      drawTopVideoHeader(ctx, scene);
-      drawSelamatStamp(ctx, scene, tSec);
-      drawMcRajaIblisPresenter(ctx, scene, tSec);
-      drawUntabiruSubtitles(ctx, scene);
+      const use3d = Boolean(toggle3dMode?.checked && stage3dReady && stage3d);
+
+      if (use3d) {
+        const voice = getLiveVoiceEnergy();
+        if (stage3d.mc?.root) {
+          stage3d.mc.root.visible = Boolean(toggleMcOverlay.checked);
+        }
+        stage3d.renderFrame(scene, currentScript.topic || "", tSec, voice, isPlaying);
+        ctx.drawImage(stage3d.domElement, 0, 0, canvas.width, canvas.height);
+
+        // Soft bottom cinematic gradient for crisp @untabiru5 yellow-box subtitle contrast
+        const subGrad = ctx.createLinearGradient(0, canvas.height - 230, 0, canvas.height);
+        subGrad.addColorStop(0, "rgba(9, 10, 15, 0)");
+        subGrad.addColorStop(1, "rgba(9, 10, 15, 0.84)");
+        ctx.fillStyle = subGrad;
+        ctx.fillRect(0, canvas.height - 230, canvas.width, 230);
+
+        drawTopVideoHeader(ctx, scene);
+        draw3dCalloutBadge(ctx, scene);
+        drawSelamatStamp(ctx, scene, tSec);
+        drawUntabiruSubtitles(ctx, scene);
+      } else {
+        drawEducationalDiagramStage(ctx, scene, tSec);
+        drawTopVideoHeader(ctx, scene);
+        drawSelamatStamp(ctx, scene, tSec);
+        drawMcRajaIblisPresenter(ctx, scene, tSec);
+        drawUntabiruSubtitles(ctx, scene);
+      }
     }
     requestAnimationFrame(frame);
   }
