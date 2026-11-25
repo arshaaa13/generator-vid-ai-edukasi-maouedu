@@ -377,11 +377,15 @@ function renderSceneList() {
     card.className = `scene-card ${index === activeSceneIndex ? "active" : ""}`;
     const hasAudio = sceneAudioBuffers.has(index);
     const clipInfo = sceneVideoClips.get(index);
-    const clipBadge = clipInfo?.videoEl ? "🎥 Klip MP4 Siap" : "";
+    const animBadge =
+      scene.visual?.useCustomStage && scene.visual?.stageParts?.length
+        ? `🎨 2.5D Gemini (${scene.visual.stageParts.length} objek)`
+        : "";
+    const clipBadge = clipInfo?.videoEl ? "🎥 Klip MP4 Siap" : animBadge;
 
     card.innerHTML = `
       <div class="scene-card-top">
-        <span class="scene-num">SCENE #${index + 1} ${clipBadge ? `<span style="color:#6ee7b7;margin-left:6px;">${clipBadge}</span>` : ""}</span>
+        <span class="scene-num">SCENE #${index + 1} ${clipBadge ? `<span style="color:#6ee7b7;margin-left:6px;font-weight:700;">${clipBadge}</span>` : ""}</span>
         <span class="phase-badge phase-${scene.phase}">${scene.phase}</span>
       </div>
       <div class="scene-controls-row">

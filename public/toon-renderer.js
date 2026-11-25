@@ -303,6 +303,8 @@ function drawCartoonHuman(ctx, x, y, action, setting, tool, t) {
   ctx.save();
   const isPanic = action === "panic";
   const isCelebrate = action === "celebrate";
+  const isHeat = action === "heat";
+  const isInspect = action === "inspect";
   const bounce = isPanic
     ? Math.abs(Math.sin(t * 14)) * -10
     : isCelebrate
@@ -365,11 +367,34 @@ function drawCartoonHuman(ctx, x, y, action, setting, tool, t) {
     // Cute round hand
     drawOutlinedCircle(ctx, 0, 56, 13, "#f1c29b", INK, 3);
 
-    // Optional Handheld Prop (Spoon / Salt Shaker / Whisk / Wrench / Bucket)
-    if (holdTool && tool && tool !== "none") {
+    // Optional Handheld Prop (Torch / Magnifier / Pour / Whisk / Wrench)
+    if (holdTool && (isHeat || isInspect || (tool && tool !== "none"))) {
       ctx.save();
       ctx.translate(0, 58);
-      if (tool === "milk_sugar" || tool === "salt_ice") {
+      if (isHeat || tool === "fire_heat") {
+        // Handheld Mini Blowtorch with Animated Flame!
+        rr(ctx, -7, 0, 14, 30, 5);
+        ctx.fillStyle = "#475569";
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-6, 30);
+        ctx.lineTo(0, 52 + Math.sin(t * 28) * 6);
+        ctx.lineTo(6, 30);
+        ctx.closePath();
+        ctx.fillStyle = "#f97316";
+        ctx.fill();
+        ctx.stroke();
+      } else if (isInspect) {
+        // Magnifying Glass!
+        ctx.strokeStyle = "#475569";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, 24);
+        ctx.stroke();
+        drawOutlinedCircle(ctx, 0, 40, 16, "rgba(186, 230, 253, 0.85)", INK, 3);
+      } else if (tool === "milk_sugar" || tool === "salt_ice" || action === "pour") {
         // Pouring Carton / Salt Shaker
         ctx.rotate(0.65);
         rr(ctx, -14, -22, 28, 38, 6);
@@ -378,7 +403,7 @@ function drawCartoonHuman(ctx, x, y, action, setting, tool, t) {
         ctx.stroke();
         ctx.fillStyle = tool === "salt_ice" ? "#ffffff" : "#2563eb";
         ctx.fillRect(-12, -8, 24, 12);
-      } else if (tool === "whisk_mixer" || tool === "spoon") {
+      } else if (tool === "whisk_mixer" || tool === "spoon" || action === "stir") {
         ctx.strokeStyle = "#64748b";
         ctx.lineWidth = 4;
         ctx.beginPath();
@@ -403,6 +428,9 @@ function drawCartoonHuman(ctx, x, y, action, setting, tool, t) {
   } else if (isCelebrate) {
     drawArm(-1, 2.65 + Math.sin(t * 9) * 0.15, false);
     drawArm(1, -2.65 - Math.sin(t * 9) * 0.15, false);
+  } else if (isInspect) {
+    drawArm(-1, 0.45 + armWave * 0.15, false);
+    drawArm(1, -1.05 + Math.sin(t * 3.5) * 0.25, true);
   } else {
     drawArm(-1, 0.55 + armWave * 0.2, false);
     drawArm(1, -0.75 + armWave * 0.35, true);
@@ -1159,6 +1187,497 @@ function drawUniversalHandsOnProps(ctx, cx, cy, visual, phase, t) {
 }
 
 // ============================================================================
+// 3B. GEMINI-AUTHORED 2.5D VECTOR CHOREOGRAPHY COMPILER (ANY TOPIC!)
+// ============================================================================
+function getPartAnchor(part) {
+  if (part.kind === "arrow") {
+    return { ox: (part.x1 + part.x2) / 2, oy: (part.y1 + part.y2) / 2 };
+  }
+  if (part.kind === "poly" && Array.isArray(part.points) && part.points.length) {
+    let sx = 0;
+    let sy = 0;
+    for (const pt of part.points) {
+      sx += pt[0];
+      sy += pt[1];
+    }
+    return { ox: sx / part.points.length, oy: sy / part.points.length };
+  }
+  return { ox: part.x || 0, oy: part.y || 0 };
+}
+
+function drawVectorPart(ctx, cx, cy, part, phase, t, idx) {
+  const { ox, oy } = getPartAnchor(part);
+  const motion = part.motion || "none";
+  const strokeColor = part.stroke || INK;
+
+  ctx.save();
+  ctx.translate(cx + ox, cy + oy);
+
+  if (motion === "float") {
+    ctx.translate(0, Math.sin(t * 3 + idx) * 6);
+  } else if (motion === "pulse") {
+    const s = 1 + Math.sin(t * 4.5 + idx) * 0.065;
+    ctx.scale(s, s);
+  } else if (motion === "spin") {
+    ctx.rotate(t * (part.speed || 3));
+  } else if (motion === "spin_reverse") {
+    ctx.rotate(-t * Math.abs(part.speed || 3));
+  } else if (motion === "shake") {
+    ctx.translate(Math.sin(t * 46 + idx) * 5, Math.cos(t * 38 + idx) * 2.5);
+  } else if (motion === "slide_x") {
+    ctx.translate(Math.sin(t * 3.5 + idx) * 18, 0);
+  } else if (motion === "slide_y") {
+    ctx.translate(0, Math.sin(t * 3.5 + idx) * 14);
+  } else if (motion === "rise") {
+    ctx.translate(0, -((t * 48 + idx * 13) % 52));
+  } else if (motion === "drip") {
+    ctx.translate(0, (t * 72 + idx * 17) % 52);
+  } else if (motion === "tilt") {
+    ctx.rotate(Math.sin(t * 3.2 + idx) * 0.24);
+  }
+
+  ctx.translate(-ox, -oy);
+
+  if (part.kind === "roundRect") {
+    const w = part.w || 120;
+    const h = part.h || 80;
+    const r = Math.min(part.r ?? 12, w / 2, h / 2);
+    rr(ctx, ox - w / 2, oy - h / 2, w, h, r);
+    ctx.fillStyle = part.glass ? "rgba(186, 230, 253, 0.36)" : part.fill || "#f8fafc";
+    ctx.fill();
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = strokeColor;
+    ctx.stroke();
+
+    if (part.glass) {
+      ctx.strokeStyle = "rgba(255,255,255,0.65)";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(ox - w / 2 + 12, oy - h / 2 + 26);
+      ctx.lineTo(ox - w / 2 + 28, oy - h / 2 + 10);
+      ctx.stroke();
+    } else if (w > 40 && h > 22) {
+      ctx.strokeStyle = "rgba(255,255,255,0.32)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(ox - w / 2 + 10, oy - h / 2 + 7);
+      ctx.lineTo(ox + w / 2 - 14, oy - h / 2 + 7);
+      ctx.stroke();
+    }
+
+    if (part.label) {
+      ctx.fillStyle = INK;
+      ctx.font = "800 12px 'Plus Jakarta Sans', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(part.label, ox, oy, w - 12);
+    }
+  } else if (part.kind === "liquid") {
+    const w = part.w || 110;
+    const h = part.h || 70;
+    const r = Math.min(part.r ?? 10, w / 2, h / 2);
+    const waveSpeed = part.waveSpeed || 4;
+    const topY = oy - h / 2;
+    const botY = oy + h / 2;
+    const leftX = ox - w / 2;
+    const rightX = ox + w / 2;
+
+    ctx.save();
+    rr(ctx, leftX, topY - 4, w, h + 4, r);
+    ctx.clip();
+
+    ctx.beginPath();
+    ctx.moveTo(leftX, botY);
+    for (let x = 0; x <= w; x += 10) {
+      ctx.lineTo(leftX + x, topY + 6 + Math.sin(t * waveSpeed + x * 0.08 + idx) * 4);
+    }
+    ctx.lineTo(rightX, botY);
+    ctx.closePath();
+    ctx.fillStyle = part.fill || "#38bdf8";
+    ctx.fill();
+
+    // Bright surface highlight wave
+    ctx.beginPath();
+    for (let x = 0; x <= w; x += 10) {
+      const wy = topY + 6 + Math.sin(t * waveSpeed + x * 0.08 + idx) * 4;
+      if (x === 0) ctx.moveTo(leftX + x, wy);
+      else ctx.lineTo(leftX + x, wy);
+    }
+    ctx.strokeStyle = "rgba(255,255,255,0.72)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Subtle rising bubbles inside liquid
+    for (let b = 0; b < 4; b++) {
+      const bx = leftX + 16 + ((b * 37) % Math.max(20, w - 32));
+      const by = botY - 8 - ((t * 36 + b * 19) % Math.max(16, h - 16));
+      drawOutlinedCircle(ctx, bx, by, 3.5, "rgba(255,255,255,0.65)", INK, 1.2);
+    }
+    ctx.restore();
+  } else if (part.kind === "circle") {
+    const rad = part.radius || 32;
+    drawOutlinedCircle(ctx, ox, oy, rad, part.fill || "#fbbf24", strokeColor, 3.5);
+    ctx.strokeStyle = "rgba(255,255,255,0.65)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(ox, oy, Math.max(4, rad * 0.65), Math.PI * 1.1, Math.PI * 1.45);
+    ctx.stroke();
+    if (part.label) {
+      ctx.fillStyle = INK;
+      ctx.font = "800 11px 'Plus Jakarta Sans', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(part.label, ox, oy, rad * 1.7);
+    }
+  } else if (part.kind === "ellipse") {
+    ctx.beginPath();
+    ctx.ellipse(ox, oy, part.rx || 48, part.ry || 24, 0, 0, Math.PI * 2);
+    ctx.fillStyle = part.fill || "#f59e0b";
+    ctx.fill();
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = strokeColor;
+    ctx.stroke();
+  } else if (part.kind === "trapezoid") {
+    const tw = (part.topW || 60) / 2;
+    const bw = (part.bottomW || 150) / 2;
+    const hh = (part.h || 110) / 2;
+    ctx.beginPath();
+    ctx.moveTo(ox - tw, oy - hh);
+    ctx.lineTo(ox + tw, oy - hh);
+    ctx.lineTo(ox + bw, oy + hh);
+    ctx.lineTo(ox - bw, oy + hh);
+    ctx.closePath();
+    ctx.fillStyle = part.fill || "#94a3b8";
+    ctx.fill();
+    ctx.lineWidth = 3.8;
+    ctx.strokeStyle = strokeColor;
+    ctx.stroke();
+  } else if (part.kind === "poly" && Array.isArray(part.points)) {
+    ctx.beginPath();
+    part.points.forEach((pt, pIdx) => {
+      if (pIdx === 0) ctx.moveTo(pt[0], pt[1]);
+      else ctx.lineTo(pt[0], pt[1]);
+    });
+    ctx.closePath();
+    ctx.fillStyle = part.fill || "#fde047";
+    ctx.fill();
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = strokeColor;
+    ctx.stroke();
+  } else if (part.kind === "arrow") {
+    const x1 = part.x1 ?? -60;
+    const y1 = part.y1 ?? 0;
+    const x2 = part.x2 ?? 60;
+    const y2 = part.y2 ?? 0;
+    const color = part.color || "#f59e0b";
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+
+    ctx.save();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = (part.width || 5) + 4;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = part.width || 5;
+    if (part.dashed !== false) {
+      ctx.setLineDash([12, 8]);
+      ctx.lineDashOffset = -t * (part.speed || 2.5) * 28;
+    }
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.translate(x2, y2);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(6, 0);
+    ctx.lineTo(-10, -8);
+    ctx.lineTo(-10, 8);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = INK;
+    ctx.stroke();
+    ctx.restore();
+  } else if (part.kind === "gear") {
+    const rad = part.radius || 32;
+    const teeth = part.teeth || 8;
+    const spinAng = motion === "none" ? t * (part.speed || 2.8) : 0;
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.rotate(spinAng);
+    drawOutlinedCircle(ctx, 0, 0, rad, part.fill || "#fbbf24", strokeColor, 3.2);
+    for (let g = 0; g < teeth; g++) {
+      ctx.save();
+      ctx.rotate((g * Math.PI * 2) / teeth);
+      rr(ctx, -5, -rad - 9, 10, 12, 3);
+      ctx.fillStyle = part.fill || "#fbbf24";
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = strokeColor;
+      ctx.stroke();
+      ctx.restore();
+    }
+    drawOutlinedCircle(ctx, 0, 0, Math.max(7, rad * 0.34), "#e2e8f0", strokeColor, 2.5);
+    ctx.restore();
+  } else if (part.kind === "fan") {
+    const rad = part.radius || 38;
+    const blades = part.blades || 3;
+    const spinAng = motion === "none" ? t * (part.speed || 8.5) : 0;
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.rotate(spinAng);
+    for (let b = 0; b < blades; b++) {
+      ctx.save();
+      ctx.rotate((b * Math.PI * 2) / blades);
+      ctx.beginPath();
+      ctx.ellipse(0, -rad * 0.55, rad * 0.28, rad * 0.52, 0.2, 0, Math.PI * 2);
+      ctx.fillStyle = part.fill || "rgba(56, 189, 248, 0.88)";
+      ctx.fill();
+      ctx.lineWidth = 2.8;
+      ctx.strokeStyle = strokeColor;
+      ctx.stroke();
+      ctx.restore();
+    }
+    drawOutlinedCircle(ctx, 0, 0, Math.max(6, rad * 0.22), "#0284c7", strokeColor, 2.5);
+    ctx.restore();
+  } else if (part.kind === "coil") {
+    const w = part.w || 90;
+    const h = part.h || 56;
+    const turns = part.turns || 5;
+    const left = ox - w / 2;
+    const top = oy - h / 2;
+    const step = w / turns;
+    ctx.save();
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    for (let i = 0; i <= turns; i++) {
+      const px = left + i * step;
+      const py = i % 2 === 0 ? top : top + h;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = strokeColor;
+    ctx.stroke();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = part.color || part.fill || "#38bdf8";
+    ctx.stroke();
+    ctx.restore();
+  } else if (part.kind === "badge") {
+    const text = part.text || part.label || "KOMPONEN";
+    ctx.font = "800 11.5px 'Plus Jakarta Sans', sans-serif";
+    const tw = Math.min(180, ctx.measureText(text).width + 20);
+    rr(ctx, ox - tw / 2, oy - 13, tw, 26, 7);
+    ctx.fillStyle = part.fill || "#fbbf24";
+    ctx.fill();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = strokeColor;
+    ctx.stroke();
+    ctx.fillStyle = part.textColor || INK;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, ox, oy, tw - 10);
+  }
+
+  ctx.restore();
+}
+
+function drawGeminiStageParts(ctx, cx, cy, visual, phase, t) {
+  const parts = visual?.stageParts || [];
+  if (!parts.length) {
+    drawUniversalHandsOnProps(ctx, cx, cy, visual, phase, t);
+    return;
+  }
+  ctx.save();
+  // Soft shadow pedestal under Gemini's 2.5D experiment
+  ctx.fillStyle = "rgba(15, 23, 42, 0.2)";
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 96, 128, 18, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  parts.forEach((part, idx) => {
+    drawVectorPart(ctx, cx, cy, part, phase, t, idx);
+  });
+  ctx.restore();
+}
+
+function drawSceneFx(ctx, cx, cy, fxList = [], t) {
+  if (!Array.isArray(fxList) || !fxList.length) return;
+  ctx.save();
+  for (const fx of fxList.slice(0, 2)) {
+    if (fx === "sparks" || fx === "lightning") {
+      for (let i = 0; i < 8; i++) {
+        const ang = (i * Math.PI) / 4 + t * 2;
+        const dist = 62 + ((t * 90 + i * 19) % 58);
+        const sx = cx + Math.cos(ang) * dist;
+        const sy = cy - 10 + Math.sin(ang) * dist * 0.7;
+        ctx.fillStyle = i % 2 === 0 ? "#fde047" : "#ef4444";
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - 8);
+        ctx.lineTo(sx + 6, sy);
+        ctx.lineTo(sx, sy + 8);
+        ctx.lineTo(sx - 6, sy);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+    } else if (fx === "bubbles" || fx === "water_drops") {
+      for (let i = 0; i < 8; i++) {
+        const bx = cx - 90 + i * 26 + Math.sin(t * 4 + i) * 7;
+        const by =
+          fx === "water_drops"
+            ? cy - 95 + ((t * 95 + i * 23) % 140)
+            : cy + 35 - ((t * 68 + i * 21) % 130);
+        drawOutlinedCircle(ctx, bx, by, 5 + (i % 3), "rgba(186, 230, 253, 0.88)", "#0284c7", 1.8);
+      }
+    } else if (fx === "steam" || fx === "smoke") {
+      const isSmoke = fx === "smoke";
+      for (let i = 0; i < 7; i++) {
+        const sx = cx - 66 + i * 22 + Math.sin(t * 3 + i) * 10;
+        const sy = cy - 45 - ((t * 52 + i * 18) % 85);
+        const rad = 11 + Math.sin(t * 4 + i) * 3;
+        drawOutlinedCircle(
+          ctx,
+          sx,
+          sy,
+          rad,
+          isSmoke ? "rgba(71, 85, 105, 0.78)" : "rgba(255, 255, 255, 0.82)",
+          INK,
+          2
+        );
+      }
+    } else if (fx === "frost") {
+      for (let i = 0; i < 9; i++) {
+        const fxX = cx - 105 + ((i * 31 + Math.sin(t * 2 + i) * 14) % 210);
+        const fxY = cy - 95 + ((t * 48 + i * 27) % 165);
+        drawOutlinedCircle(ctx, fxX, fxY, 4.5, "#e0f2fe", "#0284c7", 1.6);
+      }
+    } else if (fx === "flame") {
+      for (let i = 0; i < 6; i++) {
+        const flX = cx - 50 + i * 20;
+        const flH = 26 + Math.abs(Math.sin(t * 14 + i)) * 24;
+        ctx.beginPath();
+        ctx.moveTo(flX - 10, cy + 55);
+        ctx.quadraticCurveTo(flX, cy + 55 - flH, flX + 10, cy + 55);
+        ctx.closePath();
+        ctx.fillStyle = i % 2 === 0 ? "#f97316" : "#fde047";
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = INK;
+        ctx.stroke();
+      }
+    } else if (fx === "electrons") {
+      for (let i = 0; i < 6; i++) {
+        const ex = cx - 95 + ((t * 110 + i * 38) % 190);
+        const ey = cy - 10 + Math.sin(t * 5 + i) * 18;
+        drawOutlinedCircle(ctx, ex, ey, 5.5, "#6ee7b7", "#059669", 2);
+      }
+    } else if (fx === "leaves") {
+      for (let i = 0; i < 6; i++) {
+        const lx = cx - 80 + i * 32 + Math.sin(t * 2.5 + i) * 12;
+        const ly = cy - 100 + ((t * 38 + i * 25) % 150);
+        ctx.save();
+        ctx.translate(lx, ly);
+        ctx.rotate(t * 2 + i);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 9, 4.5, 0, 0, Math.PI * 2);
+        ctx.fillStyle = "#22c55e";
+        ctx.fill();
+        ctx.lineWidth = 1.8;
+        ctx.strokeStyle = INK;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function drawComicBurstText(ctx, W, comicText, phase, t, sceneElapsedSec) {
+  if (!comicText) return;
+  const pop = Math.min(1, sceneElapsedSec / 0.28);
+  const scale = 0.7 + Math.sin(pop * Math.PI * 0.5) * 0.35 + Math.sin(t * 8) * 0.03;
+
+  ctx.save();
+  ctx.translate(W - 92, 208);
+  ctx.rotate(phase === "TAPI" ? 0.14 : -0.1);
+  ctx.scale(scale, scale);
+
+  const bg = phase === "TAPI" ? "#e11d48" : phase === "CLIMAX" ? "#10b981" : "#fde047";
+  const spikes = 10;
+  ctx.beginPath();
+  for (let i = 0; i < spikes * 2; i++) {
+    const rad = i % 2 === 0 ? 52 : 38;
+    const ang = (i * Math.PI) / spikes;
+    const px = Math.cos(ang) * rad * 1.25;
+    const py = Math.sin(ang) * rad * 0.72;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = bg;
+  ctx.fill();
+  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = INK;
+  ctx.stroke();
+
+  ctx.fillStyle = phase === "TAPI" ? "#ffffff" : INK;
+  ctx.font = "900 13.5px 'Plus Jakarta Sans', sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(comicText, 0, 1, 96);
+  ctx.restore();
+}
+
+function drawScienceMeter(ctx, meter, phase, t) {
+  if (!meter || !meter.label) return;
+  const x = 24;
+  const y = 186;
+  const w = 138;
+  const h = 54;
+  const span = Math.max(1, (meter.max ?? 100) - (meter.min ?? 0));
+  const rawPct = ((meter.value ?? 50) - (meter.min ?? 0)) / span;
+  const pct = Math.max(0.06, Math.min(1, rawPct + Math.sin(t * 5) * 0.03));
+
+  ctx.save();
+  rr(ctx, x, y, w, h, 10);
+  ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = INK;
+  ctx.stroke();
+
+  ctx.fillStyle = "#cbd5e1";
+  ctx.font = "800 10px 'JetBrains Mono', monospace";
+  ctx.textAlign = "left";
+  ctx.fillText(meter.label, x + 10, y + 17);
+
+  ctx.fillStyle = meter.danger || phase === "TAPI" ? "#fb7185" : "#6ee7b7";
+  ctx.font = "900 13px 'JetBrains Mono', monospace";
+  ctx.textAlign = "right";
+  ctx.fillText(`${meter.value}${meter.unit || ""}`, x + w - 10, y + 18);
+
+  rr(ctx, x + 10, y + 29, w - 20, 12, 6);
+  ctx.fillStyle = "#1e293b";
+  ctx.fill();
+  rr(ctx, x + 10, y + 29, Math.max(12, (w - 20) * pct), 12, 6);
+  ctx.fillStyle = meter.danger || phase === "TAPI" ? "#e11d48" : phase === "CLIMAX" ? "#10b981" : "#f59e0b";
+  ctx.fill();
+  ctx.restore();
+}
+
+// ============================================================================
 // 4. @UNTABIRU5 FLOATING POINTER CALLOUT TAGS & CONFETTI
 // ============================================================================
 function drawFloatingCallouts(ctx, W, visual, phase, t) {
@@ -1251,9 +1770,11 @@ export function renderToonVideoFrame(ctx, W, H, scene, tSec, sceneElapsedSec = 1
   const humanY = visual.setting === "backyard" || visual.setting === "farm" ? 310 : 378;
   drawCartoonHuman(ctx, W / 2, humanY, visual.workerAction, visual.setting, visual.ingredientOrTool, tSec);
 
-  // 3. Detailed Hands-On Experiment Props in Front of Human!
+  // 3. Detailed Hands-On Experiment Props (Curated Preset OR Gemini 2.5D Choreography!)
   const propY = 515;
-  if (visual.heroObject === "ice_cream") {
+  if (visual.useCustomStage && Array.isArray(visual.stageParts) && visual.stageParts.length > 0) {
+    drawGeminiStageParts(ctx, W / 2, propY, visual, phase, tSec);
+  } else if (visual.heroObject === "ice_cream") {
     drawIceCreamProps(ctx, W / 2, propY, visual, phase, tSec);
   } else if (
     visual.heroObject === "betta_fish" ||
@@ -1264,15 +1785,22 @@ export function renderToonVideoFrame(ctx, W, H, scene, tSec, sceneElapsedSec = 1
     drawAquariumProps(ctx, W / 2, propY, visual, phase, sceneNum, tSec);
   } else if (visual.heroObject === "fan_blades") {
     drawFanMotorProps(ctx, W / 2, propY, visual, phase, sceneNum, tSec);
+  } else if (Array.isArray(visual.stageParts) && visual.stageParts.length > 0) {
+    drawGeminiStageParts(ctx, W / 2, propY, visual, phase, tSec);
   } else {
     drawUniversalHandsOnProps(ctx, W / 2, propY, visual, phase, tSec);
   }
+
+  // 3B. Gemini Particle FX, Live Science Meter & Comic Sound Burst
+  drawSceneFx(ctx, W / 2, propY, visual.fx, tSec);
+  drawScienceMeter(ctx, visual.meter, phase, tSec);
+  drawComicBurstText(ctx, W, visual.comicText, phase, tSec, sceneElapsedSec);
 
   // 4. Floating Indonesian Callout Tags with Leader Pointers (@untabiru5 style!)
   drawFloatingCallouts(ctx, W, visual, phase, tSec);
 
   // 5. Confetti Burst on CLIMAX ("SELAMAT!")
-  if (phase === "CLIMAX") {
+  if (phase === "CLIMAX" || (Array.isArray(visual.fx) && visual.fx.includes("confetti"))) {
     drawCelebrationConfetti(ctx, W, tSec);
   }
 
