@@ -1062,12 +1062,12 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
       : Math.sin(tSec * 2.2) * 0.022;
 
   ctx.save();
-  const cardW = isHero ? 226 : 188;
-  const cardH = isHero ? 286 : 240;
-  const targetX = isHero ? W - cardW - 22 : isRight ? W - cardW - 20 : 20;
+  const cardW = isHero ? 196 : 168;
+  const cardH = isHero ? 248 : 214;
+  const targetX = isHero ? W - cardW - 18 : isRight ? W - cardW - 18 : 18;
   const entryOffset = (1 - slideEase) * (isRight || isHero ? 60 : -60);
   const cardX = targetX + swayX + entryOffset;
-  const cardY = (isHero ? 476 : 498) + breathY + voiceBounceY;
+  const cardY = (isHero ? 506 : 526) + breathY + voiceBounceY;
   const centerX = cardX + cardW / 2;
   const centerY = cardY + cardH / 2;
 
@@ -1237,6 +1237,17 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(badgeLabel, centerX, cardY + cardH - 22);
+
+  // Expressive 2D Anime Emotion Pop-Up Icon floating beside MC's head
+  const fxY = cardY - 6 + Math.sin(tSec * 6.5) * 5;
+  ctx.font = "900 26px sans-serif";
+  if (scene.mcPose === "sarcastic" || scene.phase === "TAPI") {
+    ctx.fillText("💢", cardX + 18, fxY + 22);
+  } else if (scene.mcPose === "explaining" || scene.phase === "JADI") {
+    ctx.fillText("✨", cardX + cardW - 16, fxY + 18);
+  } else if (scene.mcPose === "eureka" || scene.phase === "CLIMAX") {
+    ctx.fillText("👑", centerX, fxY);
+  }
   ctx.restore();
 }
 
@@ -1426,23 +1437,23 @@ function startRenderLoop() {
       const use3d = Boolean(toggle3dMode?.checked && stage3dReady && stage3d);
 
       if (use3d) {
-        const voice = getLiveVoiceEnergy();
-        if (stage3d.mc?.root) {
-          stage3d.mc.root.visible = Boolean(toggleMcOverlay.checked);
-        }
-        stage3d.renderFrame(scene, currentScript.topic || "", tSec, voice, isPlaying);
+        // 1. Render pure 3D @untabiru5-style video of human performing the experiment (NO 3D MC inside!)
+        stage3d.renderFrame(scene, currentScript.topic || "", tSec);
         ctx.drawImage(stage3d.domElement, 0, 0, canvas.width, canvas.height);
 
         // Soft bottom cinematic gradient for crisp @untabiru5 yellow-box subtitle contrast
-        const subGrad = ctx.createLinearGradient(0, canvas.height - 230, 0, canvas.height);
+        const subGrad = ctx.createLinearGradient(0, canvas.height - 245, 0, canvas.height);
         subGrad.addColorStop(0, "rgba(9, 10, 15, 0)");
-        subGrad.addColorStop(1, "rgba(9, 10, 15, 0.84)");
+        subGrad.addColorStop(1, "rgba(9, 10, 15, 0.88)");
         ctx.fillStyle = subGrad;
-        ctx.fillRect(0, canvas.height - 230, canvas.width, 230);
+        ctx.fillRect(0, canvas.height - 245, canvas.width, 245);
 
         drawTopVideoHeader(ctx, scene);
         draw3dCalloutBadge(ctx, scene);
         drawSelamatStamp(ctx, scene, tSec);
+
+        // 2. Overlay our 2D ANIME MC Raja Iblis Host (Live2D motion, separate from the 3D video!)
+        drawMcRajaIblisPresenter(ctx, scene, tSec);
         drawUntabiruSubtitles(ctx, scene);
       } else {
         drawEducationalDiagramStage(ctx, scene, tSec);
