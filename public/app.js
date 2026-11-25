@@ -1,4 +1,5 @@
-// MaouEdu AI — 1-Prompt Auto-Research & Gaya B Video Generator Studio (Vercel Ready)
+// MaouEdu AI — 1-Prompt Auto-Research & Consistent 2.5D Toon + 2D Anime Host Video Studio
+import { renderToonVideoFrame } from "/toon-renderer.js";
 
 const canvas = document.getElementById("videoCanvas");
 const ctx = canvas.getContext("2d");
@@ -60,12 +61,10 @@ const nextSceneBtn = document.getElementById("nextSceneBtn");
 const addSceneBtn = document.getElementById("addSceneBtn");
 
 // Toggles
-const toggle3dMode = document.getElementById("toggle3dMode");
 const toggleMcOverlay = document.getElementById("toggleMcOverlay");
 const toggleYellowSubtitles = document.getElementById("toggleYellowSubtitles");
 const toggleSfx = document.getElementById("toggleSfx");
 const toggleBgm = document.getElementById("toggleBgm");
-const toggleAiBgImage = document.getElementById("toggleAiBgImage");
 
 // Local browser settings (never sent to GitHub)
 function getLocalKeys() {
@@ -308,8 +307,6 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
     renderSceneList();
     updateActiveSceneUI();
 
-    if (toggleAiBgImage.checked) preloadAiSceneImages();
-
     // 3: Generate all male voiceovers
     setPipelineState("voice");
     for (let i = 0; i < currentScript.scenes.length; i++) {
@@ -334,7 +331,7 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
 function renderResearchBox(research) {
   if (!research || (!research.summaryFacts?.length && !research.sources?.length)) {
     researchResultsBox.innerHTML = `
-      <div>🔍 Topik diproses dengan <strong>MaouEdu Science Blueprint</strong> (formula Trial → TAPI → JADI → SELAMAT!).</div>
+      <div>🔍 Topik langsung diubah jadi langkah praktek nyata (pola Praktek Awal → TAPI → JADI → SELAMAT!).</div>
     `;
     return;
   }
@@ -368,24 +365,6 @@ function showTikTokAnalysis(meta) {
     <div>📊 <strong>${views}</strong> views • ❤️ <strong>${likes}</strong> likes</div>
   `;
 }
-
-function preloadAiSceneImages() {
-  if (!currentScript?.scenes) return;
-  currentScript.scenes.forEach((sc, idx) => {
-    if (sceneBgImages.has(idx)) return;
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    const prompt = encodeURIComponent(
-      `${sc.visualPrompt}, 3D isometric educational cutaway illustration, high contrast, vertical 9:16`
-    );
-    img.src = `https://image.pollinations.ai/prompt/${prompt}?width=540&height=960&nologo=true&seed=${idx + 101}`;
-    img.onload = () => sceneBgImages.set(idx, img);
-  });
-}
-
-toggleAiBgImage.addEventListener("change", () => {
-  if (toggleAiBgImage.checked) preloadAiSceneImages();
-});
 
 // Render Storyboard Scene Cards
 function renderSceneList() {
@@ -708,18 +687,7 @@ function drawEducationalDiagramStage(ctx, scene, tSec) {
     ctx.stroke();
   }
 
-  if (toggleAiBgImage.checked && sceneBgImages.has(activeSceneIndex)) {
-    const aiImg = sceneBgImages.get(activeSceneIndex);
-    ctx.save();
-    const zoom = 1.02 + Math.sin(tSec * 0.8) * 0.025;
-    ctx.translate(W / 2, H * 0.42);
-    ctx.scale(zoom, zoom);
-    ctx.globalAlpha = 0.85;
-    ctx.drawImage(aiImg, -W / 2, -H * 0.42, W, H * 0.84);
-    ctx.restore();
-  } else {
-    drawProceduralEdutainmentScene(ctx, scene, tSec);
-  }
+  drawProceduralEdutainmentScene(ctx, scene, tSec);
 }
 
 function drawProceduralEdutainmentScene(ctx, scene, t) {
@@ -1223,7 +1191,7 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
     default: "👑 MC RAJA IBLIS",
     sarcastic: "😒 TAPI... (SARKAS)",
     explaining: "☝️ JADI BEGINI...",
-    eureka: "⚡ OVERLORD SOLVED!"
+    eureka: "👑 BERHASIL TOTAL!"
   };
   const badgeLabel = reactionMap[scene.mcPose] || "👑 MC RAJA IBLIS";
   drawRoundedRect(ctx, cardX + 10, cardY + cardH - 34, cardW - 20, 24, 7);
@@ -1358,10 +1326,10 @@ function drawTopVideoHeader(ctx, scene) {
   const W = canvas.width;
   ctx.save();
   const phaseColors = {
-    HOOK: { bg: "#1d4ed8", text: "⚡ HOOK PEMBUKA" },
-    TAPI: { bg: "#e11d48", text: "⚠️ TAPI... (MASALAH)" },
-    JADI: { bg: "#d97706", text: "💡 JADI... (SOLUSI ILMIAH)" },
-    CLIMAX: { bg: "#059669", text: "🏆 KESIMPULAN AKHIR" }
+    HOOK: { bg: "#1d4ed8", text: "⚡ MULAI PRAKTEK" },
+    TAPI: { bg: "#e11d48", text: "⚠️ TAPI... (GAGAL!)" },
+    JADI: { bg: "#d97706", text: "💡 JADI... (TRIKNYA!)" },
+    CLIMAX: { bg: "#059669", text: "🏆 BERHASIL!" }
   };
   const pInfo = phaseColors[scene.phase] || phaseColors.HOOK;
 
@@ -1415,53 +1383,30 @@ function draw3dCalloutBadge(ctx, scene) {
   ctx.restore();
 }
 
-function init3dEngine() {
-  import("/scene3d.js")
-    .then(({ Maou3DStage }) => {
-      stage3d = new Maou3DStage(canvas.width, canvas.height);
-      stage3dReady = true;
-    })
-    .catch((err) => {
-      console.warn("3D WebGL engine unavailable, using 2D fallback:", err);
-      stage3dReady = false;
-    });
-}
-
 function startRenderLoop() {
-  init3dEngine();
-
   function frame(now) {
     const tSec = now / 1000;
+    const sceneElapsedSec = Math.max(0, (now - sceneEnterTimestamp) / 1000);
     if (currentScript?.scenes?.length) {
       const scene = currentScript.scenes[activeSceneIndex] || currentScript.scenes[0];
-      const use3d = Boolean(toggle3dMode?.checked && stage3dReady && stage3d);
 
-      if (use3d) {
-        // 1. Render pure 3D @untabiru5-style video of human performing the experiment (NO 3D MC inside!)
-        stage3d.renderFrame(scene, currentScript.topic || "", tSec);
-        ctx.drawImage(stage3d.domElement, 0, 0, canvas.width, canvas.height);
+      // 1. Consistent lively 2.5D Toon Video of human doing the hands-on step (@untabiru5 style!)
+      renderToonVideoFrame(ctx, canvas.width, canvas.height, scene, tSec, sceneElapsedSec);
 
-        // Soft bottom cinematic gradient for crisp @untabiru5 yellow-box subtitle contrast
-        const subGrad = ctx.createLinearGradient(0, canvas.height - 245, 0, canvas.height);
-        subGrad.addColorStop(0, "rgba(9, 10, 15, 0)");
-        subGrad.addColorStop(1, "rgba(9, 10, 15, 0.88)");
-        ctx.fillStyle = subGrad;
-        ctx.fillRect(0, canvas.height - 245, canvas.width, 245);
+      // Soft bottom dark gradient so @untabiru5 yellow-box subtitles always pop crisply
+      const subGrad = ctx.createLinearGradient(0, canvas.height - 235, 0, canvas.height);
+      subGrad.addColorStop(0, "rgba(9, 10, 15, 0)");
+      subGrad.addColorStop(1, "rgba(9, 10, 15, 0.88)");
+      ctx.fillStyle = subGrad;
+      ctx.fillRect(0, canvas.height - 235, canvas.width, 235);
 
-        drawTopVideoHeader(ctx, scene);
-        draw3dCalloutBadge(ctx, scene);
-        drawSelamatStamp(ctx, scene, tSec);
+      drawTopVideoHeader(ctx, scene);
+      draw3dCalloutBadge(ctx, scene);
+      drawSelamatStamp(ctx, scene, tSec);
 
-        // 2. Overlay our 2D ANIME MC Raja Iblis Host (Live2D motion, separate from the 3D video!)
-        drawMcRajaIblisPresenter(ctx, scene, tSec);
-        drawUntabiruSubtitles(ctx, scene);
-      } else {
-        drawEducationalDiagramStage(ctx, scene, tSec);
-        drawTopVideoHeader(ctx, scene);
-        drawSelamatStamp(ctx, scene, tSec);
-        drawMcRajaIblisPresenter(ctx, scene, tSec);
-        drawUntabiruSubtitles(ctx, scene);
-      }
+      // 2. Consistent 2D Anime MC Raja Iblis Host reacting & pointing outside the video!
+      drawMcRajaIblisPresenter(ctx, scene, tSec);
+      drawUntabiruSubtitles(ctx, scene);
     }
     requestAnimationFrame(frame);
   }
