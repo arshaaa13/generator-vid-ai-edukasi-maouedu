@@ -27,6 +27,7 @@ let analyserData = null;
 let smoothedVoiceEnergy = 0;
 let sceneEnterTimestamp = performance.now();
 let activeAudioSource = null;
+let activePhraseTimers = [];
 let bgmInterval = null;
 let serverConfig = {
   elevenlabsVoiceId: "cPoqAvGWCPfCfyPMwe4z",
@@ -110,6 +111,37 @@ function getLiveVoiceEnergy() {
   const raw = Math.min(1, sum / (26 * 135));
   smoothedVoiceEnergy = smoothedVoiceEnergy * 0.65 + raw * 0.35;
   return smoothedVoiceEnergy;
+}
+
+function unlockAudioContextSync() {
+  try {
+    const actx = getAudioContext();
+    if (actx && actx.state === "suspended") {
+      actx.resume().catch(() => {});
+    }
+    return actx;
+  } catch {
+    return null;
+  }
+}
+
+function concatAudioBuffers(actx, buffers) {
+  if (!buffers.length) return null;
+  if (buffers.length === 1) return buffers[0];
+  const channels = Math.max(...buffers.map((b) => b.numberOfChannels));
+  const sampleRate = buffers[0].sampleRate;
+  const totalLen = buffers.reduce((sum, b) => sum + b.length, 0);
+  const out = actx.createBuffer(channels, totalLen, sampleRate);
+  for (let ch = 0; ch < channels; ch++) {
+    const outData = out.getChannelData(ch);
+    let offset = 0;
+    for (const buf of buffers) {
+      const srcChan = buf.getChannelData(Math.min(ch, buf.numberOfChannels - 1));
+      outData.set(srcChan, offset);
+      offset += buf.length;
+    }
+  }
+  return out;
 }
 
 function base64ToArrayBuffer(base64) {
@@ -275,6 +307,7 @@ function parseSubtitlePhrasesClient(narration) {
 // 1-PROMPT AUTONOMOUS PIPELINE (Research -> Script -> Male Voice -> Auto-Play)
 // ============================================================================
 async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
+  unlockAudioContextSync();
   const cleanPrompt = (promptText || simplePromptInput.value).trim();
   if (!cleanPrompt) {
     simplePromptInput.value = "";
@@ -565,10 +598,27 @@ async function ensureSceneAudio(index) {
   });
   const data = await resp.json();
 
-  if (data.audioBase64) {
-    const arrayBuf = base64ToArrayBuffer(data.audioBase64);
+  if (data.audioBase64 || (Array.isArray(data.audioChunksBase64) && data.audioChunksBase64.length)) {
     const actx = getAudioContext();
-    const decoded = await actx.decodeAudioData(arrayBuf);
+    if (actx.state === "suspended") {
+      try {
+        await actx.resume();
+      } catch {}
+    }
+
+    let decoded = null;
+    if (Array.isArray(data.audioChunksBase64) && data.audioChunksBase64.length > 1) {
+      const chunkBuffers = [];
+      for (const b64 of data.audioChunksBase64) {
+        const ab = base64ToArrayBuffer(b64);
+        chunkBuffers.push(await actx.decodeAudioData(ab));
+      }
+      decoded = concatAudioBuffers(actx, chunkBuffers);
+    } else {
+      const arrayBuf = base64ToArrayBuffer(data.audioBase64 || data.audioChunksBase64[0]);
+      decoded = await actx.decodeAudioData(arrayBuf);
+    }
+
     const entry = {
       buffer: decoded,
       provider: data.provider,
@@ -628,10 +678,15 @@ async function playSceneAudioAndWait(index, destNode = null) {
     audioEntry = await ensureSceneAudio(index);
   } catch {}
 
-  return new Promise((resolve) => {
+  return new Promise(async (resolve) => {
     const phrases = sc.subtitlePhrases;
     if (audioEntry && audioEntry.buffer) {
       const actx = getAudioContext();
+      if (actx.state === "suspended") {
+        try {
+          await actx.resume();
+        } catch {}
+      }
       const source = actx.createBufferSource();
       source.buffer = audioEntry.buffer;
       source.playbackRate.value = audioEntry.playbackRate || 1.0;
@@ -650,6 +705,9 @@ async function playSceneAudioAndWait(index, destNode = null) {
       highpassFilter.connect(vocalPresence);
       if (analyserNode) {
         vocalPresence.connect(analyserNode);
+        try {
+          analyserNode.disconnect();
+        } catch {}
         analyserNode.connect(destNode || actx.destination);
       } else {
         vocalPresence.connect(destNode || actx.destination);
@@ -660,17 +718,18 @@ async function playSceneAudioAndWait(index, destNode = null) {
           activeAudioSource.stop();
         } catch {}
       }
+      activePhraseTimers.forEach((t) => clearTimeout(t));
+      activePhraseTimers = [];
       activeAudioSource = source;
 
       const durationMs = (audioEntry.buffer.duration / (source.playbackRate.value || 1.0)) * 1000;
       const weights = phrases.map((ph) => Math.max(5, ph.map((t) => t.text).join(" ").length));
       const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
-      const timers = [];
       let accumMs = 0;
       for (let i = 0; i < phrases.length - 1; i++) {
         accumMs += (weights[i] / totalWeight) * durationMs;
         const nextIdx = i + 1;
-        timers.push(
+        activePhraseTimers.push(
           setTimeout(() => {
             if (isPlaying) activePhraseIndex = nextIdx;
           }, accumMs)
@@ -678,7 +737,8 @@ async function playSceneAudioAndWait(index, destNode = null) {
       }
 
       source.onended = () => {
-        timers.forEach((t) => clearTimeout(t));
+        activePhraseTimers.forEach((t) => clearTimeout(t));
+        activePhraseTimers = [];
         resolve();
       };
       source.start(0);
@@ -697,6 +757,7 @@ async function playSceneAudioAndWait(index, destNode = null) {
 }
 
 async function playSingleScene(index) {
+  unlockAudioContextSync();
   stopPlayback();
   isPlaying = true;
   activeSceneIndex = index;
@@ -707,6 +768,7 @@ async function playSingleScene(index) {
 
 async function playFullVideo(destNode = null) {
   if (!currentScript?.scenes?.length) return;
+  unlockAudioContextSync();
   stopPlayback();
   isPlaying = true;
   playFullVideoBtn.textContent = "⏹ Hentikan";
@@ -725,6 +787,8 @@ async function playFullVideo(destNode = null) {
 function stopPlayback() {
   isPlaying = false;
   stopBgm();
+  activePhraseTimers.forEach((t) => clearTimeout(t));
+  activePhraseTimers = [];
   if (activeAudioSource) {
     try {
       activeAudioSource.stop();
@@ -1785,6 +1849,7 @@ function startRenderLoop() {
 // ============================================================================
 async function exportFullVideo() {
   if (!currentScript?.scenes?.length) return;
+  unlockAudioContextSync();
   exportVideoBtn.disabled = true;
   exportProgressBox.classList.remove("hidden");
   exportProgressFill.style.width = "10%";
