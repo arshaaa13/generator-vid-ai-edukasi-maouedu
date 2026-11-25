@@ -1185,11 +1185,12 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
   ctx.clip();
 
   // Draw animated MC video if uploaded, else Live2D-animated portrait
-  if (mcAnimatedVideo && mcAnimatedVideo.readyState >= 2) {
+  const hasAnimatedMcVideo = Boolean(mcAnimatedVideo && mcAnimatedVideo.readyState >= 2);
+  const panX = hasAnimatedMcVideo ? 0 : Math.sin(tSec * 1.4) * 5;
+  const panY = hasAnimatedMcVideo ? 0 : Math.cos(tSec * 1.8) * 4 - voice * 5;
+  if (hasAnimatedMcVideo) {
     drawCoverVideo(ctx, mcAnimatedVideo, cardX, cardY, cardW, cardH);
   } else {
-    const panX = Math.sin(tSec * 1.4) * 5;
-    const panY = Math.cos(tSec * 1.8) * 4 - voice * 5;
     const innerZoom = 1.08 + Math.sin(tSec * 1.1) * 0.03 + voice * 0.05;
     ctx.drawImage(
       mcImage,
@@ -1455,33 +1456,37 @@ function draw3dCalloutBadge(ctx, scene) {
 
 function startRenderLoop() {
   function frame(now) {
-    const tSec = now / 1000;
-    const sceneElapsedSec = Math.max(0, (now - sceneEnterTimestamp) / 1000);
-    if (currentScript?.scenes?.length) {
-      const scene = currentScript.scenes[activeSceneIndex] || currentScript.scenes[0];
+    try {
+      const tSec = now / 1000;
+      const sceneElapsedSec = Math.max(0, (now - sceneEnterTimestamp) / 1000);
+      if (currentScript?.scenes?.length) {
+        const scene = currentScript.scenes[activeSceneIndex] || currentScript.scenes[0];
 
-      // 1. Play uploaded MP4 clip if attached, else lively 2.5D Toon animation
-      const clip = sceneVideoClips.get(activeSceneIndex);
-      if (clip?.videoEl && clip.videoEl.readyState >= 2) {
-        drawCoverVideo(ctx, clip.videoEl, 0, 0, canvas.width, canvas.height);
-      } else {
-        renderToonVideoFrame(ctx, canvas.width, canvas.height, scene, tSec, sceneElapsedSec);
+        // 1. Play uploaded MP4 clip if attached, else lively 2.5D Toon animation
+        const clip = sceneVideoClips.get(activeSceneIndex);
+        if (clip?.videoEl && clip.videoEl.readyState >= 2) {
+          drawCoverVideo(ctx, clip.videoEl, 0, 0, canvas.width, canvas.height);
+        } else {
+          renderToonVideoFrame(ctx, canvas.width, canvas.height, scene, tSec, sceneElapsedSec);
+        }
+
+        // Soft bottom dark gradient so @untabiru5 yellow-box subtitles always pop crisply
+        const subGrad = ctx.createLinearGradient(0, canvas.height - 235, 0, canvas.height);
+        subGrad.addColorStop(0, "rgba(9, 10, 15, 0)");
+        subGrad.addColorStop(1, "rgba(9, 10, 15, 0.88)");
+        ctx.fillStyle = subGrad;
+        ctx.fillRect(0, canvas.height - 235, canvas.width, 235);
+
+        drawTopVideoHeader(ctx, scene);
+        draw3dCalloutBadge(ctx, scene);
+        drawSelamatStamp(ctx, scene, tSec);
+
+        // 2. Consistent 2D Anime MC Raja Iblis Host reacting & pointing outside the video!
+        drawMcRajaIblisPresenter(ctx, scene, tSec);
+        drawUntabiruSubtitles(ctx, scene);
       }
-
-      // Soft bottom dark gradient so @untabiru5 yellow-box subtitles always pop crisply
-      const subGrad = ctx.createLinearGradient(0, canvas.height - 235, 0, canvas.height);
-      subGrad.addColorStop(0, "rgba(9, 10, 15, 0)");
-      subGrad.addColorStop(1, "rgba(9, 10, 15, 0.88)");
-      ctx.fillStyle = subGrad;
-      ctx.fillRect(0, canvas.height - 235, canvas.width, 235);
-
-      drawTopVideoHeader(ctx, scene);
-      draw3dCalloutBadge(ctx, scene);
-      drawSelamatStamp(ctx, scene, tSec);
-
-      // 2. Consistent 2D Anime MC Raja Iblis Host reacting & pointing outside the video!
-      drawMcRajaIblisPresenter(ctx, scene, tSec);
-      drawUntabiruSubtitles(ctx, scene);
+    } catch (err) {
+      console.error("Render frame error:", err);
     }
     requestAnimationFrame(frame);
   }
