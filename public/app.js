@@ -1,5 +1,13 @@
-// MaouEdu AI — 1-Prompt Auto-Research & Consistent 2.5D Toon + 2D Anime Host Video Studio
-import { renderToonVideoFrame } from "/toon-renderer.js";
+// MaouEdu AI — 1-Prompt Auto-Research & @untabiru5 3D Diorama + 2D Anime Host Video Studio
+import {
+  renderToonVideoFrame,
+  drawSceneFx,
+  drawComicBurstText,
+  drawScienceMeter,
+  drawFloatingCallouts,
+  drawCelebrationConfetti
+} from "/toon-renderer.js";
+import { Maou3DStage } from "/scene3d.js";
 
 const canvas = document.getElementById("videoCanvas");
 const ctx = canvas.getContext("2d");
@@ -62,6 +70,7 @@ const nextSceneBtn = document.getElementById("nextSceneBtn");
 const addSceneBtn = document.getElementById("addSceneBtn");
 
 // Toggles
+const toggle3dMode = document.getElementById("toggle3dMode");
 const toggleMcOverlay = document.getElementById("toggleMcOverlay");
 const toggleYellowSubtitles = document.getElementById("toggleYellowSubtitles");
 const toggleSfx = document.getElementById("toggleSfx");
@@ -378,8 +387,10 @@ function renderSceneList() {
     const hasAudio = sceneAudioBuffers.has(index);
     const clipInfo = sceneVideoClips.get(index);
     const animBadge =
-      scene.visual?.useCustomStage && scene.visual?.stageParts?.length
-        ? `🎨 2.5D Gemini (${scene.visual.stageParts.length} objek)`
+      scene.visual?.stage3d?.objects?.length
+        ? `🎬 3D AI (${scene.visual.stage3d.objects.length} objek)`
+        : scene.visual?.heroObject
+        ? `🎬 3D @untabiru5`
         : "";
     const clipBadge = clipInfo?.videoEl ? "🎥 Klip MP4 Siap" : animBadge;
 
@@ -1466,12 +1477,32 @@ function startRenderLoop() {
       if (currentScript?.scenes?.length) {
         const scene = currentScript.scenes[activeSceneIndex] || currentScript.scenes[0];
 
-        // 1. Play uploaded MP4 clip if attached, else lively 2.5D Toon animation
+        // 1. Play uploaded MP4 clip if attached, else 3D @untabiru5 Diorama Engine, else 2.5D fallback
         const clip = sceneVideoClips.get(activeSceneIndex);
+        let rendered3d = false;
         if (clip?.videoEl && clip.videoEl.readyState >= 2) {
           drawCoverVideo(ctx, clip.videoEl, 0, 0, canvas.width, canvas.height);
         } else {
-          renderToonVideoFrame(ctx, canvas.width, canvas.height, scene, tSec, sceneElapsedSec);
+          if (stage3dReady && stage3d && (!toggle3dMode || toggle3dMode.checked)) {
+            try {
+              stage3d.renderFrame(scene, currentScript.topic || "", tSec, sceneElapsedSec);
+              ctx.drawImage(stage3d.domElement, 0, 0, canvas.width, canvas.height);
+              drawSceneFx(ctx, canvas.width / 2, 515, scene.visual?.fx, tSec);
+              drawScienceMeter(ctx, scene.visual?.meter, scene.phase, tSec);
+              drawComicBurstText(ctx, canvas.width, scene.visual?.comicText, scene.phase, tSec, sceneElapsedSec);
+              drawFloatingCallouts(ctx, canvas.width, scene.visual, scene.phase, tSec);
+              if (scene.phase === "CLIMAX" || scene.visual?.fx?.includes("confetti")) {
+                drawCelebrationConfetti(ctx, canvas.width, tSec);
+              }
+              rendered3d = true;
+            } catch (glErr) {
+              console.warn("3D frame fallback to 2.5D:", glErr);
+              stage3dReady = false;
+            }
+          }
+          if (!rendered3d) {
+            renderToonVideoFrame(ctx, canvas.width, canvas.height, scene, tSec, sceneElapsedSec);
+          }
         }
 
         // Soft bottom dark gradient so @untabiru5 yellow-box subtitles always pop crisply
@@ -1599,6 +1630,14 @@ async function initStudio() {
       ? `ElevenLabs Active (${keys.elevenlabsVoiceId})`
       : `Suara Cowok Bariton Siap (${keys.elevenlabsVoiceId})`;
   } catch {}
+
+  try {
+    stage3d = new Maou3DStage(canvas.width, canvas.height);
+    stage3dReady = true;
+  } catch (err) {
+    console.warn("WebGL 3D unavailable, using 2.5D toon fallback:", err);
+    stage3dReady = false;
+  }
 
   startRenderLoop();
 

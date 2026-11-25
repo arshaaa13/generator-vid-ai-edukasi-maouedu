@@ -1510,7 +1510,7 @@ function drawGeminiStageParts(ctx, cx, cy, visual, phase, t) {
   ctx.restore();
 }
 
-function drawSceneFx(ctx, cx, cy, fxList = [], t) {
+export function drawSceneFx(ctx, cx, cy, fxList = [], t) {
   if (!Array.isArray(fxList) || !fxList.length) return;
   ctx.save();
   for (const fx of fxList.slice(0, 2)) {
@@ -1604,7 +1604,7 @@ function drawSceneFx(ctx, cx, cy, fxList = [], t) {
   ctx.restore();
 }
 
-function drawComicBurstText(ctx, W, comicText, phase, t, sceneElapsedSec) {
+export function drawComicBurstText(ctx, W, comicText, phase, t, sceneElapsedSec) {
   if (!comicText) return;
   const pop = Math.min(1, sceneElapsedSec / 0.28);
   const scale = 0.7 + Math.sin(pop * Math.PI * 0.5) * 0.35 + Math.sin(t * 8) * 0.03;
@@ -1640,7 +1640,7 @@ function drawComicBurstText(ctx, W, comicText, phase, t, sceneElapsedSec) {
   ctx.restore();
 }
 
-function drawScienceMeter(ctx, meter, phase, t) {
+export function drawScienceMeter(ctx, meter, phase, t) {
   if (!meter || !meter.label) return;
   const x = 24;
   const y = 186;
@@ -1680,7 +1680,7 @@ function drawScienceMeter(ctx, meter, phase, t) {
 // ============================================================================
 // 4. @UNTABIRU5 FLOATING POINTER CALLOUT TAGS & CONFETTI
 // ============================================================================
-function drawFloatingCallouts(ctx, W, visual, phase, t) {
+export function drawFloatingCallouts(ctx, W, visual, phase, t) {
   const tags = visual?.callouts || [];
   if (!tags.length) return;
 
@@ -1718,7 +1718,7 @@ function drawFloatingCallouts(ctx, W, visual, phase, t) {
   ctx.restore();
 }
 
-function drawCelebrationConfetti(ctx, W, t) {
+export function drawCelebrationConfetti(ctx, W, t) {
   const colors = ["#f43f5e", "#fbbf24", "#10b981", "#38bdf8", "#a855f7"];
   ctx.save();
   for (let i = 0; i < 24; i++) {
