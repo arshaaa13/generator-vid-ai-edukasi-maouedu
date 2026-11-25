@@ -14,6 +14,10 @@ let activeSceneIndex = 0;
 let activePhraseIndex = 0;
 let isPlaying = false;
 let audioCtx = null;
+let analyserNode = null;
+let analyserData = null;
+let smoothedVoiceEnergy = 0;
+let sceneEnterTimestamp = performance.now();
 let activeAudioSource = null;
 let bgmInterval = null;
 let serverConfig = {
@@ -74,10 +78,29 @@ function getAudioContext() {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
+  if (!analyserNode) {
+    analyserNode = audioCtx.createAnalyser();
+    analyserNode.fftSize = 256;
+    analyserData = new Uint8Array(analyserNode.frequencyBinCount);
+  }
   if (audioCtx.state === "suspended") {
     audioCtx.resume();
   }
   return audioCtx;
+}
+
+function getLiveVoiceEnergy() {
+  if (!isPlaying || !analyserNode || !analyserData) {
+    smoothedVoiceEnergy *= 0.85;
+    return smoothedVoiceEnergy;
+  }
+  analyserNode.getByteFrequencyData(analyserData);
+  let sum = 0;
+  // Focus on human speech frequencies (bins 2..28)
+  for (let i = 2; i < 28; i++) sum += analyserData[i];
+  const raw = Math.min(1, sum / (26 * 135));
+  smoothedVoiceEnergy = smoothedVoiceEnergy * 0.65 + raw * 0.35;
+  return smoothedVoiceEnergy;
 }
 
 function base64ToArrayBuffer(base64) {
@@ -528,6 +551,7 @@ async function playSceneAudioAndWait(index, destNode = null) {
   }
 
   activePhraseIndex = 0;
+  sceneEnterTimestamp = performance.now();
   playProceduralSfx(sc.sfx, destNode);
 
   let audioEntry = null;
@@ -549,7 +573,12 @@ async function playSceneAudioAndWait(index, destNode = null) {
       bassFilter.gain.value = audioEntry.provider === "elevenlabs" ? 3 : 7;
 
       source.connect(bassFilter);
-      bassFilter.connect(destNode || actx.destination);
+      if (analyserNode) {
+        bassFilter.connect(analyserNode);
+        analyserNode.connect(destNode || actx.destination);
+      } else {
+        bassFilter.connect(destNode || actx.destination);
+      }
 
       if (activeAudioSource) {
         try {
@@ -1010,29 +1039,76 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
   if (!toggleMcOverlay.checked || !mcImage.complete || !mcImage.naturalWidth) return;
 
   const W = canvas.width;
+  const voice = getLiveVoiceEnergy();
   const isHero = scene.mcPlacement === "hero" || scene.phase === "HOOK" || scene.phase === "CLIMAX";
   const isRight = scene.mcPlacement !== "presenter-left";
+  const elapsedScene = Math.min(1, (performance.now() - sceneEnterTimestamp) / 450);
+  const slideEase = 1 - Math.pow(1 - elapsedScene, 3);
 
-  const breathY = Math.sin(tSec * 3.2) * 3.5;
-  const speakPulse = isPlaying ? Math.abs(Math.sin(tSec * 14)) * 5 : 0;
+  // Dynamic Live2D-style motion: breathing + sway + voice-reactive bounce + phase tilt
+  const breathY = Math.sin(tSec * 2.8) * 5.5;
+  const swayX = Math.sin(tSec * 1.9) * 5.0;
+  const voiceBounceY = -voice * 11;
+  const phaseTilt =
+    scene.mcPose === "sarcastic"
+      ? -0.045 + Math.sin(tSec * 4.5) * 0.018
+      : scene.mcPose === "explaining"
+      ? 0.035 + Math.sin(tSec * 3.5) * 0.016
+      : scene.mcPose === "eureka"
+      ? Math.sin(tSec * 5.0) * 0.028
+      : Math.sin(tSec * 2.2) * 0.022;
 
   ctx.save();
-  const cardW = isHero ? 215 : 178;
-  const cardH = isHero ? 275 : 228;
-  const cardX = isHero ? W - cardW - 24 : isRight ? W - cardW - 22 : 22;
-  const cardY = isHero ? 485 + breathY : 505 + breathY;
+  const cardW = isHero ? 226 : 188;
+  const cardH = isHero ? 286 : 240;
+  const targetX = isHero ? W - cardW - 22 : isRight ? W - cardW - 20 : 20;
+  const entryOffset = (1 - slideEase) * (isRight || isHero ? 60 : -60);
+  const cardX = targetX + swayX + entryOffset;
+  const cardY = (isHero ? 476 : 498) + breathY + voiceBounceY;
+  const centerX = cardX + cardW / 2;
+  const centerY = cardY + cardH / 2;
 
-  for (let w = 0; w < 5; w++) {
-    const wx = cardX + cardW / 2 + Math.sin(tSec * 2 + w * 1.3) * (cardW * 0.48);
-    const wy = cardY + cardH * 0.45 + Math.cos(tSec * 2.4 + w) * 35;
-    const rad = 28 + Math.sin(tSec * 3 + w) * 8;
+  // 1. Rotating Arcane Overlord Magic Circle behind MC during JADI / CLIMAX
+  if (scene.mcPose === "explaining" || scene.mcPose === "eureka" || scene.phase === "CLIMAX") {
+    ctx.save();
+    ctx.translate(centerX, centerY - 12);
+    ctx.rotate(tSec * 0.75);
+    const circleRadius = (isHero ? 128 : 106) + voice * 12;
+    ctx.strokeStyle =
+      scene.phase === "CLIMAX" ? "rgba(16, 185, 129, 0.48)" : "rgba(251, 191, 36, 0.45)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, circleRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.setLineDash([10, 8]);
+    ctx.beginPath();
+    ctx.arc(0, 0, circleRadius - 14, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    for (let p = 0; p < 6; p++) {
+      const ang = (p * Math.PI) / 3;
+      ctx.beginPath();
+      ctx.arc(Math.cos(ang) * circleRadius, Math.sin(ang) * circleRadius, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#fde047";
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 2. Dark Shadow Aura Wisps billowing continuously around shoulders
+  for (let w = 0; w < 7; w++) {
+    const wx = centerX + Math.sin(tSec * 2.4 + w * 1.15) * (cardW * 0.54);
+    const wy = cardY + cardH * 0.48 - ((tSec * 36 + w * 28) % 95) + 40;
+    const rad = 24 + Math.sin(tSec * 3.6 + w) * 9 + voice * 14;
     const auraGrad = ctx.createRadialGradient(wx, wy, 2, wx, wy, rad);
     const auraColor =
       scene.mcPose === "sarcastic"
-        ? "rgba(225, 29, 72, 0.38)"
+        ? "rgba(225, 29, 72, 0.46)"
         : scene.mcPose === "eureka"
-        ? "rgba(245, 158, 11, 0.42)"
-        : "rgba(139, 92, 246, 0.34)";
+        ? "rgba(245, 158, 11, 0.48)"
+        : "rgba(139, 92, 246, 0.42)";
     auraGrad.addColorStop(0, auraColor);
     auraGrad.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = auraGrad;
@@ -1041,41 +1117,95 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
     ctx.fill();
   }
 
+  // 3. Pointing Energy Laser Beam to Educational Stage when explaining ("JADI...")
   if (scene.mcPose === "explaining" || scene.phase === "JADI") {
     ctx.save();
-    ctx.strokeStyle = "rgba(251, 191, 36, 0.7)";
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([6, 4]);
-    ctx.lineDashOffset = -tSec * 35;
+    ctx.strokeStyle = `rgba(251, 191, 36, ${0.55 + voice * 0.45})`;
+    ctx.lineWidth = 3 + voice * 2.5;
+    ctx.setLineDash([8, 5]);
+    ctx.lineDashOffset = -tSec * 55;
     ctx.beginPath();
-    ctx.moveTo(cardX + cardW / 2, cardY + 20);
-    ctx.lineTo(W / 2, 390);
+    ctx.moveTo(centerX, cardY + 18);
+    ctx.lineTo(W / 2, 385);
     ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(W / 2, 385, 6 + Math.sin(tSec * 8) * 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = "#fde047";
+    ctx.fill();
     ctx.restore();
   }
+
+  // 4. Tilted & Animated Character Card Transform
+  ctx.translate(centerX, centerY);
+  ctx.rotate(phaseTilt);
+  const punchScale = 1 + voice * 0.055;
+  ctx.scale(punchScale, punchScale);
+  ctx.translate(-centerX, -centerY);
 
   ctx.save();
   drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 18);
   ctx.clip();
 
-  const scaleBoost = 1.0 + speakPulse * 0.004;
+  // Continuous dynamic camera pan & zoom inside the portrait so character feels alive
+  const panX = Math.sin(tSec * 1.4) * 5;
+  const panY = Math.cos(tSec * 1.8) * 4 - voice * 5;
+  const innerZoom = 1.08 + Math.sin(tSec * 1.1) * 0.03 + voice * 0.05;
   ctx.drawImage(
     mcImage,
-    cardX - (cardW * (scaleBoost - 1)) / 2,
-    cardY - 6,
-    cardW * scaleBoost,
-    cardH * 1.15
+    cardX - (cardW * (innerZoom - 1)) / 2 + panX,
+    cardY - 8 + panY,
+    cardW * innerZoom,
+    cardH * 1.15 * innerZoom
   );
 
-  const innerGrad = ctx.createLinearGradient(0, cardY + cardH - 65, 0, cardY + cardH);
+  // Subtle crimson eye glint shimmer & broken-left-horn energy flicker
+  const glintAlpha = 0.28 + voice * 0.55 + Math.abs(Math.sin(tSec * 4)) * 0.22;
+  const hornX = cardX + cardW * 0.67 + panX;
+  const hornY = cardY + cardH * 0.16 + panY;
+  const hornGrad = ctx.createRadialGradient(hornX, hornY, 1, hornX, hornY, 18 + voice * 12);
+  hornGrad.addColorStop(0, `rgba(255, 60, 90, ${glintAlpha})`);
+  hornGrad.addColorStop(1, "rgba(255, 0, 40, 0)");
+  ctx.fillStyle = hornGrad;
+  ctx.beginPath();
+  ctx.arc(hornX, hornY, 26, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Natural eye-blink micro-shadow every ~3.4 seconds
+  const blinkCycle = tSec % 3.4;
+  if (blinkCycle > 3.24) {
+    ctx.fillStyle = "rgba(12, 10, 20, 0.55)";
+    ctx.fillRect(cardX + cardW * 0.28, cardY + cardH * 0.31, cardW * 0.44, 5);
+  }
+
+  // Sarcastic Glitch Scanlines on "TAPI..."
+  if (scene.mcPose === "sarcastic" && Math.sin(tSec * 18) > 0.75) {
+    ctx.fillStyle = "rgba(225, 29, 72, 0.22)";
+    ctx.fillRect(cardX, cardY + ((tSec * 160) % cardH), cardW, 6);
+  }
+
+  const innerGrad = ctx.createLinearGradient(0, cardY + cardH - 72, 0, cardY + cardH);
   innerGrad.addColorStop(0, "rgba(9, 10, 15, 0)");
-  innerGrad.addColorStop(1, "rgba(9, 10, 15, 0.92)");
+  innerGrad.addColorStop(1, "rgba(9, 10, 15, 0.94)");
   ctx.fillStyle = innerGrad;
-  ctx.fillRect(cardX, cardY + cardH - 65, cardW, 65);
+  ctx.fillRect(cardX, cardY + cardH - 72, cardW, 72);
+
+  // Live Voice Waveform Equalizer Bars inside bottom of MC frame
+  if (isPlaying || voice > 0.02) {
+    const bars = 13;
+    const barW = 4;
+    const startBx = centerX - (bars * 7) / 2;
+    for (let b = 0; b < bars; b++) {
+      const bh = 4 + Math.abs(Math.sin(tSec * 16 + b * 0.9)) * (6 + voice * 22);
+      ctx.fillStyle = scene.mcPose === "sarcastic" ? "#fb7185" : "#fbbf24";
+      drawRoundedRect(ctx, startBx + b * 7, cardY + cardH - 42 - bh, barW, bh, 2);
+      ctx.fill();
+    }
+  }
   ctx.restore();
 
   drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 18);
-  ctx.lineWidth = 3 + speakPulse * 0.35;
+  ctx.lineWidth = 3 + voice * 3.5;
   ctx.strokeStyle =
     scene.mcPose === "sarcastic"
       ? "#e11d48"
@@ -1103,7 +1233,7 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
   ctx.font = "800 10.5px 'Plus Jakarta Sans', sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(badgeLabel, cardX + cardW / 2, cardY + cardH - 22);
+  ctx.fillText(badgeLabel, centerX, cardY + cardH - 22);
   ctx.restore();
 }
 
