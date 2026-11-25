@@ -1,0 +1,10 @@
+{
+  "name": "maou-edu-video-generator",
+  "version": "1.0.0",
+  "description": "AI Faceless Educational Video Generator (Gaya B) with Consistent MC Raja Iblis & ElevenLabs Voice",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs"
+  }
+}

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MaouEdu AI — 1-Prompt Educational Video Generator (MC Raja Iblis)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Top Bar -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-avatar-wrap">
+        <img src="/assets/mc_default.jpg" alt="MC Raja Iblis" class="brand-avatar" />
+        <span class="brand-live-dot"></span>
+      </div>
+      <div>
+        <div class="brand-title-row">
+          <h1>MaouEdu AI Video Studio</h1>
+          <span class="badge badge-crimson">1-PROMPT AUTO-RESEARCH • GAYA B</span>
+        </div>
+        <p class="brand-sub">
+          Ciri Khas Terkunci: <strong>MC Raja Iblis (Modern Overlord)</strong> • Suara Cowok: <code>cPoqAvGWCPfCfyPMwe4z</code>
+        </p>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="voice-pill" id="voiceStatusPill" title="ElevenLabs Voice ID: cPoqAvGWCPfCfyPMwe4z">
+        <span class="dot" id="voiceStatusDot"></span>
+        <span id="voiceStatusLabel">Mode Suara Cowok Siap</span>
+      </div>
+      <button class="btn btn-secondary" id="openCharacterBibleBtn">👑 Character Bible</button>
+      <button class="btn btn-primary" id="openSettingsBtn">⚙️ API & Voice</button>
+    </div>
+  </header>
+
+  <!-- Hero 1-Prompt Generator Bar -->
+  <section class="prompt-hero">
+    <div class="prompt-hero-inner">
+      <div class="prompt-input-wrap">
+        <span class="prompt-icon">👑</span>
+        <input
+          type="text"
+          id="simplePromptInput"
+          placeholder='Ketik prompt simple... contoh: "bikin vid tentang buat aquarium ikan arwana"'
+          value="bikin vid tentang buat aquarium ikan arwana"
+        />
+        <button class="btn btn-crimson btn-generate-hero" id="autoBuildVideoBtn">
+          ✨ Buat Video Otomatis
+        </button>
+      </div>
+
+      <div class="prompt-meta-row">
+        <div class="preset-chips">
+          <span class="chip-label">Contoh Prompt:</span>
+          <button class="chip prompt-chip" data-prompt="bikin vid tentang buat aquarium ikan arwana">
+            🐟 Buat Aquarium Ikan Arwana
+          </button>
+          <button class="chip prompt-chip" data-prompt="bikin vid tentang cara kerja mesin kipas angin dan kapasitor">
+            🌀 Cara Kerja Kipas Angin
+          </button>
+          <button class="chip prompt-chip" data-prompt="bikin vid tentang sistem minapadi panen ikan di sawah padi">
+            🌾 Sawah Minapadi
+          </button>
+          <button class="chip prompt-chip" data-prompt="bikin vid tentang cara kerja panel surya rumah tangga">
+            ☀️ Panel Surya Rumah
+          </button>
+          <button class="chip prompt-chip" data-prompt="bikin vid tentang cara bikin filter air sumur keruh jadi jernih">
+            💧 Filter Air Sumur
+          </button>
+        </div>
+      </div>
+
+      <!-- Live 4-Step Autonomous Pipeline Tracker -->
+      <div class="pipeline-bar hidden" id="pipelineBar">
+        <div class="pipe-step" id="stepResearch">1. 🔍 AI Research Topik</div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step" id="stepScript">2. ✍️ Script MC Raja Iblis</div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step" id="stepVoice">3. 🎙️ Voiceover Cowok</div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step" id="stepReady">4. 🎬 Video 9:16 Siap!</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main 3-Column Studio Layout -->
+  <main class="studio-grid">
+    <!-- Left Column: AI Research Result, TikTok Reference & Controls -->
+    <section class="panel panel-left">
+      <div class="panel-header">
+        <h2>1. Hasil Research AI & Referensi</h2>
+        <span class="panel-tag">Auto-Research</span>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <label class="field-label">🧠 Fakta Riset Online (Otomatis dari Web)</label>
+          <span class="badge badge-outline" id="aiEngineBadge">Menunggu prompt</span>
+        </div>
+        <div id="researchResultsBox" class="research-box">
+          Ketik prompt di atas lalu klik <strong>✨ Buat Video Otomatis</strong>. AI akan otomatis meriset fakta ilmiahnya, menulis skrip ala MC Raja Iblis, merekam suara cowok, dan langsung memutar videonya.
+        </div>
+      </div>
+
+      <div class="card">
+        <label class="field-label">🔗 Link TikTok Referensi (Opsional - Style Cloner)</label>
+        <div class="input-row">
+          <input
+            type="text"
+            id="tiktokUrlInput"
+            placeholder="https://vt.tiktok.com/ZSs6fvr9W/"
+          />
+          <button class="btn btn-secondary" id="analyzeTiktokBtn">Bedah</button>
+        </div>
+        <div id="tiktokAnalysisBox" class="analysis-box hidden"></div>
+      </div>
+
+      <div class="card">
+        <label class="field-label">🎛️ Pengaturan Visual Gaya B & Audio</label>
+        <div class="toggle-list">
+          <label class="toggle-item">
+            <input type="checkbox" id="toggleMcOverlay" checked />
+            <span>Presenter <strong>MC Raja Iblis</strong> (Gaya B)</span>
+          </label>
+          <label class="toggle-item">
+            <input type="checkbox" id="toggleYellowSubtitles" checked />
+            <span>Subtitle Kotak Kuning Khas <code>@untabiru5</code></span>
+          </label>
+          <label class="toggle-item">
+            <input type="checkbox" id="toggleSfx" checked />
+            <span>Auto Sound Effects (Whoosh, Error, Ding)</span>
+          </label>
+          <label class="toggle-item">
+            <input type="checkbox" id="toggleBgm" checked />
+            <span>Background Music (Dark Edutainment)</span>
+          </label>
+          <label class="toggle-item">
+            <input type="checkbox" id="toggleAiBgImage" />
+            <span>Ilustrasi AI Eksternal per Scene (Pollinations)</span>
+          </label>
+        </div>
+
+        <div class="action-stack">
+          <button class="btn btn-gold btn-full" id="exportVideoBtn">
+            ⬇️ Render & Download Video (9:16)
+          </button>
+        </div>
+        <div id="exportProgressBox" class="progress-box hidden">
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="exportProgressFill"></div>
+          </div>
+          <p id="exportProgressText">Menyiapkan render video...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Center Column: 9:16 TikTok Preview Canvas -->
+    <section class="panel panel-center">
+      <div class="preview-header">
+        <div>
+          <span class="preview-title" id="videoTitleDisplay">MaouEdu 9:16 Preview Stage</span>
+          <span class="preview-meta" id="sceneCounterDisplay">Siap Membuat Video</span>
+        </div>
+        <div class="preview-badges">
+          <span class="badge badge-outline">9:16 TikTok</span>
+          <span class="badge badge-gold" id="activePoseBadge">MC Pose: DEFAULT</span>
+        </div>
+      </div>
+
+      <div class="canvas-stage-wrapper">
+        <canvas id="videoCanvas" width="540" height="960"></canvas>
+      </div>
+
+      <div class="player-controls">
+        <button class="btn btn-secondary" id="prevSceneBtn" title="Scene Sebelumnya">⏮</button>
+        <button class="btn btn-crimson btn-play" id="playFullVideoBtn">▶ Putar Full Video</button>
+        <button class="btn btn-secondary" id="playSceneBtn" title="Putar Scene Ini Saja">🔊 Scene Ini</button>
+        <button class="btn btn-secondary" id="nextSceneBtn" title="Scene Berikutnya">⏭</button>
+      </div>
+    </section>
+
+    <!-- Right Column: Scene-by-Scene Script & Gaya B Storyboard Editor -->
+    <section class="panel panel-right">
+      <div class="panel-header">
+        <div>
+          <h2>2. Storyboard & Script Editor</h2>
+          <p class="panel-subtitle">Opsional: edit teks <code>[kata kunci]</code> atau ekspresi MC tiap scene</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="addSceneBtn">+ Scene</button>
+      </div>
+
+      <div id="sceneListContainer" class="scene-list"></div>
+    </section>
+  </main>
+
+  <!-- API & Voice Settings Modal -->
+  <div class="modal-backdrop hidden" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>⚙️ Pengaturan Suara ElevenLabs & Gemini AI</h3>
+        <button class="btn-close" id="closeSettingsBtn">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field-group">
+          <label class="field-label">🎙️ ElevenLabs Voice ID (Suara Cowok Pilihan Lu)</label>
+          <input type="text" id="elevenlabsVoiceIdInput" value="cPoqAvGWCPfCfyPMwe4z" />
+          <small class="field-hint">
+            Link suara: <a href="https://elevenlabs.io/voices/cPoqAvGWCPfCfyPMwe4z" target="_blank" rel="noreferrer">https://elevenlabs.io/voices/cPoqAvGWCPfCfyPMwe4z</a>
+          </small>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">🔑 ElevenLabs API Key (Opsional — atau set di Vercel Env Vars)</label>
+          <input type="password" id="elevenlabsApiKeyInput" placeholder="sk_..." />
+          <small class="field-hint">
+            Disimpan aman di browser kamu (`localStorage`) & tidak dikirim ke GitHub. Kosongkan untuk pakai Free Deep Male Baritone TTS bawaan.
+          </small>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">✨ Gemini API Key (Opsional — atau set `GEMINI_API_KEY` di Vercel Env Vars)</label>
+          <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy..." />
+          <small class="field-hint">
+            Jika tidak diisi (atau limit), sistem otomatis memakai <strong>Live Wikipedia/Web Research + Free LLM</strong> agar tetap jalan di Vercel.
+          </small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelSettingsBtn">Batal</button>
+        <button class="btn btn-crimson" id="saveSettingsBtn">Simpan di Browser</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Character Bible Modal -->
+  <div class="modal-backdrop hidden" id="characterModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3>👑 Master Character Bible — Ciri Khas Channel Lu</h3>
+        <button class="btn-close" id="closeCharacterBtn">✕</button>
+      </div>
+      <div class="modal-body character-bible-grid">
+        <div class="character-preview-col">
+          <img src="/assets/mc_default.jpg" alt="MC Raja Iblis" class="character-sheet-img" />
+        </div>
+        <div class="character-details-col">
+          <h4>Maou Vaelen — "The Modern Overlord" (100% Original & Copyright-Safe)</h4>
+          <ul class="trait-list">
+            <li><strong>Peran di Video:</strong> MC / Karakter Utama & Narator yang menjelaskan ilmu pengetahuan (Bukan NPC bisu).</li>
+            <li><strong>Rambut & Wajah:</strong> Wajah anime tampan tajam, rambut <em>ash-silver wolf-cut</em> dengan 1 helai merah darah (<em>crimson streak</em>) di poni depan.</li>
+            <li><strong>Tanduk Ikonik:</strong> Tanduk hitam obsidian asimetris — <strong>tanduk kanan utuh</strong>, <strong>tanduk kiri patah di ujung dengan efek retakan cahaya merah menyala</strong>.</li>
+            <li><strong>Outfit & Aura:</strong> <em>Turtleneck</em> hitam ketat + <em>long coat</em> hitam modern beraksen garis emas & pin permata merah di dada + <strong>aura bayangan tipis di sekitar bahu</strong>.</li>
+            <li><strong>Vibe Pembawaan:</strong> Kalem, elegan, blak-blakan, asik kayak temen nongkrong tapi tetap punya aura "bos besar", sedikit arogan/sarkas.</li>
+            <li><strong>Suara Cowok:</strong> ElevenLabs Voice ID <code>cPoqAvGWCPfCfyPMwe4z</code> + Deep Male Baritone Tuning.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
