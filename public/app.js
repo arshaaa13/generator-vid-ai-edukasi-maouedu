@@ -492,7 +492,9 @@ async function ensureSceneAudio(index) {
     sceneAudioBuffers.set(index, entry);
     if (st) {
       if (data.provider === "elevenlabs") {
-        st.textContent = `✅ ElevenLabs (${data.voiceId})`;
+        st.textContent = data.voiceFallbackNote
+          ? `✅ ElevenLabs Deep Male (${data.voiceId} • Free API)`
+          : `✅ ElevenLabs (${data.voiceId})`;
         st.classList.add("ready");
       } else if (data.elevenlabsError) {
         st.textContent = `⚠️ ElevenLabs Error (pakai fallback): ${data.elevenlabsError.slice(0, 55)}`;
@@ -502,9 +504,17 @@ async function ensureSceneAudio(index) {
         st.classList.add("ready");
       }
     }
-    if (data.elevenlabsError) {
-      const lbl = document.getElementById("voiceStatusLabel");
-      if (lbl) lbl.textContent = `ElevenLabs Error: cek izin/kuota API key`;
+    const lbl = document.getElementById("voiceStatusLabel");
+    const dot = document.getElementById("voiceStatusDot");
+    if (data.provider === "elevenlabs") {
+      if (dot) dot.classList.add("active-el");
+      if (lbl) {
+        lbl.textContent = data.voiceFallbackNote
+          ? `ElevenLabs Active (${data.voiceId} • Free Premade)`
+          : `ElevenLabs Active (${data.voiceId})`;
+      }
+    } else if (data.elevenlabsError && lbl) {
+      lbl.textContent = `ElevenLabs Error: cek izin/kuota API key`;
     }
     return entry;
   }
