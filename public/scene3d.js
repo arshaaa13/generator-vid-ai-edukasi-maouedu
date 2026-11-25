@@ -1,11 +1,12 @@
-// MaouEdu 3D Video World Engine v2 (Three.js WebGL)
-// High-Craft @untabiru5 x @dhotscliper 3D Diorama Storytelling + Gemini 3D Choreography Compiler!
-// Note: 2D Anime MC Raja Iblis & yellow-pill subtitles always composite outside this 3D video in app.js.
+// MaouEdu 3D Video World Engine v3 (Three.js WebGL)
+// High-Craft @untabiru5 x @dhotscliper 3D Diorama Storytelling + Gemini Composite 3D Prefab Compiler!
+// Features extruded slotted stator + copper windings, stone-tiled cutaway pond + fish drop shadows,
+// curved golden rice paddy ditch + palm + flag, beveled Blender-style geometry, and 10+ composite prefabs.
 
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js";
 
 // ============================================================================
-// 1. PROCEDURAL TEXTURES (@untabiru5 Brick, Tile, Oak Desk, Soil, Fish Scales)
+// 1. PROCEDURAL TEXTURES & BEVELED GEOMETRY HELPERS
 // ============================================================================
 function createBrickTexture() {
   const c = document.createElement("canvas");
@@ -53,10 +54,10 @@ function createWoodTexture() {
   c.width = 256;
   c.height = 256;
   const g = c.getContext("2d");
-  g.fillStyle = "#c97d3b";
+  g.fillStyle = "#cc803c";
   g.fillRect(0, 0, 256, 256);
   for (let y = 0; y < 256; y += 6) {
-    g.fillStyle = y % 18 === 0 ? "rgba(92, 42, 12, 0.24)" : "rgba(255, 224, 178, 0.14)";
+    g.fillStyle = y % 18 === 0 ? "rgba(88, 38, 10, 0.25)" : "rgba(255, 224, 178, 0.14)";
     g.fillRect(0, y, 256, 3);
   }
   const tex = new THREE.CanvasTexture(c);
@@ -73,7 +74,7 @@ function createSoilTexture() {
   const g = c.getContext("2d");
   g.fillStyle = "#8a562e";
   g.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 110; i++) {
+  for (let i = 0; i < 115; i++) {
     g.fillStyle = i % 3 === 0 ? "#5c3619" : i % 3 === 1 ? "#a86f42" : "#d6ab7c";
     g.beginPath();
     g.arc((i * 53) % 256, (i * 97) % 256, 3 + (i % 6), 0, Math.PI * 2);
@@ -89,8 +90,8 @@ function createWireMeshTexture() {
   const g = c.getContext("2d");
   g.clearRect(0, 0, 128, 128);
   g.strokeStyle = "#18181b";
-  g.lineWidth = 5;
-  for (let i = 0; i <= 128; i += 16) {
+  g.lineWidth = 4;
+  for (let i = 0; i <= 128; i += 12) {
     g.beginPath();
     g.moveTo(i, 0);
     g.lineTo(i, 128);
@@ -101,7 +102,7 @@ function createWireMeshTexture() {
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(6, 2);
+  tex.repeat.set(7, 2);
   return tex;
 }
 
@@ -125,6 +126,30 @@ function createArowanaScaleTexture() {
   return new THREE.CanvasTexture(c);
 }
 
+function createSolarGridTexture() {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 256;
+  const g = c.getContext("2d");
+  g.fillStyle = "#0f172a";
+  g.fillRect(0, 0, 256, 256);
+  g.strokeStyle = "#38bdf8";
+  g.lineWidth = 4;
+  for (let x = 32; x < 256; x += 32) {
+    g.beginPath();
+    g.moveTo(x, 0);
+    g.lineTo(x, 256);
+    g.stroke();
+  }
+  for (let y = 32; y < 256; y += 32) {
+    g.beginPath();
+    g.moveTo(0, y);
+    g.lineTo(256, y);
+    g.stroke();
+  }
+  return new THREE.CanvasTexture(c);
+}
+
 function createCapacitorLabelTexture() {
   const c = document.createElement("canvas");
   c.width = 256;
@@ -144,6 +169,38 @@ function createCapacitorLabelTexture() {
   return new THREE.CanvasTexture(c);
 }
 
+// Smooth Blender-Style Rounded Bevel Box Geometry
+function createRoundedBoxGeometry(w = 1, h = 1, d = 1, r = 0.08) {
+  const rad = Math.min(r, w * 0.28, h * 0.28, d * 0.28);
+  if (typeof THREE.Shape !== "function" || typeof THREE.ExtrudeGeometry !== "function") {
+    return new THREE.BoxGeometry(w, h, d);
+  }
+  const shape = new THREE.Shape();
+  const hw = Math.max(0.02, w / 2 - rad);
+  const hh = Math.max(0.02, h / 2 - rad);
+  shape.moveTo(-hw, -hh - rad);
+  shape.lineTo(hw, -hh - rad);
+  shape.quadraticCurveTo(hw + rad, -hh - rad, hw + rad, -hh);
+  shape.lineTo(hw + rad, hh);
+  shape.quadraticCurveTo(hw + rad, hh + rad, hw, hh + rad);
+  shape.lineTo(-hw, hh + rad);
+  shape.quadraticCurveTo(-hw - rad, hh + rad, -hw - rad, hh);
+  shape.lineTo(-hw - rad, -hh);
+  shape.quadraticCurveTo(-hw - rad, -hh - rad, -hw, -hh - rad);
+
+  const depth = Math.max(0.02, d - rad * 2);
+  const geom = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: true,
+    bevelSegments: 2,
+    steps: 1,
+    bevelSize: rad,
+    bevelThickness: rad
+  });
+  geom.translate(0, 0, -depth / 2);
+  return geom;
+}
+
 function easeOutBack(x) {
   const t = Math.max(0, Math.min(1, x));
   const c1 = 1.70158;
@@ -156,7 +213,7 @@ function easeOutBack(x) {
 // ============================================================================
 function createHumanWorkerRig() {
   const root = new THREE.Group();
-  const skinMat = new THREE.MeshStandardMaterial({ color: 0xedb98f, roughness: 0.48 });
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xebb68c, roughness: 0.48 });
   const hoodieMat = new THREE.MeshStandardMaterial({ color: 0x0d9488, roughness: 0.5 });
   const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1e3a5f, roughness: 0.65 });
   const shoeMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 });
@@ -170,6 +227,16 @@ function createHumanWorkerRig() {
   torso.position.y = 0.32;
   torso.castShadow = true;
   hips.add(torso);
+
+  // Cute white vertical shirt buttons (matches dhotscliper ref_3.jpg!)
+  const btnGroup = new THREE.Group();
+  const btnMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
+  [0.44, 0.32, 0.2].forEach((by) => {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 6), btnMat);
+    b.position.set(0, by, 0.235);
+    btnGroup.add(b);
+  });
+  hips.add(btnGroup);
 
   const head = new THREE.Group();
   head.position.y = 0.72;
@@ -197,23 +264,23 @@ function createHumanWorkerRig() {
   // @dhotscliper Yellow Farmer Caping Hat with crisp dark outline rim!
   const capingGroup = new THREE.Group();
   const capingCone = new THREE.Mesh(
-    new THREE.ConeGeometry(0.56, 0.24, 24),
+    new THREE.ConeGeometry(0.58, 0.24, 24),
     new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.65 })
   );
   capingCone.castShadow = true;
   capingGroup.add(capingCone);
   const capingRim = new THREE.Mesh(
-    new THREE.TorusGeometry(0.56, 0.018, 8, 28),
+    new THREE.TorusGeometry(0.58, 0.018, 8, 28),
     new THREE.MeshBasicMaterial({ color: 0x141824 })
   );
   capingRim.rotation.x = Math.PI / 2;
   capingRim.position.y = -0.11;
   capingGroup.add(capingRim);
-  capingGroup.position.set(0, 0.21, 0);
+  capingGroup.position.set(0, 0.22, 0);
   capingGroup.visible = false;
   head.add(capingGroup);
 
-  // White Chef Hat
+  // Chef Hat
   const chefHat = new THREE.Group();
   const chefBase = new THREE.Mesh(
     new THREE.CylinderGeometry(0.18, 0.18, 0.16, 14),
@@ -251,15 +318,15 @@ function createHumanWorkerRig() {
   rShoe.position.set(0, -0.55, 0.05);
   rightLeg.add(rShoe);
 
-  // Articulated Arms + Tactile Big Peach Spherical Hands (ref_2.jpg!)
+  // Tactile Spherical Hands & Arms (exact ref_2.jpg silhouette!)
   const leftArm = new THREE.Group();
   leftArm.position.set(-0.28, 0.46, 0);
   hips.add(leftArm);
-  const laMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.068, 0.32, 6, 10), hoodieMat);
+  const laMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.072, 0.32, 6, 10), hoodieMat);
   laMesh.position.y = -0.19;
   laMesh.castShadow = true;
   leftArm.add(laMesh);
-  const lHand = new THREE.Mesh(new THREE.SphereGeometry(0.095, 14, 12), skinMat);
+  const lHand = new THREE.Mesh(new THREE.SphereGeometry(0.105, 16, 14), skinMat);
   lHand.position.y = -0.4;
   lHand.castShadow = true;
   leftArm.add(lHand);
@@ -267,32 +334,41 @@ function createHumanWorkerRig() {
   const rightArm = new THREE.Group();
   rightArm.position.set(0.28, 0.46, 0);
   hips.add(rightArm);
-  const raMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.068, 0.32, 6, 10), hoodieMat);
+  const raMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.072, 0.32, 6, 10), hoodieMat);
   raMesh.position.y = -0.19;
   raMesh.castShadow = true;
   rightArm.add(raMesh);
-  const rHand = new THREE.Mesh(new THREE.SphereGeometry(0.095, 14, 12), skinMat);
+  const rHand = new THREE.Mesh(new THREE.SphereGeometry(0.105, 16, 14), skinMat);
   rHand.position.y = -0.4;
   rHand.castShadow = true;
   rightArm.add(rHand);
 
-  // Switchable Right-Hand Tool Group (Bamboo Pole / Blowtorch / Carton / Magnifier)
+  // Switchable Bamboo Scoop / Blowtorch Group
   const toolGroup = new THREE.Group();
   toolGroup.position.set(0, -0.4, 0.06);
   rightArm.add(toolGroup);
   const stick = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.024, 0.024, 0.85, 8),
-    new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.55 })
+    new THREE.CylinderGeometry(0.024, 0.024, 0.9, 8),
+    new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.55 })
   );
-  stick.position.y = -0.25;
-  stick.rotation.x = 0.45;
+  stick.position.y = -0.28;
+  stick.rotation.x = 0.42;
   toolGroup.add(stick);
+
+  const basketRim = new THREE.Mesh(
+    new THREE.TorusGeometry(0.18, 0.022, 8, 16),
+    new THREE.MeshStandardMaterial({ color: 0x18181b })
+  );
+  basketRim.position.set(0, -0.68, -0.18);
+  basketRim.rotation.x = Math.PI / 2;
+  basketRim.visible = false;
+  toolGroup.add(basketRim);
 
   const flameTip = new THREE.Mesh(
     new THREE.ConeGeometry(0.06, 0.16, 8),
     new THREE.MeshBasicMaterial({ color: 0xf97316 })
   );
-  flameTip.position.set(0, -0.64, -0.16);
+  flameTip.position.set(0, -0.66, -0.16);
   flameTip.rotation.x = Math.PI + 0.45;
   flameTip.visible = false;
   toolGroup.add(flameTip);
@@ -306,6 +382,7 @@ function createHumanWorkerRig() {
     leftLeg,
     rightLeg,
     toolGroup,
+    basketRim,
     flameTip,
     capingHat: capingGroup,
     chefHat
@@ -313,11 +390,19 @@ function createHumanWorkerRig() {
 }
 
 // ============================================================================
-// 3. DETAILED 3D FISH, GEAR, FAN & COIL BUILDERS
+// 3. DETAILED 3D FISH (+ DROP SHADOW), RICE STALK, PALM, GEAR, FAN, COIL
 // ============================================================================
 function createFishMesh(species = "arowana", colorHex = "#ef4444", scaleTex = null) {
   const g = new THREE.Group();
   const baseColor = new THREE.Color(colorHex || (species === "betta" ? "#2563eb" : "#ef4444"));
+
+  // Grounding Soft Shadow Oval beneath every fish (ref_1.jpg!)
+  const shadowDisc = new THREE.Mesh(
+    new THREE.CircleGeometry(0.28, 16),
+    new THREE.MeshBasicMaterial({ color: 0x0f172a, transparent: true, opacity: 0.22 })
+  );
+  shadowDisc.rotation.x = -Math.PI / 2;
+  shadowDisc.scale.set(1.5, 0.65, 1);
 
   if (species === "betta") {
     const bodyMat = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.25, metalness: 0.2 });
@@ -352,39 +437,99 @@ function createFishMesh(species = "arowana", colorHex = "#ef4444", scaleTex = nu
     const e2 = e1.clone();
     e2.position.z = -0.055;
     g.add(e2);
-    return { group: g, tail, dorsal };
+    return { group: g, tail, shadowDisc };
   }
 
-  // Scaled Arowana / Golden Carp (matches ref_1.jpg & ref_3.jpg!)
+  // Sculpted Scaled Arowana / Orange Carp (matches ref_1.jpg & ref_3.jpg!)
   const bodyMat = new THREE.MeshStandardMaterial({
     color: species === "orange_fish" ? 0xf97316 : baseColor,
     map: species === "arowana" && scaleTex ? scaleTex : null,
-    roughness: 0.28,
+    roughness: 0.26,
     metalness: 0.2
   });
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 14), bodyMat);
-  body.scale.set(species === "arowana" ? 1.95 : 1.45, 0.48, 0.32);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.21, 18, 14), bodyMat);
+  body.scale.set(species === "arowana" ? 1.95 : 1.4, 0.46, 0.3);
   body.castShadow = true;
   g.add(body);
 
   const finMat = new THREE.MeshStandardMaterial({
     color: species === "orange_fish" ? 0xfb923c : 0xf43f5e,
-    roughness: 0.35
+    roughness: 0.35,
+    side: THREE.DoubleSide
   });
-  const tail = new THREE.Mesh(new THREE.CircleGeometry(0.15, 10, -Math.PI * 0.4, Math.PI * 0.8), finMat);
-  tail.position.set(species === "arowana" ? -0.44 : -0.32, 0, 0);
+  const tail = new THREE.Mesh(new THREE.CircleGeometry(0.145, 10, -Math.PI * 0.42, Math.PI * 0.84), finMat);
+  tail.position.set(species === "arowana" ? -0.43 : -0.31, 0, 0);
   tail.rotation.y = Math.PI;
-  tail.material.side = THREE.DoubleSide;
   g.add(tail);
 
+  if (species === "arowana") {
+    const dorsalLong = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.09, 0.02), finMat);
+    dorsalLong.position.set(-0.22, 0.09, 0);
+    dorsalLong.rotation.z = 0.08;
+    g.add(dorsalLong);
+    const analLong = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.02), finMat);
+    analLong.position.set(-0.22, -0.08, 0);
+    g.add(analLong);
+
+    // Classic Arowana Mouth Whisker Barbels!
+    const barbelMat = new THREE.MeshBasicMaterial({ color: 0x7f1d1d });
+    [-0.03, 0.03].forEach((bz) => {
+      const barb = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.004, 0.09, 5), barbelMat);
+      barb.position.set(0.41, 0.01, bz);
+      barb.rotation.z = -1.1;
+      g.add(barb);
+    });
+  }
+
   const eyeMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
-  const e1 = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), eyeMat);
-  e1.position.set(species === "arowana" ? 0.33 : 0.22, 0.03, 0.06);
+  const e1 = new THREE.Mesh(new THREE.SphereGeometry(0.028, 6, 6), eyeMat);
+  e1.position.set(species === "arowana" ? 0.31 : 0.21, 0.03, 0.058);
   g.add(e1);
   const e2 = e1.clone();
-  e2.position.z = -0.06;
+  e2.position.z = -0.058;
   g.add(e2);
-  return { group: g, tail };
+  return { group: g, tail, shadowDisc };
+}
+
+function createGoldenRicePlant() {
+  const g = new THREE.Group();
+  const stemMat = new THREE.MeshStandardMaterial({ color: 0x65a30d, roughness: 0.7 });
+  const grainMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.55 });
+  for (let b = 0; b < 3; b++) {
+    const offX = (b - 1) * 0.06;
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.024, 0.92, 6), stemMat);
+    stem.position.set(offX, 0.46, (b % 2) * 0.04);
+    g.add(stem);
+    // Curved golden drooping grain head at top (ref_3.jpg!)
+    const head = new THREE.Mesh(new THREE.CapsuleGeometry(0.032, 0.26, 4, 8), grainMat);
+    head.position.set(offX + 0.06, 0.96, (b % 2) * 0.04);
+    head.rotation.z = -0.58 + b * 0.14;
+    g.add(head);
+  }
+  return g;
+}
+
+function createCoconutPalm(x, z, scale = 1) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08 * scale, 0.14 * scale, 1.9 * scale, 8),
+    new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.85 })
+  );
+  trunk.position.y = 0.95 * scale;
+  trunk.rotation.z = 0.08;
+  g.add(trunk);
+
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.65, side: THREE.DoubleSide });
+  for (let f = 0; f < 6; f++) {
+    const ang = (f / 6) * Math.PI * 2;
+    const frond = new THREE.Mesh(new THREE.ConeGeometry(0.24 * scale, 1.05 * scale, 4), leafMat);
+    frond.position.set(Math.cos(ang) * 0.45 * scale, 1.85 * scale, Math.sin(ang) * 0.45 * scale);
+    frond.rotation.z = -1.25;
+    frond.rotation.y = -ang;
+    g.add(frond);
+  }
+  g.position.set(x, 0, z);
+  return g;
 }
 
 function buildGearMesh(radius = 0.3, teeth = 8, color = "#f59e0b", metallic = true) {
@@ -463,8 +608,26 @@ function buildHelixCoilMesh(radius = 0.35, h = 0.65, turns = 5, tube = 0.04, col
   return mesh;
 }
 
+function buildCurvedTube(from, to, radius = 0.04, color = "#64748b", glow = false) {
+  const p0 = new THREE.Vector3(from[0], from[1], from[2]);
+  const p2 = new THREE.Vector3(to[0], to[1], to[2]);
+  const mid = new THREE.Vector3((p0.x + p2.x) / 2, Math.max(p0.y, p2.y) + 0.16, (p0.z + p2.z) / 2 + 0.08);
+  const curve = new THREE.CatmullRomCurve3([p0, mid, p2]);
+  const geom = new THREE.TubeGeometry(curve, 16, radius, 8, false);
+  const c = new THREE.Color(color);
+  const mat = new THREE.MeshStandardMaterial({
+    color: c,
+    emissive: glow ? c.clone().multiplyScalar(0.45) : new THREE.Color(0x000000),
+    metalness: 0.45,
+    roughness: 0.3
+  });
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.castShadow = true;
+  return mesh;
+}
+
 // ============================================================================
-// 4. MAIN MAOU 3D DIORAMA STAGE v2 (@untabiru5 x @dhotscliper + GEMINI 3D!)
+// 4. MAIN MAOU 3D DIORAMA STAGE v3 (@untabiru5 x @dhotscliper + GEMINI 3D!)
 // ============================================================================
 export class Maou3DStage {
   constructor(width = 540, height = 960) {
@@ -481,22 +644,21 @@ export class Maou3DStage {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.toneMappingExposure = 1.16;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xfff7ed);
 
     this.camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 80);
-    this.camera.position.set(0.35, 1.45, 2.45);
+    this.camera.position.set(0.32, 1.38, 2.28);
     this.cameraTarget = new THREE.Vector3(0, 0.5, 0.05);
-    this.camPosGoal = new THREE.Vector3(0.35, 1.45, 2.45);
+    this.camPosGoal = new THREE.Vector3(0.32, 1.38, 2.28);
     this.camLookGoal = new THREE.Vector3(0, 0.5, 0.05);
 
-    // Bright Daylight @untabiru5 Global Studio Lighting + Tight Sharp Sun Shadows!
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x64748b, 1.15);
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x64748b, 1.18);
     this.scene.add(hemi);
 
-    const sun = new THREE.DirectionalLight(0xfffbeb, 1.6);
+    const sun = new THREE.DirectionalLight(0xfffbeb, 1.65);
     sun.position.set(3.8, 7.2, 4.5);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
@@ -509,7 +671,7 @@ export class Maou3DStage {
     sun.shadow.bias = -0.0005;
     this.scene.add(sun);
 
-    const fill = new THREE.DirectionalLight(0xbae6fd, 0.5);
+    const fill = new THREE.DirectionalLight(0xbae6fd, 0.52);
     fill.position.set(-4, 3.5, 2.5);
     this.scene.add(fill);
 
@@ -519,10 +681,11 @@ export class Maou3DStage {
     this.soilTex = createSoilTexture();
     this.meshFenceTex = createWireMeshTexture();
     this.arowanaTex = createArowanaScaleTexture();
+    this.solarTex = createSolarGridTexture();
     this.capTex = createCapacitorLabelTexture();
 
     this.worker = createHumanWorkerRig();
-    this.worker.root.position.set(0.0, 0.0, -0.95);
+    this.worker.root.position.set(0.0, 0.0, -0.92);
     this.scene.add(this.worker.root);
 
     this.dioramaGroup = new THREE.Group();
@@ -533,7 +696,6 @@ export class Maou3DStage {
     this.customNodes = [];
     this.customFlows = [];
     this.customParticles = [];
-    this.envGroundY = 0;
   }
 
   get domElement() {
@@ -557,7 +719,7 @@ export class Maou3DStage {
     this.customParticles = [];
   }
 
-  // Unified @untabiru5 / @dhotscliper Environments — Surface ALWAYS aligns cleanly at Y = 0.0!
+  // Unified @untabiru5 / @dhotscliper Environments (Surface ALWAYS aligned cleanly at Y = 0.0!)
   buildEnvironmentStage(envType) {
     if (envType === "kitchen_tile") {
       this.scene.background = new THREE.Color(0xfff7ed);
@@ -571,7 +733,6 @@ export class Maou3DStage {
       wall.receiveShadow = true;
       this.dioramaGroup.add(wall);
 
-      // Sunny blue window pane on left wall!
       const windowGlass = new THREE.Mesh(
         new THREE.BoxGeometry(1.65, 1.5, 0.08),
         new THREE.MeshBasicMaterial({ color: 0xbae6fd })
@@ -586,9 +747,7 @@ export class Maou3DStage {
       counter.position.set(0, -0.35, 0.15);
       counter.receiveShadow = true;
       this.dioramaGroup.add(counter);
-      this.envGroundY = -0.35;
     } else if (envType === "backyard_cutaway") {
-      // ref_1.jpg Exact Isometric Cutaway Ground + Red Brick House + Lawn!
       this.scene.background = new THREE.Color(0xbae6fd);
       this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.018);
 
@@ -614,11 +773,9 @@ export class Maou3DStage {
       );
       houseWall.position.set(0, 1.55, -2.6);
       this.dioramaGroup.add(houseWall);
-      this.envGroundY = 0;
     } else if (envType === "farm_trench") {
-      // ref_3.jpg Rice Paddy Valley + Village Huts + Palm + Indonesian Flag!
       this.scene.background = new THREE.Color(0x7dd3fc);
-      this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.022);
+      this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.02);
 
       const soilBase = new THREE.Mesh(
         new THREE.BoxGeometry(9.0, 0.8, 8.5),
@@ -628,7 +785,6 @@ export class Maou3DStage {
       soilBase.receiveShadow = true;
       this.dioramaGroup.add(soilBase);
 
-      // Left & Right Elevated Earth Bunds framing the water ditch
       const bankMat = new THREE.MeshStandardMaterial({ color: 0x65a30d, roughness: 0.8 });
       [-1.55, 1.55].forEach((bx) => {
         const bank = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.38, 7.6), bankMat);
@@ -637,34 +793,36 @@ export class Maou3DStage {
         this.dioramaGroup.add(bank);
       });
 
-      // Horizon hut & Merah-Putih Flagpole in the distance
+      // Horizon hut, coconut palm trees & Merah-Putih flag (ref_3.jpg!)
       const hutBody = new THREE.Mesh(
         new THREE.BoxGeometry(1.1, 0.7, 0.9),
         new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.8 })
       );
-      hutBody.position.set(-1.55, 0.35, -4.1);
+      hutBody.position.set(-1.65, 0.35, -4.1);
       this.dioramaGroup.add(hutBody);
       const hutRoof = new THREE.Mesh(
         new THREE.ConeGeometry(0.95, 0.55, 4),
         new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.85 })
       );
-      hutRoof.position.set(-1.55, 0.96, -4.1);
+      hutRoof.position.set(-1.65, 0.96, -4.1);
       hutRoof.rotation.y = Math.PI / 4;
       this.dioramaGroup.add(hutRoof);
+
+      this.dioramaGroup.add(createCoconutPalm(-0.1, -4.6, 1.25));
+      this.dioramaGroup.add(createCoconutPalm(1.75, -4.2, 1.05));
 
       const pole = new THREE.Mesh(
         new THREE.CylinderGeometry(0.025, 0.025, 1.9, 6),
         new THREE.MeshStandardMaterial({ color: 0x475569 })
       );
-      pole.position.set(-0.9, 0.95, -4.4);
+      pole.position.set(-1.05, 0.95, -4.4);
       this.dioramaGroup.add(pole);
       const flagRed = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.14, 0.02), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
-      flagRed.position.set(-0.68, 1.76, -4.4);
+      flagRed.position.set(-0.83, 1.76, -4.4);
       this.dioramaGroup.add(flagRed);
       const flagWhite = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.14, 0.02), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-      flagWhite.position.set(-0.68, 1.62, -4.4);
+      flagWhite.position.set(-0.83, 1.62, -4.4);
       this.dioramaGroup.add(flagWhite);
-      this.envGroundY = 0;
     } else if (envType === "outdoor_sky") {
       this.scene.background = new THREE.Color(0x93c5fd);
       this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.02);
@@ -675,7 +833,6 @@ export class Maou3DStage {
       lawn.position.set(0, -0.35, 0);
       lawn.receiveShadow = true;
       this.dioramaGroup.add(lawn);
-      this.envGroundY = 0;
     } else {
       // wood_desk (ref_2.jpg Sunlit Workbench Studio!)
       this.scene.background = new THREE.Color(0xfefce8);
@@ -696,12 +853,11 @@ export class Maou3DStage {
       desk.position.set(0, -0.36, 0.15);
       desk.receiveShadow = true;
       this.dioramaGroup.add(desk);
-      this.envGroundY = -0.35;
     }
   }
 
   // ============================================================================
-  // 5. CURATED @UNTABIRU5 / @DHOTSCLIPER WORLDS + GEMINI CUSTOM 3D COMPILER
+  // 5. CURATED @UNTABIRU5 / @DHOTSCLIPER WORLDS + GEMINI COMPOSITE 3D COMPILER
   // ============================================================================
   buildDiorama(worldKey, scene, cleanTopic) {
     if (this.activeKey === worldKey) return;
@@ -733,7 +889,16 @@ export class Maou3DStage {
     this.worker.chefHat.visible = envType === "kitchen_tile";
 
     // A. CUSTOM GEMINI 3D SCENE COMPILER (FOR ANY TOPIC!)
-    if (hero === "custom_stage" || (Array.isArray(s3d.objects) && s3d.objects.length >= 2 && hero !== "ice_cream" && hero !== "betta_fish" && hero !== "arowana_fish" && hero !== "fan_blades" && hero !== "rice_fish")) {
+    if (
+      hero === "custom_stage" ||
+      (Array.isArray(s3d.objects) &&
+        s3d.objects.length >= 2 &&
+        hero !== "ice_cream" &&
+        hero !== "betta_fish" &&
+        hero !== "arowana_fish" &&
+        hero !== "fan_blades" &&
+        hero !== "rice_fish")
+    ) {
       this.buildGeminiCustomObjects(s3d.objects || []);
       return;
     }
@@ -846,57 +1011,70 @@ export class Maou3DStage {
       return;
     }
 
-    // C. CURATED KIPAS ANGIN & STATOR COPPER COIL DIORAMA (ref_2.jpg!)
+    // C. CURATED KIPAS ANGIN & SLOTTED COPPER STATOR DIORAMA (Exact ref_2.jpg!)
     if (hero === "fan_blades") {
       const motorGroup = new THREE.Group();
-      motorGroup.position.set(0, 0.72, 0.08);
+      motorGroup.position.set(0, 0.72, 0.1);
       this.dioramaGroup.add(motorGroup);
       this.dioramaParts.motorGroup = motorGroup;
 
-      // Brown Wooden Mounting Feet sitting right on desk!
-      [-0.42, 0.42].forEach((mx) => {
-        const foot = new THREE.Mesh(
-          new THREE.BoxGeometry(0.22, 0.26, 0.74),
-          new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.75 })
-        );
-        foot.position.set(mx, -0.59, 0);
-        foot.castShadow = true;
-        motorGroup.add(foot);
-      });
-
-      // Thick Laminated Gray Steel Stator Ring + Inner Winding Teeth (ref_2.jpg!)
-      const statorOuter = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.66, 0.66, 0.46, 32, 1, true),
-        new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.68, roughness: 0.32, side: THREE.DoubleSide })
+      // Wooden Cradle Mount resting flush on oak workbench
+      const stand = new THREE.Mesh(
+        createRoundedBoxGeometry(0.96, 0.24, 0.58, 0.04),
+        new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.72 })
       );
-      statorOuter.rotation.x = Math.PI / 2;
-      statorOuter.castShadow = true;
-      motorGroup.add(statorOuter);
+      stand.position.set(0, -0.6, 0);
+      stand.castShadow = true;
+      motorGroup.add(stand);
 
-      const statorRing = new THREE.Mesh(
-        new THREE.TorusGeometry(0.55, 0.12, 14, 32),
-        new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.7, roughness: 0.35 })
-      );
-      motorGroup.add(statorRing);
-
-      // Glossy Copper Wire Windings around inner Stator Slots!
-      const copperMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.78, roughness: 0.22 });
-      const frontWire = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.045, 10, 28), copperMat);
-      frontWire.position.z = 0.2;
-      motorGroup.add(frontWire);
-      for (let i = 0; i < 12; i++) {
-        const ang = (i / 12) * Math.PI * 2;
-        const slot = new THREE.Mesh(
-          new THREE.BoxGeometry(0.11, 0.18, 0.44),
-          new THREE.MeshStandardMaterial({ color: i % 2 === 0 ? 0xc2410c : 0x64748b, metalness: 0.55, roughness: 0.35 })
-        );
-        slot.position.set(Math.cos(ang) * 0.42, Math.sin(ang) * 0.42, 0);
-        slot.rotation.z = ang;
-        motorGroup.add(slot);
+      // Multi-lamination Gray Steel Outer Stator Barrel (ref_2.jpg!)
+      const steelMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.65, roughness: 0.34, side: THREE.DoubleSide });
+      const darkSteelMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.7, roughness: 0.32 });
+      for (let slice = -2; slice <= 2; slice++) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.11, 10, 32), slice % 2 === 0 ? steelMat : darkSteelMat);
+        ring.position.z = slice * 0.085;
+        ring.castShadow = true;
+        motorGroup.add(ring);
       }
 
-      const rotorPivot = buildFanMesh(0.56, 3, visual.accentColor || "#38bdf8");
-      rotorPivot.position.z = 0.26;
+      // 16 Radial Inner Steel Stator Teeth + Continuous Enameled Orange Copper Windings!
+      const copperMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.72, roughness: 0.22 });
+      for (let t = 0; t < 16; t++) {
+        const ang = (t / 16) * Math.PI * 2;
+        const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.22, 0.44), darkSteelMat);
+        tooth.position.set(Math.cos(ang) * 0.44, Math.sin(ang) * 0.44, 0);
+        tooth.rotation.z = ang + Math.PI / 2;
+        motorGroup.add(tooth);
+      }
+      // Front & Back Copper Coil Torus Loops weaving smoothly around teeth!
+      [-0.22, 0.22].forEach((cz) => {
+        const copperRing = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.055, 12, 32), copperMat);
+        copperRing.position.z = cz;
+        copperRing.castShadow = true;
+        motorGroup.add(copperRing);
+      });
+
+      // Power Cord + White Wall Plug on Left Desk (visible on left of ref_2.jpg!)
+      const plug = new THREE.Mesh(
+        createRoundedBoxGeometry(0.24, 0.22, 0.24, 0.04),
+        new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.35 })
+      );
+      plug.position.set(-1.12, -0.6, 0.18);
+      motorGroup.add(plug);
+      motorGroup.add(buildCurvedTube([-0.4, -0.45, -0.15], [-1.05, -0.6, 0.12], 0.025, "#18181b", false));
+
+      // Central Shaft & 3-Blade Propeller (Hidden on HOOK empty stator scenes 1-2, spins in CLIMAX!)
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.055, 0.055, 0.72, 12),
+        new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.85, roughness: 0.2 })
+      );
+      shaft.rotation.x = Math.PI / 2;
+      shaft.position.z = 0.08;
+      motorGroup.add(shaft);
+      this.dioramaParts.shaft = shaft;
+
+      const rotorPivot = buildFanMesh(0.58, 3, visual.accentColor || "#38bdf8");
+      rotorPivot.position.z = 0.36;
       motorGroup.add(rotorPivot);
       this.dioramaParts.rotorPivot = rotorPivot;
 
@@ -905,14 +1083,14 @@ export class Maou3DStage {
         new THREE.BoxGeometry(0.46, 0.52, 0.32),
         new THREE.MeshStandardMaterial({ map: this.capTex, roughness: 0.35 })
       );
-      cap.position.set(1.05, -0.46, 0.18);
+      cap.position.set(1.08, -0.46, 0.18);
       cap.castShadow = true;
       motorGroup.add(cap);
       this.dioramaParts.capacitor = cap;
       return;
     }
 
-    // D. CURATED ARWANA POND / CUPANG AQUARIUM DIORAMA (ref_1.jpg!)
+    // D. CURATED ARWANA POND / CUPANG AQUARIUM DIORAMA (Exact ref_1.jpg!)
     if (hero === "arowana_fish" || hero === "betta_fish" || hero === "ornamental_fish" || hero === "catfish") {
       const isCupang = hero === "betta_fish";
       const isPond = envType === "backyard_cutaway";
@@ -924,7 +1102,6 @@ export class Maou3DStage {
       const th = isCupang ? 1.1 : 1.0;
       const td = isCupang ? 1.15 : 1.35;
 
-      // Cream Stone Tile Coping Rim + Front Cutaway Wall around Pond (ref_1.jpg!)
       if (isPond) {
         const concreteMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.75 });
         const wallH = 0.44;
@@ -937,31 +1114,40 @@ export class Maou3DStage {
           tankGroup.add(sw);
         });
 
-        const tileMat = new THREE.MeshStandardMaterial({ color: 0xe7e5e4, roughness: 0.7 });
-        [-td / 2 - 0.04, td / 2 + 0.04].forEach((tz) => {
-          const rim = new THREE.Mesh(new THREE.BoxGeometry(tw + 0.34, 0.09, 0.18), tileMat);
-          rim.position.set(0, wallH + 0.04, tz);
-          rim.castShadow = true;
-          tankGroup.add(rim);
-        });
-        [-tw / 2 - 0.08, tw / 2 + 0.08].forEach((tx) => {
-          const rim = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.09, td + 0.02), tileMat);
-          rim.position.set(tx, wallH + 0.04, 0);
-          rim.castShadow = true;
-          tankGroup.add(rim);
-        });
+        // Segmented Cream Stone Tile Coping Rim around Pond (ref_1.jpg!)
+        const tileMat = new THREE.MeshStandardMaterial({ color: 0xe7e5e4, roughness: 0.65 });
+        for (let tx = -tw / 2; tx <= tw / 2; tx += 0.28) {
+          const stoneBack = new THREE.Mesh(createRoundedBoxGeometry(0.25, 0.09, 0.18, 0.02), tileMat);
+          stoneBack.position.set(tx, wallH + 0.04, -td / 2 - 0.04);
+          stoneBack.castShadow = true;
+          tankGroup.add(stoneBack);
+        }
+        for (let tz = -td / 2; tz <= td / 2; tz += 0.28) {
+          [-tw / 2 - 0.06, tw / 2 + 0.06].forEach((sideX) => {
+            const stoneSide = new THREE.Mesh(createRoundedBoxGeometry(0.18, 0.09, 0.25, 0.02), tileMat);
+            stoneSide.position.set(sideX, wallH + 0.04, tz);
+            stoneSide.castShadow = true;
+            tankGroup.add(stoneSide);
+          });
+        }
 
-        // Wire Mesh Safety Fence around Rim (ref_1.jpg!)
+        // Wire Mesh Fence + Steel Corner Posts around Rim (ref_1.jpg!)
         const fenceGroup = new THREE.Group();
         const fenceMat = new THREE.MeshBasicMaterial({ map: this.meshFenceTex, transparent: true, side: THREE.DoubleSide });
+        const postMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.5 });
         const backFence = new THREE.Mesh(new THREE.PlaneGeometry(tw + 0.16, 0.62), fenceMat);
-        backFence.position.set(0, wallH + 0.38, -td / 2 - 0.05);
+        backFence.position.set(0, wallH + 0.38, -td / 2 - 0.04);
         fenceGroup.add(backFence);
-        [-tw / 2 - 0.08, tw / 2 + 0.08].forEach((fx) => {
+        [-tw / 2 - 0.06, tw / 2 + 0.06].forEach((fx) => {
           const sideFence = new THREE.Mesh(new THREE.PlaneGeometry(td + 0.12, 0.62), fenceMat);
           sideFence.position.set(fx, wallH + 0.38, 0);
           sideFence.rotation.y = Math.PI / 2;
           fenceGroup.add(sideFence);
+          [-td / 2, 0, td / 2].forEach((pz) => {
+            const post = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.68, 6), postMat);
+            post.position.set(fx, wallH + 0.4, pz);
+            fenceGroup.add(post);
+          });
         });
         tankGroup.add(fenceGroup);
         this.dioramaParts.meshFence = fenceGroup;
@@ -971,7 +1157,7 @@ export class Maou3DStage {
       const waterMat = new THREE.MeshPhysicalMaterial({
         color: 0x38bdf8,
         transparent: true,
-        opacity: 0.42,
+        opacity: 0.38,
         roughness: 0.08
       });
       const water = new THREE.Mesh(new THREE.BoxGeometry(tw - 0.06, isPond ? 0.4 : th - 0.1, td - 0.06), waterMat);
@@ -979,7 +1165,6 @@ export class Maou3DStage {
       tankGroup.add(water);
       this.dioramaParts.waterMat = waterMat;
 
-      // Translucent Glass Edges
       const edges = new THREE.LineSegments(
         new THREE.EdgesGeometry(new THREE.BoxGeometry(tw, isPond ? 0.46 : th, td)),
         new THREE.LineBasicMaterial({ color: 0xe0f2fe })
@@ -987,16 +1172,24 @@ export class Maou3DStage {
       edges.position.y = waterYCenter;
       tankGroup.add(edges);
 
-      // Clean Sand Floor & Pebbles (ALWAYS above grassLawn y=-0.02!)
+      const floorY = 0.04;
       const floor = new THREE.Mesh(
         new THREE.BoxGeometry(tw - 0.04, 0.04, td - 0.04),
         new THREE.MeshStandardMaterial({ color: 0xd6d3d1, roughness: 0.9 })
       );
-      floor.position.y = 0.04;
+      floor.position.y = floorY;
       floor.receiveShadow = true;
       tankGroup.add(floor);
 
-      // Brown Ketapang Leaf + Divider for Cupang
+      // Decorative Smooth River Stones + Dirt Pellets for TAPI
+      const stoneMat = new THREE.MeshStandardMaterial({ color: 0xa8a29e, roughness: 0.85 });
+      [[-0.75, -0.35], [-0.45, 0.3], [0.68, 0.22], [0.4, -0.4]].forEach(([sx, sz]) => {
+        const pebble = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), stoneMat);
+        pebble.scale.set(1.3, 0.4, 1.1);
+        pebble.position.set(sx, floorY + 0.03, sz);
+        tankGroup.add(pebble);
+      });
+
       const ketapangLeaf = new THREE.Mesh(
         new THREE.BoxGeometry(0.38, 0.02, 0.22),
         new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.7 })
@@ -1019,45 +1212,53 @@ export class Maou3DStage {
       for (let i = 0; i < count; i++) {
         const fc = isCupang ? (i === 0 ? "#2563eb" : "#e11d48") : visual.accentColor || "#ef4444";
         const f = createFishMesh(isCupang ? "betta" : "arowana", fc, this.arowanaTex);
-        f.group.scale.setScalar(isCupang ? 0.9 : 0.72);
+        f.group.scale.setScalar(isCupang ? 0.9 : 0.76);
         f.group.position.set((i - 1) * 0.4, waterYCenter + (i % 2) * 0.12, 0);
         tankGroup.add(f.group);
-        fishes.push({ ...f, seed: i * 1.9, waterYCenter });
+        f.shadowDisc.position.set(f.group.position.x, floorY + 0.026, f.group.position.z);
+        tankGroup.add(f.shadowDisc);
+        fishes.push({ ...f, seed: i * 1.9, waterYCenter, floorY });
       }
       this.dioramaParts.fishes = fishes;
       this.dioramaParts.isCupang = isCupang;
       return;
     }
 
-    // E. CURATED SAWAH MINAPADI CORRIDOR (ref_3.jpg!)
+    // E. CURATED SAWAH MINAPADI CORRIDOR (Exact ref_3.jpg!)
     if (hero === "rice_fish") {
       const water = new THREE.Mesh(
-        new THREE.BoxGeometry(1.15, 0.22, 7.6),
+        new THREE.BoxGeometry(1.18, 0.22, 7.6),
         new THREE.MeshPhysicalMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.65, roughness: 0.1 })
       );
       water.position.set(0, -0.22, -0.6);
       this.dioramaGroup.add(water);
 
+      // Sloped concrete ditch sides framing central canal (ref_3.jpg!)
+      const edgeMat = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.85 });
+      [-0.6, 0.6].forEach((ex) => {
+        const ledge = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.35, 7.6), edgeMat);
+        ledge.position.set(ex, -0.14, -0.6);
+        this.dioramaGroup.add(ledge);
+      });
+
       const stalks = [];
-      const stalkMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.65 });
-      for (let i = 0; i < 42; i++) {
+      for (let i = 0; i < 40; i++) {
         const side = i % 2 === 0 ? -1 : 1;
-        const sx = side * (0.72 + ((i * 19) % 10) * 0.14);
+        const sx = side * (0.78 + ((i * 19) % 8) * 0.16);
         const sz = 2.0 - Math.floor(i / 2) * 0.34;
-        const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.045, 1.35, 6), stalkMat);
-        stalk.position.set(sx, 0.52, sz);
-        stalk.castShadow = true;
-        this.dioramaGroup.add(stalk);
-        stalks.push({ mesh: stalk, seed: i * 0.55 });
+        const rice = createGoldenRicePlant();
+        rice.position.set(sx, 0.02, sz);
+        rice.rotation.y = side * 0.3;
+        this.dioramaGroup.add(rice);
+        stalks.push({ mesh: rice, seed: i * 0.55 });
       }
       this.dioramaParts.stalks = stalks;
-      this.dioramaParts.stalkMat = stalkMat;
 
       const fishes = [];
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 10; i++) {
         const f = createFishMesh("orange_fish", "#f97316");
         f.group.scale.setScalar(0.5);
-        f.group.position.set((i % 2 === 0 ? -0.22 : 0.22), -0.15, 1.2 - i * 0.48);
+        f.group.position.set((i % 2 === 0 ? -0.22 : 0.22), -0.15, 1.4 - i * 0.42);
         f.group.rotation.y = Math.PI / 2;
         this.dioramaGroup.add(f.group);
         fishes.push({ ...f, seed: i * 1.1 });
@@ -1066,10 +1267,12 @@ export class Maou3DStage {
       return;
     }
 
-    // Default custom fallback
     this.buildGeminiCustomObjects(s3d.objects || []);
   }
 
+  // ============================================================================
+  // 5B. GEMINI COMPOSITE 3D PREFAB & ROUNDED BEVEL OBJECT COMPILER
+  // ============================================================================
   buildGeminiCustomObjects(objects = []) {
     objects.slice(0, 12).forEach((o, idx) => {
       const baseColor = new THREE.Color(o.color || "#38bdf8");
@@ -1078,8 +1281,8 @@ export class Maou3DStage {
         : new THREE.MeshStandardMaterial({
             color: baseColor,
             emissive: o.glow ? baseColor.clone().multiplyScalar(0.45) : new THREE.Color(0x000000),
-            metalness: o.metallic ? 0.65 : 0.15,
-            roughness: o.metallic ? 0.25 : 0.45
+            metalness: o.metallic ? 0.65 : 0.18,
+            roughness: o.metallic ? 0.26 : 0.42
           });
 
       if (o.kind === "flow") {
@@ -1092,6 +1295,12 @@ export class Maou3DStage {
           balls.push({ mesh: sp, tOffset: b / count });
         }
         this.customFlows.push({ from: o.from, to: o.to, speed: o.speed || 2.0, balls });
+        return;
+      }
+
+      if (o.kind === "pipe" || o.kind === "wire_cable") {
+        const tube = buildCurvedTube(o.from, o.to, o.radius || 0.04, o.color, o.glow);
+        this.dioramaGroup.add(tube);
         return;
       }
 
@@ -1110,7 +1319,180 @@ export class Maou3DStage {
       }
 
       let mesh = null;
-      if (o.kind === "cylinder") {
+      if (o.kind === "glass_tank") {
+        const g = new THREE.Group();
+        const w = o.w || 1.5;
+        const h = o.h || 0.9;
+        const d = o.d || 0.85;
+        const glass = new THREE.Mesh(
+          new THREE.BoxGeometry(w, h, d),
+          new THREE.MeshPhysicalMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.28, roughness: 0.08 })
+        );
+        g.add(glass);
+        g.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)), new THREE.LineBasicMaterial({ color: 0xf8fafc })));
+        const liqH = h * (o.waterLevel || 0.72);
+        const liq = new THREE.Mesh(
+          new THREE.BoxGeometry(w - 0.08, liqH, d - 0.08),
+          new THREE.MeshPhysicalMaterial({ color: new THREE.Color(o.murky ? "#855e30" : o.liquidColor || "#38bdf8"), transparent: true, opacity: 0.65, roughness: 0.1 })
+        );
+        liq.position.y = -h / 2 + liqH / 2 + 0.04;
+        g.add(liq);
+        mesh = g;
+      } else if (o.kind === "battery_cell") {
+        const g = new THREE.Group();
+        const r = o.radius || 0.45;
+        const h = o.h || 1.0;
+        const shell = new THREE.Mesh(
+          new THREE.CylinderGeometry(r, r, h, 24),
+          new THREE.MeshPhysicalMaterial({ color: 0xe2e8f0, transparent: true, opacity: 0.36, roughness: 0.12 })
+        );
+        g.add(shell);
+        const cap = new THREE.Mesh(
+          new THREE.CylinderGeometry(r * 0.35, r * 0.35, 0.12, 16),
+          new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.8, roughness: 0.25 })
+        );
+        cap.position.y = h / 2 + 0.06;
+        g.add(cap);
+        const core = new THREE.Mesh(
+          new THREE.CylinderGeometry(r * 0.84, r * 0.84, h * 0.8, 20),
+          new THREE.MeshStandardMaterial({ color: new THREE.Color(o.chargeColor || "#38bdf8"), roughness: 0.25 })
+        );
+        g.add(core);
+        if (o.hasSeparator) {
+          const sep = new THREE.Mesh(
+            new THREE.BoxGeometry(0.06, h * 0.86, r * 1.68),
+            new THREE.MeshStandardMaterial({ color: 0xfde047, emissive: 0x854d0e })
+          );
+          g.add(sep);
+        }
+        mesh = g;
+      } else if (o.kind === "volcano") {
+        const g = new THREE.Group();
+        const r = o.radius || 1.1;
+        const h = o.h || 1.25;
+        const mtn = new THREE.Mesh(
+          new THREE.ConeGeometry(r, h, 14),
+          new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.88 })
+        );
+        mtn.castShadow = true;
+        g.add(mtn);
+        const crater = new THREE.Mesh(
+          new THREE.CylinderGeometry(r * 0.24, r * 0.16, 0.14, 14),
+          new THREE.MeshStandardMaterial({
+            color: 0xf97316,
+            emissive: o.magmaGlow ? new THREE.Color(0xdc2626) : new THREE.Color(0x000000)
+          })
+        );
+        crater.position.y = h / 2 - 0.06;
+        g.add(crater);
+        mesh = g;
+      } else if (o.kind === "ac_unit") {
+        const g = new THREE.Group();
+        const w = o.w || 0.95;
+        const h = o.h || 0.52;
+        const d = o.d || 0.45;
+        const body = new THREE.Mesh(
+          createRoundedBoxGeometry(w, h, d, 0.06),
+          new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.35 })
+        );
+        body.castShadow = true;
+        g.add(body);
+        if (o.isOutdoor) {
+          const fan = buildFanMesh(Math.min(w, h) * 0.36, 3, o.bladeColor || "#38bdf8");
+          fan.position.z = d / 2 + 0.03;
+          g.add(fan);
+          g.userData.spinChild = fan;
+        } else {
+          const vent = new THREE.Mesh(new THREE.BoxGeometry(w * 0.8, 0.06, 0.04), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+          vent.position.set(0, -h * 0.28, d / 2 + 0.02);
+          g.add(vent);
+        }
+        mesh = g;
+      } else if (o.kind === "cup_mug") {
+        const g = new THREE.Group();
+        const r = o.radius || 0.32;
+        const h = o.h || 0.48;
+        const cup = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.82, h, 20), mat);
+        cup.castShadow = true;
+        g.add(cup);
+        const handle = new THREE.Mesh(new THREE.TorusGeometry(h * 0.28, 0.04, 8, 16), mat);
+        handle.position.x = r;
+        g.add(handle);
+        const drink = new THREE.Mesh(
+          new THREE.CylinderGeometry(r * 0.9, r * 0.9, 0.06, 18),
+          new THREE.MeshStandardMaterial({ color: new THREE.Color(o.liquidColor || "#78350f"), roughness: 0.2 })
+        );
+        drink.position.y = h * 0.38;
+        g.add(drink);
+        if (o.foam) {
+          const foam = new THREE.Mesh(
+            new THREE.SphereGeometry(r * 0.85, 14, 10),
+            new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.5 })
+          );
+          foam.scale.set(1, 0.32, 1);
+          foam.position.y = h * 0.44;
+          g.add(foam);
+        }
+        mesh = g;
+      } else if (o.kind === "pot_pan") {
+        const g = new THREE.Group();
+        const r = o.radius || 0.46;
+        const h = o.h || 0.5;
+        const pot = new THREE.Mesh(
+          new THREE.CylinderGeometry(r, r, h, 22),
+          new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.72, roughness: 0.26 })
+        );
+        pot.castShadow = true;
+        g.add(pot);
+        const soup = new THREE.Mesh(
+          new THREE.CylinderGeometry(r * 0.9, r * 0.9, 0.06, 20),
+          new THREE.MeshStandardMaterial({ color: new THREE.Color(o.liquidColor || "#f59e0b"), roughness: 0.25 })
+        );
+        soup.position.y = h * 0.36;
+        g.add(soup);
+        if (o.burnerOn) {
+          const flame = new THREE.Mesh(
+            new THREE.TorusGeometry(r * 0.65, 0.045, 8, 20),
+            new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+          );
+          flame.rotation.x = Math.PI / 2;
+          flame.position.y = -h * 0.52;
+          g.add(flame);
+        }
+        mesh = g;
+      } else if (o.kind === "beaker") {
+        const g = new THREE.Group();
+        const r = o.radius || 0.32;
+        const h = o.h || 0.68;
+        const glass = new THREE.Mesh(
+          new THREE.CylinderGeometry(r, r, h, 20),
+          new THREE.MeshPhysicalMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.34, roughness: 0.08 })
+        );
+        g.add(glass);
+        const liq = new THREE.Mesh(
+          new THREE.CylinderGeometry(r * 0.88, r * 0.88, h * 0.62, 18),
+          new THREE.MeshPhysicalMaterial({ color: new THREE.Color(o.liquidColor || "#38bdf8"), transparent: true, opacity: 0.72 })
+        );
+        liq.position.y = -h * 0.14;
+        g.add(liq);
+        mesh = g;
+      } else if (o.kind === "solar_panel") {
+        const g = new THREE.Group();
+        const panel = new THREE.Mesh(
+          createRoundedBoxGeometry(o.w || 1.35, 0.08, o.d || 0.85, 0.03),
+          new THREE.MeshStandardMaterial({ map: this.solarTex, metalness: 0.4, roughness: 0.2 })
+        );
+        panel.rotation.x = o.tilt || 0.45;
+        panel.castShadow = true;
+        g.add(panel);
+        const stand = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.06, 0.1, 0.45, 10),
+          new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.6 })
+        );
+        stand.position.y = -0.22;
+        g.add(stand);
+        mesh = g;
+      } else if (o.kind === "cylinder") {
         mesh = new THREE.Mesh(new THREE.CylinderGeometry(o.rTop || 0.35, o.rBottom || 0.4, o.h || 0.7, 22, 1, Boolean(o.openTop)), mat);
         if (o.openTop) mat.side = THREE.DoubleSide;
       } else if (o.kind === "sphere") {
@@ -1129,7 +1511,7 @@ export class Maou3DStage {
         const lMat = new THREE.MeshPhysicalMaterial({ color: baseColor, transparent: true, opacity: 0.68, roughness: 0.12 });
         mesh = new THREE.Mesh(new THREE.BoxGeometry(o.w || 1.1, o.h || 0.5, o.d || 0.65), lMat);
       } else {
-        mesh = new THREE.Mesh(new THREE.BoxGeometry(o.w || 0.9, o.h || 0.7, o.d || 0.7), mat);
+        mesh = new THREE.Mesh(createRoundedBoxGeometry(o.w || 0.9, o.h || 0.7, o.d || 0.7, 0.07), mat);
       }
 
       mesh.position.set(o.x || 0, o.y ?? 0.45, o.z || 0);
@@ -1191,7 +1573,6 @@ export class Maou3DStage {
       this.camPosGoal.set(0.32 + shakeX, 1.45 + shakeY, 2.38);
       this.camLookGoal.set(0, 0.52, 0.05);
     } else {
-      // closeup_hands (exact ref_2.jpg tight framing with Ipul behind!)
       this.camPosGoal.set(0.34 + Math.sin(tSec * 0.4) * 0.2, 1.35, 2.28 - Math.min(0.18, sceneElapsedSec * 0.06));
       this.camLookGoal.set(0, 0.5, 0.08);
     }
@@ -1200,13 +1581,15 @@ export class Maou3DStage {
     this.cameraTarget.lerp(this.camLookGoal, 0.08);
     this.camera.lookAt(this.cameraTarget);
 
-    // 2. ANIMATE 3D "IPUL" WORKER BEHIND EXPERIMENT
+    // 2. ANIMATE "IPUL" BEHIND EXPERIMENT
     const wk = this.worker;
     const action = visual.workerAction || (phase === "TAPI" ? "panic" : phase === "CLIMAX" ? "celebrate" : "build");
     wk.root.position.set(0, -0.32, -0.88);
     if (this.worker.capingHat.visible) wk.root.position.set(-0.55, 0, 0.25);
 
     wk.flameTip.visible = action === "heat";
+    wk.basketRim.visible = this.worker.capingHat.visible;
+
     if (action === "panic" || phase === "TAPI") {
       wk.hips.position.y = 0.68 + Math.abs(Math.sin(tSec * 12)) * 0.1;
       wk.leftArm.rotation.x = -2.35 + Math.sin(tSec * 15) * 0.4;
@@ -1255,6 +1638,9 @@ export class Maou3DStage {
       node.mesh.position.set(ex, ey, ez);
       node.mesh.scale.setScalar(scale);
 
+      if (node.mesh.userData?.spinChild) {
+        node.mesh.userData.spinChild.rotation.z = tSec * 9.5;
+      }
       if (node.kind === "fan" || node.kind === "gear") {
         node.mesh.rotation.z = tSec * (node.motion === "spin_reverse" ? -Math.abs(node.speed) : node.speed);
       } else if (node.motion === "spin") {
@@ -1277,7 +1663,7 @@ export class Maou3DStage {
 
     for (const ps of this.customParticles) {
       ps.items.forEach((it, idx) => {
-        const u = ((tSec * 0.9 + it.seed) % 1);
+        const u = (tSec * 0.9 + it.seed) % 1;
         const angle = idx * 0.9 + tSec * 1.5;
         const spread = ps.type === "sparks" ? u * 0.65 : Math.sin(angle) * 0.25;
         it.mesh.position.set(
@@ -1310,10 +1696,12 @@ export class Maou3DStage {
       }
       if (p.mixMat) p.mixMat.color.set(isFrozen ? "#bae6fd" : visual.accentColor || "#f9a8d4");
     } else if (hero === "fan_blades") {
-      const isSpinning = phase === "JADI" || phase === "CLIMAX" || visual.solutionVisual === "rotating_arrows";
+      const isSpinning = phase === "CLIMAX" || (phase === "JADI" && sceneNum >= 5) || visual.solutionVisual === "sparkle_shield";
       const isHumming = phase === "TAPI" || visual.problemVisual === "motor_vibrating";
+      if (p.shaft) p.shaft.visible = sceneNum >= 3;
       if (p.rotorPivot) {
-        if (isSpinning) p.rotorPivot.rotation.z -= 0.26;
+        p.rotorPivot.visible = sceneNum >= 5 || phase === "CLIMAX";
+        if (isSpinning) p.rotorPivot.rotation.z -= 0.28;
         else if (isHumming) p.rotorPivot.rotation.z = Math.sin(tSec * 46) * 0.09;
       }
       if (p.motorGroup) p.motorGroup.position.x = isHumming ? Math.sin(tSec * 52) * 0.04 : 0;
@@ -1338,16 +1726,23 @@ export class Maou3DStage {
         } else {
           const ang = tSec * 1.35 + f.seed;
           const sideX = p.divider?.visible ? (idx === 0 ? -0.45 : 0.45) : 0;
-          f.group.position.set(sideX + Math.sin(ang) * (p.divider?.visible ? 0.25 : 0.68), f.waterYCenter + Math.cos(tSec * 2 + idx) * 0.08, Math.cos(ang) * 0.32);
+          f.group.position.set(
+            sideX + Math.sin(ang) * (p.divider?.visible ? 0.25 : 0.68),
+            f.waterYCenter + Math.cos(tSec * 2 + idx) * 0.08,
+            Math.cos(ang) * 0.32
+          );
           f.group.rotation.y = Math.cos(ang) >= 0 ? 0 : Math.PI;
           f.group.rotation.z = 0;
+        }
+        if (f.shadowDisc) {
+          f.shadowDisc.position.set(f.group.position.x, f.floorY + 0.026, f.group.position.z);
+          f.shadowDisc.rotation.y = f.group.rotation.y;
         }
         if (f.tail) f.tail.rotation.y = Math.PI + Math.sin(tSec * 12 + idx) * 0.35;
       });
     } else if (hero === "rice_fish") {
-      if (p.stalkMat) p.stalkMat.color.setHex(phase === "CLIMAX" ? 0xfacc15 : 0x84cc16);
       (p.stalks || []).forEach((s) => {
-        s.mesh.rotation.z = Math.sin(tSec * 2.2 + s.seed) * 0.12;
+        s.mesh.rotation.z = Math.sin(tSec * 2.2 + s.seed) * 0.1;
       });
       (p.fishes || []).forEach((f, idx) => {
         f.group.position.z = ((tSec * 0.65 + f.seed) % 4.5) - 2.2;

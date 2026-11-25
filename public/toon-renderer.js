@@ -1642,36 +1642,36 @@ export function drawComicBurstText(ctx, W, comicText, phase, t, sceneElapsedSec)
 
 export function drawScienceMeter(ctx, meter, phase, t) {
   if (!meter || !meter.label) return;
-  const x = 24;
-  const y = 186;
-  const w = 138;
-  const h = 54;
+  const x = 20;
+  const y = 116;
+  const w = 118;
+  const h = 46;
   const span = Math.max(1, (meter.max ?? 100) - (meter.min ?? 0));
   const rawPct = ((meter.value ?? 50) - (meter.min ?? 0)) / span;
   const pct = Math.max(0.06, Math.min(1, rawPct + Math.sin(t * 5) * 0.03));
 
   ctx.save();
-  rr(ctx, x, y, w, h, 10);
-  ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+  rr(ctx, x, y, w, h, 9);
+  ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
   ctx.fill();
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2.5;
   ctx.strokeStyle = INK;
   ctx.stroke();
 
   ctx.fillStyle = "#cbd5e1";
-  ctx.font = "800 10px 'JetBrains Mono', monospace";
+  ctx.font = "800 9.5px 'JetBrains Mono', monospace";
   ctx.textAlign = "left";
-  ctx.fillText(meter.label, x + 10, y + 17);
+  ctx.fillText(meter.label, x + 8, y + 15);
 
   ctx.fillStyle = meter.danger || phase === "TAPI" ? "#fb7185" : "#6ee7b7";
-  ctx.font = "900 13px 'JetBrains Mono', monospace";
+  ctx.font = "900 11.5px 'JetBrains Mono', monospace";
   ctx.textAlign = "right";
-  ctx.fillText(`${meter.value}${meter.unit || ""}`, x + w - 10, y + 18);
+  ctx.fillText(`${meter.value}${meter.unit || ""}`, x + w - 8, y + 16);
 
-  rr(ctx, x + 10, y + 29, w - 20, 12, 6);
+  rr(ctx, x + 8, y + 25, w - 16, 10, 5);
   ctx.fillStyle = "#1e293b";
   ctx.fill();
-  rr(ctx, x + 10, y + 29, Math.max(12, (w - 20) * pct), 12, 6);
+  rr(ctx, x + 8, y + 25, Math.max(10, (w - 16) * pct), 10, 5);
   ctx.fillStyle = meter.danger || phase === "TAPI" ? "#e11d48" : phase === "CLIMAX" ? "#10b981" : "#f59e0b";
   ctx.fill();
   ctx.restore();

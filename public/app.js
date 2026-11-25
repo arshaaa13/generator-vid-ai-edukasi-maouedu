@@ -1,10 +1,7 @@
 // MaouEdu AI — 1-Prompt Auto-Research & @untabiru5 3D Diorama + 2D Anime Host Video Studio
 import {
   renderToonVideoFrame,
-  drawSceneFx,
-  drawComicBurstText,
   drawScienceMeter,
-  drawFloatingCallouts,
   drawCelebrationConfetti
 } from "/toon-renderer.js";
 import { Maou3DStage } from "/scene3d.js";
@@ -1111,12 +1108,12 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
       : Math.sin(tSec * 2.2) * 0.022;
 
   ctx.save();
-  const cardW = isHero ? 196 : 168;
-  const cardH = isHero ? 248 : 214;
-  const targetX = isHero ? W - cardW - 18 : isRight ? W - cardW - 18 : 18;
-  const entryOffset = (1 - slideEase) * (isRight || isHero ? 60 : -60);
+  const cardW = isHero ? 148 : 132;
+  const cardH = isHero ? 186 : 168;
+  const targetX = isHero ? W - cardW - 14 : isRight ? W - cardW - 14 : 14;
+  const entryOffset = (1 - slideEase) * (isRight || isHero ? 50 : -50);
   const cardX = targetX + swayX + entryOffset;
-  const cardY = (isHero ? 506 : 526) + breathY + voiceBounceY;
+  const cardY = (isHero ? 548 : 566) + breathY + voiceBounceY;
   const centerX = cardX + cardW / 2;
   const centerY = cardY + cardH / 2;
 
@@ -1375,25 +1372,25 @@ function drawUntabiruSubtitles(ctx, scene) {
 
       if (tok.highlight) {
         ctx.save();
-        drawRoundedRect(ctx, cursorX, y - 20, boxW, 40, 8);
+        drawRoundedRect(ctx, cursorX, y - 20, boxW, 42, 10);
         ctx.fillStyle = "#090a0f";
         ctx.fill();
 
-        drawRoundedRect(ctx, cursorX - 2, y - 22, boxW, 40, 8);
-        ctx.fillStyle = "#f59e0b";
+        drawRoundedRect(ctx, cursorX - 2, y - 22, boxW, 42, 10);
+        ctx.fillStyle = "#fbbf24";
         ctx.fill();
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 3.2;
         ctx.strokeStyle = "#090a0f";
         ctx.stroke();
 
         ctx.fillStyle = "#090a0f";
         ctx.textAlign = "left";
-        ctx.fillText(tok.text, cursorX + 8, y - 1);
+        ctx.fillText(tok.text, cursorX + 8, y);
         ctx.restore();
       } else {
         ctx.save();
         ctx.textAlign = "left";
-        ctx.lineWidth = 7;
+        ctx.lineWidth = 8.5;
         ctx.strokeStyle = "#090a0f";
         ctx.lineJoin = "round";
         ctx.strokeText(tok.text, cursorX + 4, y);
@@ -1487,10 +1484,7 @@ function startRenderLoop() {
             try {
               stage3d.renderFrame(scene, currentScript.topic || "", tSec, sceneElapsedSec);
               ctx.drawImage(stage3d.domElement, 0, 0, canvas.width, canvas.height);
-              drawSceneFx(ctx, canvas.width / 2, 515, scene.visual?.fx, tSec);
               drawScienceMeter(ctx, scene.visual?.meter, scene.phase, tSec);
-              drawComicBurstText(ctx, canvas.width, scene.visual?.comicText, scene.phase, tSec, sceneElapsedSec);
-              drawFloatingCallouts(ctx, canvas.width, scene.visual, scene.phase, tSec);
               if (scene.phase === "CLIMAX" || scene.visual?.fx?.includes("confetti")) {
                 drawCelebrationConfetti(ctx, canvas.width, tSec);
               }
@@ -1505,12 +1499,12 @@ function startRenderLoop() {
           }
         }
 
-        // Soft bottom dark gradient so @untabiru5 yellow-box subtitles always pop crisply
-        const subGrad = ctx.createLinearGradient(0, canvas.height - 235, 0, canvas.height);
+        // Light bottom gradient only near subtitle zone so 3D diorama stays bright @untabiru5 style!
+        const subGrad = ctx.createLinearGradient(0, canvas.height - 175, 0, canvas.height);
         subGrad.addColorStop(0, "rgba(9, 10, 15, 0)");
-        subGrad.addColorStop(1, "rgba(9, 10, 15, 0.88)");
+        subGrad.addColorStop(1, "rgba(9, 10, 15, 0.58)");
         ctx.fillStyle = subGrad;
-        ctx.fillRect(0, canvas.height - 235, canvas.width, 235);
+        ctx.fillRect(0, canvas.height - 175, canvas.width, 175);
 
         drawTopVideoHeader(ctx, scene);
         draw3dCalloutBadge(ctx, scene);
