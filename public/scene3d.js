@@ -1057,11 +1057,12 @@ export class Maou3DStage {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xfff7ed);
 
-    this.camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 80);
-    this.camera.position.set(0.32, 1.38, 2.28);
-    this.cameraTarget = new THREE.Vector3(0, 0.5, 0.05);
-    this.camPosGoal = new THREE.Vector3(0.32, 1.38, 2.28);
-    this.camLookGoal = new THREE.Vector3(0, 0.5, 0.05);
+    this.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 80);
+    this.camera.position.set(0.28, 1.38, 2.75);
+    this.cameraTarget = new THREE.Vector3(0, 0.28, 0.0);
+    this.camPosGoal = new THREE.Vector3(0.28, 1.38, 2.75);
+    this.camLookGoal = new THREE.Vector3(0, 0.28, 0.0);
+    this.lastCamSceneKey = "";
 
     const hemi = new THREE.HemisphereLight(0xffffff, 0x64748b, 1.18);
     this.scene.add(hemi);
@@ -1163,8 +1164,8 @@ export class Maou3DStage {
       bunkerFloor.receiveShadow = true;
       this.dioramaGroup.add(bunkerFloor);
       [-1.65, 1.65].forEach((bx) => {
-        const bSide = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.38, 2.3), bunkerMat);
-        bSide.position.set(bx, -0.82, -0.18);
+        const bSide = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.38, 1.45), bunkerMat);
+        bSide.position.set(bx, -0.82, -0.58);
         this.dioramaGroup.add(bSide);
       });
 
@@ -1200,10 +1201,10 @@ export class Maou3DStage {
 
       [-1.74, 1.74].forEach((wx) => {
         const sideW = new THREE.Mesh(
-          new THREE.BoxGeometry(0.14, 1.52, 2.4),
+          new THREE.BoxGeometry(0.14, 1.52, 1.48),
           new THREE.MeshStandardMaterial({ color: 0xfef9c3, roughness: 0.7 })
         );
-        sideW.position.set(wx, 0.76, -0.15);
+        sideW.position.set(wx, 0.76, -0.58);
         this.dioramaGroup.add(sideW);
       });
 
@@ -2316,11 +2317,17 @@ export class Maou3DStage {
       mesh.receiveShadow = true;
       this.dioramaGroup.add(mesh);
 
+      const hw = o.w ? o.w / 2 : (o.radius || 0.35);
+      const hh = o.h ? o.h / 2 : (o.radius || 0.35);
+      const hd = o.d ? o.d / 2 : (o.radius || 0.35);
       this.customNodes.push({
         mesh,
         baseX: o.x || 0,
         baseY: o.y ?? 0.45,
         baseZ: o.z || 0,
+        halfW: hw,
+        halfH: hh,
+        halfD: hd,
         baseRx: o.rx || 0,
         baseRy: o.ry || 0,
         baseRz: o.rz || 0,
@@ -2331,6 +2338,64 @@ export class Maou3DStage {
         seed: idx * 0.9
       });
     });
+  }
+
+  computeActiveBounds(visual, hero, envType, shot) {
+    if (hero === "custom_stage" && (this.customNodes.length > 0 || this.customFlows.length > 0)) {
+      let minX = Infinity, maxX = -Infinity;
+      let minY = Infinity, maxY = -Infinity;
+      let minZ = Infinity, maxZ = -Infinity;
+      for (const n of this.customNodes) {
+        minX = Math.min(minX, n.baseX - (n.halfW || 0.4));
+        maxX = Math.max(maxX, n.baseX + (n.halfW || 0.4));
+        minY = Math.min(minY, n.baseY - (n.halfH || 0.35));
+        maxY = Math.max(maxY, n.baseY + (n.halfH || 0.35));
+        minZ = Math.min(minZ, n.baseZ - (n.halfD || 0.35));
+        maxZ = Math.max(maxZ, n.baseZ + (n.halfD || 0.35));
+      }
+      for (const fl of this.customFlows) {
+        minX = Math.min(minX, fl.from[0], fl.to[0]);
+        maxX = Math.max(maxX, fl.from[0], fl.to[0]);
+        minY = Math.min(minY, fl.from[1], fl.to[1]);
+        maxY = Math.max(maxY, fl.from[1], fl.to[1]);
+        minZ = Math.min(minZ, fl.from[2], fl.to[2]);
+        maxZ = Math.max(maxZ, fl.from[2], fl.to[2]);
+      }
+      if (Number.isFinite(minX)) {
+        return {
+          cx: (minX + maxX) / 2,
+          cy: (minY + maxY) / 2,
+          cz: (minZ + maxZ) / 2,
+          spanW: Math.max(1.15, maxX - minX),
+          spanH: Math.max(0.85, maxY - minY),
+          spanD: Math.max(0.9, maxZ - minZ)
+        };
+      }
+    }
+
+    if (hero === "bitcoin_bunker") {
+      if (shot === "room_closeup") return { cx: 0.15, cy: 0.62, cz: -0.42, spanW: 1.85, spanH: 1.15, spanD: 1.1 };
+      if (shot === "bunker_view") return { cx: 0.25, cy: -0.88, cz: -0.25, spanW: 2.25, spanH: 1.15, spanD: 1.0 };
+      if (shot === "rooftop_view") return { cx: 0.65, cy: 1.88, cz: -0.22, spanW: 1.85, spanH: 0.95, spanD: 1.2 };
+      return { cx: 0.12, cy: 0.25, cz: -0.28, spanW: 3.1, spanH: 3.05, spanD: 1.4 };
+    }
+    if (hero === "supersonic_jet") {
+      if (shot === "macro_plate") return { cx: 0, cy: 0.5, cz: 0.62, spanW: 1.65, spanH: 0.85, spanD: 1.05 };
+      return { cx: 0, cy: 0.45, cz: 0.0, spanW: 2.35, spanH: 0.95, spanD: 1.65 };
+    }
+    if (hero === "stingray_pond") {
+      const hasFilter = Boolean(this.dioramaParts.filterGroup?.visible);
+      return hasFilter
+        ? { cx: 0.22, cy: 0.36, cz: -0.05, spanW: 2.85, spanH: 0.9, spanD: 1.45 }
+        : { cx: -0.18, cy: 0.36, cz: -0.05, spanW: 2.25, spanH: 0.85, spanD: 1.45 };
+    }
+    if (hero === "rice_fish") return { cx: 0, cy: 0.35, cz: -0.45, spanW: 2.1, spanH: 1.1, spanD: 2.0 };
+    if (hero === "fan_blades") return { cx: 0.05, cy: 0.65, cz: 0.08, spanW: 2.1, spanH: 1.15, spanD: 1.0 };
+    if (hero === "ice_cream") return { cx: 0, cy: 0.58, cz: 0.08, spanW: 1.9, spanH: 1.1, spanD: 1.35 };
+    if (hero === "arowana_fish" || hero === "betta_fish" || hero === "ornamental_fish" || hero === "catfish") {
+      return { cx: 0, cy: 0.48, cz: 0, spanW: 2.25, spanH: 1.05, spanD: 1.35 };
+    }
+    return { cx: 0, cy: 0.48, cz: 0, spanW: 1.9, spanH: 1.0, spanD: 1.2 };
   }
 
   // ============================================================================
@@ -2349,56 +2414,153 @@ export class Maou3DStage {
 
     this.buildDiorama(worldKey, sceneData, topicText);
 
-    // 1. CINEMATIC @UNTABIRU5 x @DEKODAID x @BELAJAR.IAI CAMERA CUTS & SMOOTH DOLLY
+    // 1. AUTO-FRAMED 9:16 SHOWCASE CAMERA (UNOBSTRUCTED UPPER-MIDDLE STAGE!)
     const shot = visual.stage3d?.cameraShot || "closeup_hands";
-    const shakeX = phase === "TAPI" && sceneElapsedSec < 0.8 ? Math.sin(tSec * 52) * 0.08 * (1 - sceneElapsedSec / 0.8) : 0;
-    const shakeY = phase === "TAPI" && sceneElapsedSec < 0.8 ? Math.cos(tSec * 44) * 0.05 * (1 - sceneElapsedSec / 0.8) : 0;
+    const envType = visual.stage3d?.environment || "wood_desk";
+    const shakeX = phase === "TAPI" && sceneElapsedSec < 0.7 ? Math.sin(tSec * 52) * 0.075 * (1 - sceneElapsedSec / 0.7) : 0;
+    const shakeY = phase === "TAPI" && sceneElapsedSec < 0.7 ? Math.cos(tSec * 44) * 0.05 * (1 - sceneElapsedSec / 0.7) : 0;
+
+    const bounds = this.computeActiveBounds(visual, hero, envType, shot);
+    const vFovRad = (50 * Math.PI) / 180;
+    const hFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * (this.width / this.height));
+    const distX = (bounds.spanW * 0.5) / (Math.tan(hFovRad / 2) * 0.74);
+    const distY = (bounds.spanH * 0.5) / (Math.tan(vFovRad / 2) * 0.44);
+    let dist = Math.max(2.15, distX, distY, bounds.spanD * 0.65 + 1.35);
+
+    let az = 0.22; // +12.5 deg clean 3/4 view
+    let elev = 0.44; // ~25 deg downward look
+    const pushFactor = 1.0 - Math.min(0.08, sceneElapsedSec * 0.02);
 
     if (shot === "isometric_cutaway") {
-      this.camPosGoal.set(2.05 + Math.sin(tSec * 0.45) * 0.28, 2.25, 2.95);
-      this.camLookGoal.set(0, 0.25, 0.05);
-    } else if (shot === "corridor_view") {
-      this.camPosGoal.set(Math.sin(tSec * 0.5) * 0.18, 1.35, 3.25 - Math.min(0.45, sceneElapsedSec * 0.12));
-      this.camLookGoal.set(0, 0.5, -0.6);
-    } else if (shot === "hero_low") {
-      this.camPosGoal.set(Math.sin(tSec * 0.6) * 1.15, 1.15, 2.95);
-      this.camLookGoal.set(0, 0.62, 0);
+      az = 0.46 + Math.sin(tSec * 0.45) * 0.07;
+      elev = 0.54;
+      dist *= 1.04;
     } else if (shot === "side_inspection") {
-      this.camPosGoal.set(-1.75 + Math.cos(tSec * 0.5) * 0.2, 1.48, 2.35);
-      this.camLookGoal.set(0, 0.52, 0.05);
+      az = -0.44 + Math.cos(tSec * 0.45) * 0.06;
+      elev = 0.36;
+      dist *= 0.98;
+    } else if (shot === "corridor_view") {
+      az = Math.sin(tSec * 0.45) * 0.08;
+      elev = 0.32;
+      dist *= 1.06;
+    } else if (shot === "hero_low") {
+      az = Math.sin(tSec * 0.5) * 0.25;
+      elev = 0.18;
+      dist *= 1.02;
     } else if (shot === "disaster_shake") {
-      this.camPosGoal.set(0.32 + shakeX, 1.45 + shakeY, 2.38);
-      this.camLookGoal.set(0, 0.52, 0.05);
-    } else if (shot === "room_closeup") {
-      this.camPosGoal.set(0.28 + Math.sin(tSec * 0.35) * 0.12, 1.05, 2.08);
-      this.camLookGoal.set(0.15, 0.58, -0.35);
-    } else if (shot === "bunker_view") {
-      this.camPosGoal.set(0.32 + Math.sin(tSec * 0.4) * 0.18, -0.48, 2.65);
-      this.camLookGoal.set(0.05, -0.82, -0.2);
+      az = 0.14;
+      elev = 0.38;
+      dist *= 0.94;
+    } else if (shot === "room_closeup" || shot === "bunker_view") {
+      az = 0.18 + Math.sin(tSec * 0.4) * 0.06;
+      elev = 0.16;
+      dist *= 1.12;
     } else if (shot === "rooftop_view") {
-      this.camPosGoal.set(0.68 + Math.sin(tSec * 0.35) * 0.18, 2.48, 2.75);
-      this.camLookGoal.set(0.4, 1.55, -0.25);
+      az = 0.34 + Math.sin(tSec * 0.35) * 0.06;
+      elev = 0.46;
+      dist *= 1.18;
     } else if (shot === "full_cross_section") {
-      this.camPosGoal.set(0.15 + Math.sin(tSec * 0.3) * 0.16, 0.55, 4.45);
-      this.camLookGoal.set(0, 0.15, -0.15);
+      az = Math.sin(tSec * 0.35) * 0.06;
+      elev = 0.14;
+      dist *= 1.24;
     } else if (shot === "macro_plate") {
-      this.camPosGoal.set(0.18 + Math.sin(tSec * 0.5) * 0.08, 1.25, 1.62);
-      this.camLookGoal.set(0, 0.46, 0.52);
+      az = 0.14 + Math.sin(tSec * 0.5) * 0.05;
+      elev = 0.52;
+      dist *= 1.08;
     } else {
-      this.camPosGoal.set(0.34 + Math.sin(tSec * 0.4) * 0.2, 1.35, 2.28 - Math.min(0.18, sceneElapsedSec * 0.06));
-      this.camLookGoal.set(0, 0.5, 0.08);
+      az = 0.20 + Math.sin(tSec * 0.4) * 0.05;
+      elev = 0.20;
+      dist *= 1.18;
     }
 
-    this.camera.position.lerp(this.camPosGoal, 0.08);
-    this.cameraTarget.lerp(this.camLookGoal, 0.08);
+    const activeDist = Math.max(3.85, dist * pushFactor * 1.14);
+    const horizDist = activeDist * Math.cos(elev);
+    const camX = bounds.cx + Math.sin(az) * horizDist + shakeX;
+    const camY = bounds.cy + Math.sin(elev) * activeDist + shakeY;
+    const camZ = bounds.cz + Math.cos(az) * horizDist;
+
+    // Look slightly above center so the 3D subject settles cleanly in the open middle stage (y=260..740), clear of top HUD & bottom subtitles
+    const lookYOffset = Math.min(0.24, Math.max(0.06, bounds.spanH * 0.08));
+    this.camPosGoal.set(camX, camY, camZ);
+    this.camLookGoal.set(bounds.cx, bounds.cy + lookYOffset, bounds.cz);
+
+    const curCamSceneKey = `${worldKey}::${sceneNum}::${shot}`;
+    if (this.lastCamSceneKey !== curCamSceneKey) {
+      this.lastCamSceneKey = curCamSceneKey;
+      this.camera.position.copy(this.camPosGoal);
+      this.cameraTarget.copy(this.camLookGoal);
+    } else {
+      this.camera.position.lerp(this.camPosGoal, 0.14);
+      this.cameraTarget.lerp(this.camLookGoal, 0.14);
+    }
     this.camera.lookAt(this.cameraTarget);
 
-    // 2. ANIMATE "IPUL" BEHIND EXPERIMENT OR IN BUNKER
+    // 2. OPEN UNDERGROUND BUNKER CUTAWAY & ROOF VISIBILITY + ANIMATE "IPUL"
+    if ((visual.stage3d?.environment === "house_bunker" || hero === "bitcoin_bunker") && this.dioramaGroup) {
+      let cutawayReady = this.dioramaGroup.children.some((c) => c.name === "__maouBunkerCutawayMarker");
+      if (!cutawayReady) {
+        const marker = new THREE.Group();
+        marker.name = "__maouBunkerCutawayMarker";
+        this.dioramaGroup.add(marker);
+        let soilMat = null;
+        const roofs = [];
+        const wp = new THREE.Vector3();
+        if (typeof this.dioramaGroup.updateMatrixWorld === "function") {
+          this.dioramaGroup.updateMatrixWorld(true);
+        }
+        this.dioramaGroup.traverse((ch) => {
+          if (!ch?.isMesh || !ch.geometry?.parameters) return;
+          const gp = ch.geometry.parameters;
+          if (typeof ch.getWorldPosition === "function") ch.getWorldPosition(wp);
+          else wp.copy(ch.position);
+          // Solid front soil cube (8.6 x 2 x 5.2 at z=-0.6) buried the underground concrete bunker; open the front mouth
+          if ((gp.width || 0) >= 8.0 && (gp.height || 0) >= 1.8 && wp.y < -0.45) {
+            ch.visible = false;
+            soilMat = ch.material;
+          } else if (
+            ch.geometry.type === "CylinderGeometry" &&
+            Math.abs(wp.x) < 1.85 &&
+            wp.z > 0.25 &&
+            wp.y > -0.25 &&
+            wp.y < 0.08
+          ) {
+            ch.visible = false;
+          } else if (Math.abs(ch.rotation?.z || 0) > 0.35 && wp.y > 1.45 && (gp.depth || 0) > 2.0) {
+            roofs.push({ mesh: ch, origZ: ch.position.z });
+          }
+        });
+        if (soilMat) {
+          const leftSoil = new THREE.Mesh(new THREE.BoxGeometry(2.55, 1.56, 4.4), soilMat);
+          leftSoil.position.set(-3.02, -0.82, -0.6);
+          const rightSoil = new THREE.Mesh(new THREE.BoxGeometry(2.55, 1.56, 4.4), soilMat);
+          rightSoil.position.set(3.02, -0.82, -0.6);
+          const backSoil = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.56, 0.5), soilMat);
+          backSoil.position.set(0, -0.82, -1.58);
+          const baseSoil = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.52, 4.8), soilMat);
+          baseSoil.position.set(0, -1.80, -0.6);
+          this.dioramaGroup.add(leftSoil, rightSoil, backSoil, baseSoil);
+        }
+        if (typeof THREE.PointLight === "function") {
+          const bunkerFill = new THREE.PointLight(0xfef3c7, 0.95, 5.5);
+          bunkerFill.position.set(0, -0.42, 0.85);
+          this.dioramaGroup.add(bunkerFill);
+        }
+        this.dioramaGroup.userData.roofSlopes = roofs;
+      }
+      const showFullRoof = shot === "rooftop_view";
+      for (const rf of this.dioramaGroup.userData.roofSlopes || []) {
+        rf.mesh.scale.set(1, 1, showFullRoof ? 1 : 0.70);
+        rf.mesh.position.z = showFullRoof ? rf.origZ : rf.origZ - 0.36;
+      }
+    }
+
     const wk = this.worker;
     const action = visual.workerAction || (phase === "TAPI" ? "panic" : phase === "CLIMAX" ? "celebrate" : "build");
+    wk.root.scale.setScalar(1);
     if (visual.stage3d?.environment === "house_bunker" || hero === "bitcoin_bunker") {
       if (shot === "bunker_view" || shot === "full_cross_section") {
-        wk.root.position.set(-1.12, -1.45, -0.35);
+        wk.root.position.set(-0.92, -1.44, -0.25);
+        wk.root.scale.setScalar(0.82);
       } else {
         wk.root.position.set(-0.25, 0.0, -0.58);
       }

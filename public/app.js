@@ -229,7 +229,7 @@ function startBgm(destNode = null) {
     const gain = actx.createGain();
     osc.type = "triangle";
     osc.frequency.setValueAtTime(notes[step % notes.length], now);
-    gain.gain.setValueAtTime(0.032, now);
+    gain.gain.setValueAtTime(0.008, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
     osc.connect(gain);
     gain.connect(target);
@@ -572,7 +572,7 @@ async function ensureSceneAudio(index) {
     const entry = {
       buffer: decoded,
       provider: data.provider,
-      playbackRate: data.provider === "elevenlabs" ? 1.0 : 0.9
+      playbackRate: 1.0
     };
     sceneAudioBuffers.set(index, entry);
     if (st) {
@@ -636,17 +636,23 @@ async function playSceneAudioAndWait(index, destNode = null) {
       source.buffer = audioEntry.buffer;
       source.playbackRate.value = audioEntry.playbackRate || 1.0;
 
-      const bassFilter = actx.createBiquadFilter();
-      bassFilter.type = "lowshelf";
-      bassFilter.frequency.value = 220;
-      bassFilter.gain.value = audioEntry.provider === "elevenlabs" ? 3 : 7;
+      const highpassFilter = actx.createBiquadFilter();
+      highpassFilter.type = "highpass";
+      highpassFilter.frequency.value = 85;
 
-      source.connect(bassFilter);
+      const vocalPresence = actx.createBiquadFilter();
+      vocalPresence.type = "peaking";
+      vocalPresence.frequency.value = 3000;
+      vocalPresence.Q.value = 0.9;
+      vocalPresence.gain.value = 2.8;
+
+      source.connect(highpassFilter);
+      highpassFilter.connect(vocalPresence);
       if (analyserNode) {
-        bassFilter.connect(analyserNode);
+        vocalPresence.connect(analyserNode);
         analyserNode.connect(destNode || actx.destination);
       } else {
-        bassFilter.connect(destNode || actx.destination);
+        vocalPresence.connect(destNode || actx.destination);
       }
 
       if (activeAudioSource) {
@@ -656,19 +662,23 @@ async function playSceneAudioAndWait(index, destNode = null) {
       }
       activeAudioSource = source;
 
-      const durationMs = (audioEntry.buffer.duration / source.playbackRate.value) * 1000;
-      const phraseIntervalMs = Math.max(400, durationMs / phrases.length);
-
-      const phraseTimer = setInterval(() => {
-        if (!isPlaying) {
-          clearInterval(phraseTimer);
-          return;
-        }
-        if (activePhraseIndex < phrases.length - 1) activePhraseIndex++;
-      }, phraseIntervalMs);
+      const durationMs = (audioEntry.buffer.duration / (source.playbackRate.value || 1.0)) * 1000;
+      const weights = phrases.map((ph) => Math.max(5, ph.map((t) => t.text).join(" ").length));
+      const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
+      const timers = [];
+      let accumMs = 0;
+      for (let i = 0; i < phrases.length - 1; i++) {
+        accumMs += (weights[i] / totalWeight) * durationMs;
+        const nextIdx = i + 1;
+        timers.push(
+          setTimeout(() => {
+            if (isPlaying) activePhraseIndex = nextIdx;
+          }, accumMs)
+        );
+      }
 
       source.onended = () => {
-        clearInterval(phraseTimer);
+        timers.forEach((t) => clearTimeout(t));
         resolve();
       };
       source.start(0);
@@ -1480,6 +1490,7 @@ function draw3dCalloutBadge(ctx, scene) {
 }
 
 function drawDekodaHookCard(ctx, visual, tSec, sceneElapsedSec) {
+  if (visual?.vsCard?.leftTitle && visual?.vsCard?.rightTitle) return;
   const hc = visual?.hookCard;
   if (!hc || !hc.title) return;
   const W = canvas.width;
@@ -1604,52 +1615,49 @@ function drawMaouVersusCard(ctx, visual, tSec) {
   const vs = visual?.vsCard;
   if (!vs || !vs.leftTitle || !vs.rightTitle) return;
   const W = canvas.width;
-  const cardW = 310;
-  const cardH = 68;
-  const x = (W - cardW) / 2;
-  const y = 248;
+  const cardW = 280;
+  const cardH = 56;
+  const x = W - cardW - 18;
+  const y = 114;
 
   ctx.save();
-  drawRoundedRect(ctx, x + 3, y + 4, cardW, cardH, 12);
-  ctx.fillStyle = "rgba(9, 10, 15, 0.35)";
+  drawRoundedRect(ctx, x + 2, y + 3, cardW, cardH, 11);
+  ctx.fillStyle = "rgba(9, 10, 15, 0.3)";
   ctx.fill();
 
-  drawRoundedRect(ctx, x, y, cardW, cardH, 12);
+  drawRoundedRect(ctx, x, y, cardW, cardH, 11);
   ctx.fillStyle = "rgba(15, 18, 28, 0.94)";
   ctx.fill();
-  ctx.lineWidth = 2.4;
+  ctx.lineWidth = 2.2;
   ctx.strokeStyle = "#f59e0b";
   ctx.stroke();
 
-  // Left block
   ctx.textAlign = "center";
   ctx.fillStyle = "#94a3b8";
-  ctx.font = "800 9.5px 'Plus Jakarta Sans', sans-serif";
-  ctx.fillText(vs.leftTitle.toUpperCase(), x + 76, y + 18, 128);
+  ctx.font = "800 9px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillText(vs.leftTitle.toUpperCase(), x + 68, y + 14, 112);
   ctx.fillStyle = "#fb7185";
-  ctx.font = "900 13.5px 'Plus Jakarta Sans', sans-serif";
-  ctx.fillText(vs.leftValue || "-", x + 76, y + 40, 128);
+  ctx.font = "900 12px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillText(vs.leftValue || "-", x + 68, y + 32, 112);
 
-  // VS badge
-  drawRoundedRect(ctx, x + cardW / 2 - 16, y + 19, 32, 24, 999);
+  drawRoundedRect(ctx, x + cardW / 2 - 14, y + 14, 28, 20, 999);
   ctx.fillStyle = "#e11d48";
   ctx.fill();
   ctx.fillStyle = "#ffffff";
-  ctx.font = "900 10.5px 'Plus Jakarta Sans', sans-serif";
-  ctx.fillText("VS", x + cardW / 2, y + 32);
+  ctx.font = "900 9.5px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillText("VS", x + cardW / 2, y + 25);
 
-  // Right block
   ctx.fillStyle = "#94a3b8";
-  ctx.font = "800 9.5px 'Plus Jakarta Sans', sans-serif";
-  ctx.fillText(vs.rightTitle.toUpperCase(), x + cardW - 76, y + 18, 128);
+  ctx.font = "800 9px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillText(vs.rightTitle.toUpperCase(), x + cardW - 68, y + 14, 112);
   ctx.fillStyle = "#34d399";
-  ctx.font = "900 13.5px 'Plus Jakarta Sans', sans-serif";
-  ctx.fillText(vs.rightValue || "-", x + cardW - 76, y + 40, 128);
+  ctx.font = "900 12px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillText(vs.rightValue || "-", x + cardW - 68, y + 32, 112);
 
   if (vs.verdict) {
     ctx.fillStyle = "#fde047";
-    ctx.font = "800 10px 'Plus Jakarta Sans', sans-serif";
-    ctx.fillText(vs.verdict.toUpperCase(), x + cardW / 2, y + 58, cardW - 20);
+    ctx.font = "800 9px 'Plus Jakarta Sans', sans-serif";
+    ctx.fillText(vs.verdict.toUpperCase(), x + cardW / 2, y + 48, cardW - 18);
   }
   ctx.restore();
 }
