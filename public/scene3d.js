@@ -106,6 +106,25 @@ function createWireMeshTexture() {
   return tex;
 }
 
+function createStingraySpotTexture() {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 256;
+  const g = c.getContext("2d");
+  g.fillStyle = "#334155";
+  g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 46; i++) {
+    const x = 16 + ((i * 53) % 224);
+    const y = 16 + ((i * 89) % 224);
+    const r = 5 + (i % 5);
+    g.fillStyle = "#fef3c7";
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+  }
+  return new THREE.CanvasTexture(c);
+}
+
 function createArowanaScaleTexture() {
   const c = document.createElement("canvas");
   c.width = 256;
@@ -626,6 +645,395 @@ function buildCurvedTube(from, to, radius = 0.04, color = "#64748b", glow = fals
   return mesh;
 }
 
+function createStingrayMesh(spotTex, scale = 1, bellyAlert = false) {
+  const g = new THREE.Group();
+  const topMat = new THREE.MeshStandardMaterial({
+    map: spotTex,
+    color: bellyAlert ? 0xf87171 : 0xffffff,
+    roughness: 0.35
+  });
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.38, 0.14, 18), topMat);
+  disc.scale.set(1.22, 0.46, 1.05);
+  disc.castShadow = true;
+  g.add(disc);
+
+  const belly = new THREE.Mesh(
+    new THREE.SphereGeometry(0.32, 12, 8),
+    new THREE.MeshStandardMaterial({ color: bellyAlert ? 0xfca5a5 : 0xfef3c7, roughness: 0.5 })
+  );
+  belly.scale.set(1.1, 0.16, 0.95);
+  belly.position.y = -0.028;
+  g.add(belly);
+
+  const leftWing = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.035, 0.52), topMat);
+  leftWing.position.set(-0.34, 0.01, 0);
+  g.add(leftWing);
+  const rightWing = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.035, 0.52), topMat);
+  rightWing.position.set(0.34, 0.01, 0);
+  g.add(rightWing);
+
+  const tail = new THREE.Group();
+  tail.position.set(-0.4, 0, 0);
+  const tailRod = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.012, 0.035, 0.58, 8),
+    new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4 })
+  );
+  tailRod.rotation.z = Math.PI / 2;
+  tailRod.position.x = -0.26;
+  tail.add(tailRod);
+
+  const spineTip = new THREE.Mesh(
+    new THREE.ConeGeometry(0.042, 0.16, 8),
+    new THREE.MeshStandardMaterial({ color: 0xe11d48, emissive: 0x9f1239 })
+  );
+  spineTip.rotation.z = Math.PI / 2;
+  spineTip.position.set(-0.36, 0.035, 0);
+  spineTip.visible = false;
+  tail.add(spineTip);
+  g.add(tail);
+
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+  [-0.085, 0.085].forEach((ez) => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), eyeMat);
+    eye.position.set(0.18, 0.045, ez);
+    g.add(eye);
+  });
+
+  g.scale.setScalar(scale);
+  return { group: g, leftWing, rightWing, tail, spineTip };
+}
+
+function createCamelMascot() {
+  const g = new THREE.Group();
+  const coat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.55 });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.34, 8, 12), coat);
+  body.rotation.z = Math.PI / 2;
+  body.position.y = 0.46;
+  body.castShadow = true;
+  g.add(body);
+
+  const hump = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), coat);
+  hump.position.set(-0.02, 0.62, 0);
+  g.add(hump);
+
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.075, 0.38, 8), coat);
+  neck.position.set(0.26, 0.68, 0);
+  neck.rotation.z = -0.35;
+  g.add(neck);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), coat);
+  head.scale.set(1.25, 0.9, 0.85);
+  head.position.set(0.36, 0.86, 0);
+  g.add(head);
+
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 6), eyeMat);
+  eye.position.set(0.42, 0.88, 0.085);
+  g.add(eye);
+
+  [[-0.14, 0.09], [-0.14, -0.09], [0.14, 0.09], [0.14, -0.09]].forEach(([lx, lz]) => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.032, 0.44, 6), coat);
+    leg.position.set(lx, 0.22, lz);
+    g.add(leg);
+  });
+  return g;
+}
+
+function createFilterSumpMesh(w = 1.0, h = 0.68, d = 0.72, accentColor = "#0ea5e9") {
+  const g = new THREE.Group();
+  const boxMat = new THREE.MeshPhysicalMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.34, roughness: 0.1 });
+  const tank = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), boxMat);
+  g.add(tank);
+  g.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)), new THREE.LineBasicMaterial({ color: 0x0284c7 })));
+
+  // 2 Internal Chamber Baffles
+  const baffleMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.5 });
+  [-w * 0.17, w * 0.17].forEach((bx) => {
+    const baf = new THREE.Mesh(new THREE.BoxGeometry(0.03, h * 0.82, d - 0.05), baffleMat);
+    baf.position.set(bx, -h * 0.05, 0);
+    g.add(baf);
+  });
+
+  // Chamber 1: Filter Brushes
+  const brushMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.85 });
+  [-0.16, 0, 0.16].forEach((bz) => {
+    const br = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, h * 0.68, 8), brushMat);
+    br.position.set(-w * 0.33, 0, bz);
+    g.add(br);
+  });
+
+  // Chamber 2: Stacked Blue & Yellow Foam Sponges
+  const spBlue = new THREE.Mesh(
+    new THREE.BoxGeometry(w * 0.25, h * 0.28, d * 0.78),
+    new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.9 })
+  );
+  spBlue.position.set(0, -h * 0.18, 0);
+  g.add(spBlue);
+  const spYellow = new THREE.Mesh(
+    new THREE.BoxGeometry(w * 0.25, h * 0.22, d * 0.78),
+    new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.9 })
+  );
+  spYellow.position.set(0, h * 0.1, 0);
+  g.add(spYellow);
+
+  // Chamber 3: Bio-bacteria Media + Submersible Pump
+  const pump = new THREE.Mesh(
+    createRoundedBoxGeometry(w * 0.22, h * 0.28, d * 0.45, 0.03),
+    new THREE.MeshStandardMaterial({ color: new THREE.Color(accentColor), roughness: 0.35 })
+  );
+  pump.position.set(w * 0.34, -h * 0.26, 0);
+  g.add(pump);
+
+  const bioSpheres = [];
+  const bioMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, emissive: 0x10b981, emissiveIntensity: 0.4 });
+  for (let i = 0; i < 6; i++) {
+    const sp = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), bioMat);
+    sp.position.set(w * 0.33 + ((i % 2) - 0.5) * 0.12, -0.05 + Math.floor(i / 2) * 0.1, ((i % 3) - 1) * 0.12);
+    g.add(sp);
+    bioSpheres.push({ mesh: sp, baseY: sp.position.y, seed: i * 1.1 });
+  }
+  g.userData.bioSpheres = bioSpheres;
+  return g;
+}
+
+function createTurbineGenMesh(radius = 0.42, blades = 8, color = "#e2e8f0", glowing = true) {
+  const g = new THREE.Group();
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.65, roughness: 0.35 });
+  const base = new THREE.Mesh(createRoundedBoxGeometry(radius * 2.6, 0.14, radius * 1.4, 0.03), frameMat);
+  base.position.y = -radius * 0.95;
+  base.castShadow = true;
+  g.add(base);
+
+  const rotor = buildFanMesh(radius * 0.92, Math.max(6, blades), color);
+  rotor.position.set(-radius * 0.65, 0, 0);
+  rotor.rotation.y = Math.PI / 2;
+  g.add(rotor);
+
+  const shaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.05, radius * 1.7, 12),
+    new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.85, roughness: 0.2 })
+  );
+  shaft.rotation.z = Math.PI / 2;
+  g.add(shaft);
+
+  const genBody = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius * 0.58, radius * 0.58, radius * 0.95, 18),
+    new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.55, roughness: 0.3 })
+  );
+  genBody.rotation.z = Math.PI / 2;
+  genBody.position.set(radius * 0.55, 0, 0);
+  genBody.castShadow = true;
+  g.add(genBody);
+
+  const terminal = new THREE.Mesh(
+    new THREE.SphereGeometry(0.085, 10, 10),
+    new THREE.MeshStandardMaterial({
+      color: glowing ? 0xfde047 : 0x64748b,
+      emissive: glowing ? 0xf59e0b : 0x000000
+    })
+  );
+  terminal.position.set(radius * 0.65, radius * 0.66, 0);
+  g.add(terminal);
+
+  g.userData.spinChild = rotor;
+  return g;
+}
+
+function createMinerRigMesh(w = 0.88, h = 0.68, d = 0.58, color = "#475569", immersed = false) {
+  const g = new THREE.Group();
+  const chassis = new THREE.Mesh(
+    createRoundedBoxGeometry(w, h, d, 0.05),
+    new THREE.MeshStandardMaterial({ color: new THREE.Color(color), metalness: 0.65, roughness: 0.35 })
+  );
+  chassis.castShadow = true;
+  g.add(chassis);
+
+  const topBoard = new THREE.Mesh(
+    createRoundedBoxGeometry(w * 0.72, 0.08, d * 0.65, 0.02),
+    new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5 })
+  );
+  topBoard.position.y = h / 2 + 0.04;
+  g.add(topBoard);
+
+  const led = new THREE.Mesh(
+    new THREE.SphereGeometry(0.045, 8, 8),
+    new THREE.MeshBasicMaterial({ color: immersed ? 0x10b981 : 0xef4444 })
+  );
+  led.position.set(w * 0.34, h * 0.28, d / 2 + 0.02);
+  g.add(led);
+
+  const spinFans = [];
+  [-w * 0.22, w * 0.22].forEach((fx) => {
+    const fan = buildFanMesh(Math.min(w, h) * 0.28, 4, "#0f172a");
+    fan.position.set(fx, -0.02, d / 2 + 0.025);
+    g.add(fan);
+    spinFans.push(fan);
+  });
+  g.userData.spinFans = spinFans;
+
+  if (immersed) {
+    const vat = new THREE.Mesh(
+      new THREE.BoxGeometry(w * 1.38, h * 1.38, d * 1.45),
+      new THREE.MeshPhysicalMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.32, roughness: 0.08 })
+    );
+    g.add(vat);
+    g.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w * 1.38, h * 1.38, d * 1.45)), new THREE.LineBasicMaterial({ color: 0xe0f2fe })));
+  }
+  return g;
+}
+
+function createSoundRingsMesh(radius = 0.75, rings = 4, color = "#ef4444") {
+  const g = new THREE.Group();
+  const c = new THREE.Color(color);
+  const ringMeshes = [];
+  for (let i = 0; i < rings; i++) {
+    const r = radius * (0.4 + (i / rings) * 0.7);
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(r, 0.024, 8, 28),
+      new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85 - i * 0.15 })
+    );
+    ring.position.z = i * 0.06;
+    g.add(ring);
+    ringMeshes.push({ mesh: ring, idx: i });
+  }
+  g.userData.ringMeshes = ringMeshes;
+  return g;
+}
+
+function createRebarPitMesh(w = 1.15, h = 0.5, d = 0.85) {
+  const g = new THREE.Group();
+  const plankMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.78 });
+  const rebarMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.75, roughness: 0.35 });
+
+  const concrete = new THREE.Mesh(
+    new THREE.BoxGeometry(w - 0.08, 0.08, d - 0.08),
+    new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.85 })
+  );
+  concrete.position.y = -h * 0.42;
+  g.add(concrete);
+
+  [-w / 2, w / 2].forEach((px) => {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.06, h, d), plankMat);
+    wall.position.x = px;
+    g.add(wall);
+  });
+  [-d / 2, d / 2].forEach((pz) => {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.06), plankMat);
+    wall.position.z = pz;
+    g.add(wall);
+  });
+
+  for (let i = -2; i <= 2; i++) {
+    const barX = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, w * 0.88, 6), rebarMat);
+    barX.rotation.z = Math.PI / 2;
+    barX.position.set(0, -h * 0.28, (i / 2.5) * (d * 0.45));
+    g.add(barX);
+
+    const barZ = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, d * 0.88, 6), rebarMat);
+    barZ.rotation.x = Math.PI / 2;
+    barZ.position.set((i / 2.5) * (w * 0.45), -h * 0.25, 0);
+    g.add(barZ);
+  }
+  return g;
+}
+
+function createThermalPlatesMesh(w = 1.55, d = 1.05, heated = false, color = "#64748b") {
+  const g = new THREE.Group();
+  const tankUnder = new THREE.Mesh(
+    new THREE.BoxGeometry(w * 0.96, 0.14, d * 0.96),
+    new THREE.MeshStandardMaterial({ color: 0xd97706, emissive: heated ? 0x7c2d12 : 0x451a03, roughness: 0.4 })
+  );
+  tankUnder.position.y = -0.05;
+  g.add(tankUnder);
+
+  const tiles = [];
+  const tw = w * 0.28;
+  const td = d * 0.28;
+  const tileMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(heated ? "#fb923c" : color),
+    emissive: heated ? new THREE.Color(0x9a3412) : new THREE.Color(0x000000),
+    metalness: 0.72,
+    roughness: 0.28
+  });
+
+  for (let r = -1; r <= 1; r++) {
+    for (let c = -1; c <= 1; c++) {
+      const tile = new THREE.Mesh(createRoundedBoxGeometry(tw, 0.09, td, 0.015), tileMat);
+      const gap = heated ? 1.02 : 1.18;
+      tile.position.set(c * tw * gap, 0.07, r * td * gap);
+      tile.castShadow = true;
+      g.add(tile);
+      tiles.push({ mesh: tile, col: c, row: r, tw, td });
+    }
+  }
+  g.userData.tiles = tiles;
+  g.userData.heated = heated;
+  return g;
+}
+
+function createAircraftJetMesh(color = "#1e293b", heated = false) {
+  const g = new THREE.Group();
+  const hullMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(color),
+    emissive: heated ? new THREE.Color(0x7c2d12) : new THREE.Color(0x000000),
+    metalness: 0.55,
+    roughness: 0.35
+  });
+
+  const fuselage = new THREE.Mesh(new THREE.ConeGeometry(0.16, 2.25, 10), hullMat);
+  fuselage.rotation.z = -Math.PI / 2;
+  fuselage.scale.set(1, 1, 0.55);
+  fuselage.castShadow = true;
+  g.add(fuselage);
+
+  const cockpit = new THREE.Mesh(
+    new THREE.BoxGeometry(0.32, 0.1, 0.14),
+    new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+  );
+  cockpit.position.set(0.42, 0.08, 0);
+  g.add(cockpit);
+
+  const deltaWing = new THREE.Mesh(new THREE.ConeGeometry(0.88, 1.55, 3), hullMat);
+  deltaWing.rotation.z = -Math.PI / 2;
+  deltaWing.scale.set(0.08, 1, 1.25);
+  deltaWing.position.set(-0.22, -0.02, 0);
+  deltaWing.castShadow = true;
+  g.add(deltaWing);
+
+  [-0.36, 0.36].forEach((ez) => {
+    const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.095, 1.05, 12), hullMat);
+    pod.rotation.z = Math.PI / 2;
+    pod.position.set(-0.32, 0.01, ez);
+    g.add(pod);
+
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.24, 0.03), hullMat);
+    fin.position.set(-0.68, 0.14, ez * 0.92);
+    fin.rotation.x = ez > 0 ? 0.25 : -0.25;
+    g.add(fin);
+
+    const flame = new THREE.Mesh(
+      new THREE.ConeGeometry(0.095, heated ? 0.55 : 0.18, 10),
+      new THREE.MeshBasicMaterial({ color: heated ? 0xf97316 : 0x64748b })
+    );
+    flame.rotation.z = Math.PI / 2;
+    flame.position.set(heated ? -1.05 : -0.88, 0.01, ez);
+    g.add(flame);
+  });
+
+  // Landing gear legs
+  [[-0.3, -0.2, 0.26], [-0.3, -0.2, -0.26], [0.55, -0.2, 0]].forEach(([gx, gy, gz]) => {
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.28, 6), new THREE.MeshStandardMaterial({ color: 0x94a3b8 }));
+    strut.position.set(gx, gy + 0.06, gz);
+    g.add(strut);
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.05, 10), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
+    wheel.rotation.x = Math.PI / 2;
+    wheel.position.set(gx, gy - 0.06, gz);
+    g.add(wheel);
+  });
+
+  return g;
+}
+
 // ============================================================================
 // 4. MAIN MAOU 3D DIORAMA STAGE v3 (@untabiru5 x @dhotscliper + GEMINI 3D!)
 // ============================================================================
@@ -657,6 +1065,7 @@ export class Maou3DStage {
 
     const hemi = new THREE.HemisphereLight(0xffffff, 0x64748b, 1.18);
     this.scene.add(hemi);
+    this.hemiLight = hemi;
 
     const sun = new THREE.DirectionalLight(0xfffbeb, 1.65);
     sun.position.set(3.8, 7.2, 4.5);
@@ -670,16 +1079,19 @@ export class Maou3DStage {
     sun.shadow.camera.bottom = -3.8;
     sun.shadow.bias = -0.0005;
     this.scene.add(sun);
+    this.sunLight = sun;
 
     const fill = new THREE.DirectionalLight(0xbae6fd, 0.52);
     fill.position.set(-4, 3.5, 2.5);
     this.scene.add(fill);
+    this.fillLight = fill;
 
     this.brickTex = createBrickTexture();
     this.tileTex = createTileTexture();
     this.woodTex = createWoodTexture();
     this.soilTex = createSoilTexture();
     this.meshFenceTex = createWireMeshTexture();
+    this.stingrayTex = createStingraySpotTexture();
     this.arowanaTex = createArowanaScaleTexture();
     this.solarTex = createSolarGridTexture();
     this.capTex = createCapacitorLabelTexture();
@@ -719,11 +1131,165 @@ export class Maou3DStage {
     this.customParticles = [];
   }
 
-  // Unified @untabiru5 / @dhotscliper Environments (Surface ALWAYS aligned cleanly at Y = 0.0!)
-  buildEnvironmentStage(envType) {
-    if (envType === "kitchen_tile") {
-      this.scene.background = new THREE.Color(0xfff7ed);
-      this.scene.fog = new THREE.FogExp2(0xfff7ed, 0.02);
+  // Unified @untabiru5 / @dekodaid / @belajar.iai Environments (Surface aligned cleanly at Y = 0.0!)
+  buildEnvironmentStage(envType, skyMode = "day") {
+    this.applySkyLighting(skyMode);
+
+    if (envType === "house_bunker") {
+      // Multi-story cutaway House + Underground Subterranean Bunker!
+      const soilCutaway = new THREE.Mesh(
+        new THREE.BoxGeometry(8.6, 2.0, 5.2),
+        new THREE.MeshStandardMaterial({ map: this.soilTex, roughness: 0.92 })
+      );
+      soilCutaway.position.set(0, -1.04, -0.6);
+      soilCutaway.receiveShadow = true;
+      this.dioramaGroup.add(soilCutaway);
+
+      // Left & Right Green Front Lawns flanking concrete bunker opening
+      const lawnMat = new THREE.MeshStandardMaterial({ color: 0x65a30d, roughness: 0.8 });
+      [-2.85, 2.85].forEach((lx) => {
+        const lawn = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.14, 5.4), lawnMat);
+        lawn.position.set(lx, -0.04, -0.4);
+        this.dioramaGroup.add(lawn);
+      });
+
+      // Subterranean Concrete Bunker Box Cutaway (y = -1.52..-0.12, front open)
+      const bunkerMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.72 });
+      const bunkerBack = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.38, 0.16), bunkerMat);
+      bunkerBack.position.set(0, -0.82, -1.25);
+      this.dioramaGroup.add(bunkerBack);
+      const bunkerFloor = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.12, 2.3), bunkerMat);
+      bunkerFloor.position.set(0, -1.48, -0.18);
+      bunkerFloor.receiveShadow = true;
+      this.dioramaGroup.add(bunkerFloor);
+      [-1.65, 1.65].forEach((bx) => {
+        const bSide = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.38, 2.3), bunkerMat);
+        bSide.position.set(bx, -0.82, -0.18);
+        this.dioramaGroup.add(bSide);
+      });
+
+      // Vertical Yellow Steel Access Ladder into Bunker
+      const ladderMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.4 });
+      [-1.42, -1.16].forEach((lx) => {
+        const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.48, 6), ladderMat);
+        rail.position.set(lx, -0.76, 0.35);
+        this.dioramaGroup.add(rail);
+      });
+      for (let r = 0; r < 6; r++) {
+        const rung = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.03, 0.03), ladderMat);
+        rung.position.set(-1.29, -1.3 + r * 0.22, 0.35);
+        this.dioramaGroup.add(rung);
+      }
+
+      // Ground-Floor Cozy Bedroom Cutaway (y = 0.0..1.48)
+      const houseBack = new THREE.Mesh(
+        new THREE.BoxGeometry(3.6, 1.52, 0.16),
+        new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.7 })
+      );
+      houseBack.position.set(0, 0.76, -1.25);
+      houseBack.receiveShadow = true;
+      this.dioramaGroup.add(houseBack);
+
+      const floorSlab = new THREE.Mesh(
+        new THREE.BoxGeometry(3.6, 0.12, 2.4),
+        new THREE.MeshStandardMaterial({ map: this.woodTex, roughness: 0.5 })
+      );
+      floorSlab.position.set(0, -0.02, -0.15);
+      floorSlab.receiveShadow = true;
+      this.dioramaGroup.add(floorSlab);
+
+      [-1.74, 1.74].forEach((wx) => {
+        const sideW = new THREE.Mesh(
+          new THREE.BoxGeometry(0.14, 1.52, 2.4),
+          new THREE.MeshStandardMaterial({ color: 0xfef9c3, roughness: 0.7 })
+        );
+        sideW.position.set(wx, 0.76, -0.15);
+        this.dioramaGroup.add(sideW);
+      });
+
+      // Red Pitched Roof (supports Solar Panels on right slope!)
+      const roofMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.65 });
+      const leftSlope = new THREE.Mesh(new THREE.BoxGeometry(2.35, 0.12, 2.65), roofMat);
+      leftSlope.position.set(-0.95, 1.85, -0.15);
+      leftSlope.rotation.z = 0.44;
+      this.dioramaGroup.add(leftSlope);
+      const rightSlope = new THREE.Mesh(new THREE.BoxGeometry(2.35, 0.12, 2.65), roofMat);
+      rightSlope.position.set(0.95, 1.85, -0.15);
+      rightSlope.rotation.z = -0.44;
+      this.dioramaGroup.add(rightSlope);
+
+      // Bed Prop on left side of upstairs bedroom
+      const bedFrame = new THREE.Mesh(
+        createRoundedBoxGeometry(0.85, 0.24, 0.75, 0.03),
+        new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.7 })
+      );
+      bedFrame.position.set(-1.12, 0.16, -0.55);
+      this.dioramaGroup.add(bedFrame);
+      const mattress = new THREE.Mesh(
+        createRoundedBoxGeometry(0.78, 0.14, 0.68, 0.03),
+        new THREE.MeshStandardMaterial({ color: 0x60a5fa, roughness: 0.6 })
+      );
+      mattress.position.set(-1.12, 0.31, -0.55);
+      this.dioramaGroup.add(mattress);
+
+      // Ceiling Light Bulbs (toggled ON/OFF by power scenes!)
+      const roomBulbMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xfbbf24, emissiveIntensity: 0.8 });
+      const upperBulb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), roomBulbMat);
+      upperBulb.position.set(0, 1.38, -0.3);
+      this.dioramaGroup.add(upperBulb);
+      const lowerBulb = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 10), roomBulbMat);
+      lowerBulb.position.set(0, -0.22, -0.3);
+      this.dioramaGroup.add(lowerBulb);
+      this.dioramaParts.roomBulbMat = roomBulbMat;
+    } else if (envType === "runway_tarmac") {
+      // Airport Tarmac Runway + Hills + Hangar (@dekodaid SR-71!)
+      const runway = new THREE.Mesh(
+        new THREE.BoxGeometry(9.5, 0.3, 4.6),
+        new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.82 })
+      );
+      runway.position.set(0, -0.15, 0.2);
+      runway.receiveShadow = true;
+      this.dioramaGroup.add(runway);
+
+      const stripeMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
+      for (let sx = -3.6; sx <= 3.6; sx += 1.2) {
+        const dash = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.02, 0.12), stripeMat);
+        dash.position.set(sx, 0.01, 0.2);
+        this.dioramaGroup.add(dash);
+      }
+
+      const grassStrip = new THREE.Mesh(
+        new THREE.BoxGeometry(10.5, 0.25, 3.6),
+        new THREE.MeshStandardMaterial({ color: 0x65a30d, roughness: 0.85 })
+      );
+      grassStrip.position.set(0, -0.14, -3.5);
+      this.dioramaGroup.add(grassStrip);
+
+      // Hangar Building + Control Tower
+      const hangar = new THREE.Mesh(
+        createRoundedBoxGeometry(1.9, 1.05, 1.3, 0.08),
+        new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.7 })
+      );
+      hangar.position.set(-2.1, 0.52, -3.4);
+      this.dioramaGroup.add(hangar);
+
+      const towerStem = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18, 0.24, 1.85, 10),
+        new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.5 })
+      );
+      towerStem.position.set(2.25, 0.92, -3.6);
+      this.dioramaGroup.add(towerStem);
+      const towerCab = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.42, 0.32, 0.38, 12),
+        new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.3 })
+      );
+      towerCab.position.set(2.25, 1.95, -3.6);
+      this.dioramaGroup.add(towerCab);
+    } else if (envType === "kitchen_tile") {
+      if (skyMode === "day") {
+        this.scene.background = new THREE.Color(0xfff7ed);
+        this.scene.fog = new THREE.FogExp2(0xfff7ed, 0.02);
+      }
 
       const wall = new THREE.Mesh(
         new THREE.BoxGeometry(8.5, 4.8, 0.25),
@@ -748,8 +1314,10 @@ export class Maou3DStage {
       counter.receiveShadow = true;
       this.dioramaGroup.add(counter);
     } else if (envType === "backyard_cutaway") {
-      this.scene.background = new THREE.Color(0xbae6fd);
-      this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.018);
+      if (skyMode === "day") {
+        this.scene.background = new THREE.Color(0xbae6fd);
+        this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.018);
+      }
 
       const soilBlock = new THREE.Mesh(
         new THREE.BoxGeometry(8.2, 1.25, 6.2),
@@ -774,8 +1342,10 @@ export class Maou3DStage {
       houseWall.position.set(0, 1.55, -2.6);
       this.dioramaGroup.add(houseWall);
     } else if (envType === "farm_trench") {
-      this.scene.background = new THREE.Color(0x7dd3fc);
-      this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.02);
+      if (skyMode === "day") {
+        this.scene.background = new THREE.Color(0x7dd3fc);
+        this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.02);
+      }
 
       const soilBase = new THREE.Mesh(
         new THREE.BoxGeometry(9.0, 0.8, 8.5),
@@ -793,7 +1363,6 @@ export class Maou3DStage {
         this.dioramaGroup.add(bank);
       });
 
-      // Horizon hut, coconut palm trees & Merah-Putih flag (ref_3.jpg!)
       const hutBody = new THREE.Mesh(
         new THREE.BoxGeometry(1.1, 0.7, 0.9),
         new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.8 })
@@ -824,8 +1393,10 @@ export class Maou3DStage {
       flagWhite.position.set(-0.83, 1.62, -4.4);
       this.dioramaGroup.add(flagWhite);
     } else if (envType === "outdoor_sky") {
-      this.scene.background = new THREE.Color(0x93c5fd);
-      this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.02);
+      if (skyMode === "day") {
+        this.scene.background = new THREE.Color(0x93c5fd);
+        this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.02);
+      }
       const lawn = new THREE.Mesh(
         new THREE.BoxGeometry(9.0, 0.7, 7.0),
         new THREE.MeshStandardMaterial({ color: 0x65a30d, roughness: 0.8 })
@@ -834,9 +1405,10 @@ export class Maou3DStage {
       lawn.receiveShadow = true;
       this.dioramaGroup.add(lawn);
     } else {
-      // wood_desk (ref_2.jpg Sunlit Workbench Studio!)
-      this.scene.background = new THREE.Color(0xfefce8);
-      this.scene.fog = new THREE.FogExp2(0xfefce8, 0.018);
+      if (skyMode === "day") {
+        this.scene.background = new THREE.Color(0xfefce8);
+        this.scene.fog = new THREE.FogExp2(0xfefce8, 0.018);
+      }
 
       const backWall = new THREE.Mesh(
         new THREE.BoxGeometry(8.5, 4.8, 0.25),
@@ -856,6 +1428,43 @@ export class Maou3DStage {
     }
   }
 
+  applySkyLighting(skyMode = "day") {
+    if (skyMode === "night") {
+      this.scene.background = new THREE.Color(0x0f172a);
+      this.scene.fog = new THREE.FogExp2(0x0f172a, 0.022);
+      if (this.hemiLight) this.hemiLight.intensity = 0.62;
+      if (this.sunLight) {
+        this.sunLight.color.setHex(0x93c5fd);
+        this.sunLight.intensity = 0.75;
+      }
+      if (this.fillLight) this.fillLight.intensity = 0.45;
+      const starMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+      for (let i = 0; i < 16; i++) {
+        const star = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), starMat);
+        star.position.set(-3.2 + ((i * 1.1) % 6.4), 2.4 + ((i * 0.7) % 1.8), -3.8);
+        this.dioramaGroup.add(star);
+      }
+    } else if (skyMode === "heat_alert") {
+      this.scene.background = new THREE.Color(0xfed7aa);
+      this.scene.fog = new THREE.FogExp2(0xfdba74, 0.025);
+      if (this.hemiLight) this.hemiLight.intensity = 1.1;
+      if (this.sunLight) {
+        this.sunLight.color.setHex(0xfb923c);
+        this.sunLight.intensity = 1.8;
+      }
+      if (this.fillLight) this.fillLight.intensity = 0.48;
+    } else {
+      this.scene.background = new THREE.Color(0xbae6fd);
+      this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.018);
+      if (this.hemiLight) this.hemiLight.intensity = 1.18;
+      if (this.sunLight) {
+        this.sunLight.color.setHex(0xfffbeb);
+        this.sunLight.intensity = 1.65;
+      }
+      if (this.fillLight) this.fillLight.intensity = 0.52;
+    }
+  }
+
   // ============================================================================
   // 5. CURATED @UNTABIRU5 / @DHOTSCLIPER WORLDS + GEMINI COMPOSITE 3D COMPILER
   // ============================================================================
@@ -865,6 +1474,7 @@ export class Maou3DStage {
     this.clearDiorama();
 
     const visual = scene?.visual || {};
+    const phase = scene?.phase || "HOOK";
     const hero = visual.heroObject || "custom_stage";
     const s3d = visual.stage3d || {};
     const envType =
@@ -877,13 +1487,20 @@ export class Maou3DStage {
         ? visual.setting === "aquarium"
           ? "wood_desk"
           : "backyard_cutaway"
+        : hero === "stingray_pond"
+        ? "backyard_cutaway"
+        : hero === "bitcoin_bunker"
+        ? "house_bunker"
+        : hero === "supersonic_jet"
+        ? "runway_tarmac"
         : hero === "rice_fish"
         ? "farm_trench"
         : hero === "rocket"
         ? "outdoor_sky"
         : "wood_desk");
 
-    this.buildEnvironmentStage(envType);
+    const skyMode = s3d.skyMode || "day";
+    this.buildEnvironmentStage(envType, skyMode);
 
     this.worker.capingHat.visible = envType === "farm_trench";
     this.worker.chefHat.visible = envType === "kitchen_tile";
@@ -897,7 +1514,10 @@ export class Maou3DStage {
         hero !== "betta_fish" &&
         hero !== "arowana_fish" &&
         hero !== "fan_blades" &&
-        hero !== "rice_fish")
+        hero !== "rice_fish" &&
+        hero !== "stingray_pond" &&
+        hero !== "bitcoin_bunker" &&
+        hero !== "supersonic_jet")
     ) {
       this.buildGeminiCustomObjects(s3d.objects || []);
       return;
@@ -1267,6 +1887,166 @@ export class Maou3DStage {
       return;
     }
 
+    // F. CURATED KOLAM IKAN PARI + FILTER 3 SEKAT (@untabiru5!)
+    if (hero === "stingray_pond") {
+      const pond = new THREE.Group();
+      pond.position.set(-0.22, 0, 0);
+      this.dioramaGroup.add(pond);
+
+      const wallMat = new THREE.MeshStandardMaterial({ color: 0xb45309, map: this.brickTex, roughness: 0.78 });
+      const backW = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.56, 0.14), wallMat);
+      backW.position.set(0, 0.28, -0.68);
+      pond.add(backW);
+      [-1.02, 1.02].forEach((wx) => {
+        const sw = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.56, 1.42), wallMat);
+        sw.position.set(wx, 0.28, 0);
+        pond.add(sw);
+      });
+
+      const rebarGroup = createRebarPitMesh(1.98, 0.48, 1.24);
+      rebarGroup.position.set(0, 0.26, 0);
+      pond.add(rebarGroup);
+      this.dioramaParts.rebarGroup = rebarGroup;
+
+      const sandBed = new THREE.Mesh(
+        new THREE.BoxGeometry(1.9, 0.08, 1.24),
+        new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.92 })
+      );
+      sandBed.position.set(0, 0.06, 0);
+      sandBed.receiveShadow = true;
+      pond.add(sandBed);
+      this.dioramaParts.sandBed = sandBed;
+
+      const waterMat = new THREE.MeshPhysicalMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.42, roughness: 0.08 });
+      const waterBox = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.42, 1.24), waterMat);
+      waterBox.position.set(0, 0.28, 0);
+      pond.add(waterBox);
+      this.dioramaParts.waterMat = waterMat;
+      this.dioramaParts.waterBox = waterBox;
+
+      const filterGroup = new THREE.Group();
+      const sump = createFilterSumpMesh(0.92, 0.54, 0.74, "#0ea5e9");
+      sump.position.set(1.38, 0.28, -0.05);
+      filterGroup.add(sump);
+      filterGroup.add(buildCurvedTube([0.72, 0.42, -0.15], [1.02, 0.42, -0.15], 0.04, "#38bdf8", false));
+      filterGroup.add(buildCurvedTube([1.15, 0.14, 0.25], [0.68, 0.45, 0.22], 0.035, "#10b981", false));
+      this.dioramaGroup.add(filterGroup);
+      this.dioramaParts.filterGroup = filterGroup;
+      this.dioramaParts.sumpMesh = sump;
+
+      // Camel mascot in background yard!
+      const camel = createCamelMascot();
+      camel.position.set(-1.35, 0.0, -1.35);
+      camel.scale.setScalar(0.85);
+      this.dioramaGroup.add(camel);
+
+      const rays = [];
+      const bellyAlert = visual.problemVisual === "murky_mud";
+      for (let i = 0; i < 2; i++) {
+        const ray = createStingrayMesh(this.stingrayTex, 0.66 - i * 0.08, bellyAlert);
+        ray.group.position.set(-0.22 + (i - 0.5) * 0.65, 0.18, (i - 0.5) * 0.25);
+        pond.add(ray.group);
+        rays.push({ ...ray, seed: i * 2.1 });
+      }
+      this.dioramaParts.stingrays = rays;
+
+      const babyRays = [];
+      for (let b = 0; b < 2; b++) {
+        const baby = createStingrayMesh(this.stingrayTex, 0.34, false);
+        baby.group.position.set(-0.15 + b * 0.48, 0.22, 0.18 - b * 0.25);
+        pond.add(baby.group);
+        babyRays.push({ ...baby, seed: b * 1.4 + 3.0 });
+      }
+      this.dioramaParts.babyRays = babyRays;
+      return;
+    }
+
+    // G. CURATED MINING BITCOIN HOUSE + BUNKER + PLTU MINI (@belajar.iai!)
+    if (hero === "bitcoin_bunker") {
+      // Upstairs ASIC miner rig on bedroom desk
+      const desk = new THREE.Mesh(
+        createRoundedBoxGeometry(0.9, 0.42, 0.55, 0.03),
+        new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.6 })
+      );
+      desk.position.set(0.75, 0.21, -0.55);
+      this.dioramaGroup.add(desk);
+
+      const roomMiner = createMinerRigMesh(0.58, 0.46, 0.42, "#475569", false);
+      roomMiner.position.set(0.75, 0.66, -0.52);
+      this.dioramaGroup.add(roomMiner);
+      this.dioramaParts.roomMiner = roomMiner;
+
+      const soundRings = createSoundRingsMesh(0.62, 4, "#ef4444");
+      soundRings.position.set(0.75, 0.72, -0.15);
+      this.dioramaGroup.add(soundRings);
+      this.dioramaParts.soundRings = soundRings;
+
+      // Bunker Underground Miner + Dielectric Immersion Tank
+      const bunkerMiner = createMinerRigMesh(0.68, 0.52, 0.48, "#334155", true);
+      bunkerMiner.position.set(-0.55, -1.04, -0.25);
+      this.dioramaGroup.add(bunkerMiner);
+      this.dioramaParts.bunkerMiner = bunkerMiner;
+
+      // Rooftop Solar Panels (slope right!)
+      const solarGroup = new THREE.Group();
+      [-0.55, 0.35].forEach((sz) => {
+        const sp = new THREE.Mesh(
+          createRoundedBoxGeometry(0.95, 0.06, 0.72, 0.02),
+          new THREE.MeshStandardMaterial({ map: this.solarTex, metalness: 0.4, roughness: 0.2 })
+        );
+        sp.position.set(0.92, 1.98, sz);
+        sp.rotation.z = -0.44;
+        solarGroup.add(sp);
+      });
+      this.dioramaGroup.add(solarGroup);
+      this.dioramaParts.solarGroup = solarGroup;
+
+      // PLTU Mini (Orange Heat Exchanger Coil + Steam Turbine Generator + Cooling Pipe!)
+      const pltuGroup = new THREE.Group();
+      const coil = buildHelixCoilMesh(0.24, 0.56, 5, 0.04, "#f97316", true);
+      coil.position.set(0.28, -1.04, -0.25);
+      pltuGroup.add(coil);
+
+      const turbine = createTurbineGenMesh(0.32, 8, "#e2e8f0", true);
+      turbine.position.set(1.05, -0.82, -0.25);
+      pltuGroup.add(turbine);
+      this.dioramaParts.turbine = turbine;
+
+      // Heat fluid pipe -> turbine & cooling return loop -> tank + power wire up to ceiling!
+      pltuGroup.add(buildCurvedTube([-0.15, -1.0, -0.25], [0.22, -1.0, -0.25], 0.038, "#ef4444", true));
+      pltuGroup.add(buildCurvedTube([0.28, -0.74, -0.25], [0.85, -0.74, -0.25], 0.036, "#f8fafc", false));
+      pltuGroup.add(buildCurvedTube([1.05, -1.16, 0.05], [-0.45, -1.35, 0.15], 0.034, "#38bdf8", false));
+      pltuGroup.add(buildCurvedTube([1.22, -0.58, -0.25], [1.45, 1.38, -0.3], 0.024, "#facc15", true));
+      this.dioramaGroup.add(pltuGroup);
+      this.dioramaParts.pltuGroup = pltuGroup;
+      return;
+    }
+
+    // H. CURATED SR-71 BLACKBIRD + THERMAL EXPANSION PLATES (@dekodaid!)
+    if (hero === "supersonic_jet") {
+      const isHeated = visual.solutionVisual === "afterburner_heat" || visual.solutionVisual === "thermal_expand" || visual.solutionVisual === "sealed_jet" || phase === "CLIMAX";
+      const jet = createAircraftJetMesh("#1e293b", isHeated);
+      jet.position.set(0, 0.42, -0.1);
+      jet.scale.setScalar(1.05);
+      this.dioramaGroup.add(jet);
+      this.dioramaParts.jet = jet;
+
+      const fuelPuddle = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.45, 0.48, 0.02, 18),
+        new THREE.MeshPhysicalMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.78, roughness: 0.15 })
+      );
+      fuelPuddle.position.set(-0.1, 0.02, 0.25);
+      this.dioramaGroup.add(fuelPuddle);
+      this.dioramaParts.fuelPuddle = fuelPuddle;
+
+      const plateRig = createThermalPlatesMesh(1.48, 0.98, visual.solutionVisual === "thermal_expand" || phase === "CLIMAX", "#94a3b8");
+      plateRig.position.set(0, 0.48, 0.65);
+      plateRig.rotation.x = 0.62;
+      this.dioramaGroup.add(plateRig);
+      this.dioramaParts.plateRig = plateRig;
+      return;
+    }
+
     this.buildGeminiCustomObjects(s3d.objects || []);
   }
 
@@ -1492,6 +2272,22 @@ export class Maou3DStage {
         stand.position.y = -0.22;
         g.add(stand);
         mesh = g;
+      } else if (o.kind === "sound_rings") {
+        mesh = createSoundRingsMesh(o.radius || 0.75, o.rings || 4, o.color || "#ef4444");
+      } else if (o.kind === "filter_sump") {
+        mesh = createFilterSumpMesh(o.w || 1.0, o.h || 0.68, o.d || 0.72, o.color || "#0ea5e9");
+      } else if (o.kind === "turbine_gen") {
+        mesh = createTurbineGenMesh(o.radius || 0.42, o.blades || 8, o.color || "#e2e8f0", o.glow !== false);
+      } else if (o.kind === "rebar_pit") {
+        mesh = createRebarPitMesh(o.w || 1.15, o.h || 0.5, o.d || 0.85);
+      } else if (o.kind === "stingray") {
+        mesh = createStingrayMesh(this.stingrayTex, o.radius ? o.radius * 1.4 : 0.75, o.murky).group;
+      } else if (o.kind === "thermal_plates") {
+        mesh = createThermalPlatesMesh(o.w || 1.48, o.d || 0.98, Boolean(o.heated), o.color || "#94a3b8");
+      } else if (o.kind === "aircraft_jet") {
+        mesh = createAircraftJetMesh(o.color || "#1e293b", Boolean(o.heated));
+      } else if (o.kind === "miner_rig") {
+        mesh = createMinerRigMesh(o.w || 0.88, o.h || 0.68, o.d || 0.58, o.color || "#475569", Boolean(o.immersed));
       } else if (o.kind === "cylinder") {
         mesh = new THREE.Mesh(new THREE.CylinderGeometry(o.rTop || 0.35, o.rBottom || 0.4, o.h || 0.7, 22, 1, Boolean(o.openTop)), mat);
         if (o.openTop) mat.side = THREE.DoubleSide;
@@ -1545,14 +2341,15 @@ export class Maou3DStage {
     const phase = sceneData?.phase || "HOOK";
     const sceneNum = sceneData?.sceneNumber || 1;
     const hero = visual.heroObject || "custom_stage";
+    const skyMode = visual.stage3d?.skyMode || "day";
     const worldKey =
       hero === "custom_stage"
-        ? `custom::${topicText}::${sceneNum}`
-        : `${hero}::${visual.setting || "std"}`;
+        ? `custom::${topicText}::${sceneNum}::${skyMode}`
+        : `${hero}::${visual.setting || "std"}::${skyMode}::${visual.solutionVisual || "none"}::${visual.problemVisual || "none"}`;
 
     this.buildDiorama(worldKey, sceneData, topicText);
 
-    // 1. CINEMATIC @UNTABIRU5 CAMERA CUTS & SMOOTH DOLLY
+    // 1. CINEMATIC @UNTABIRU5 x @DEKODAID x @BELAJAR.IAI CAMERA CUTS & SMOOTH DOLLY
     const shot = visual.stage3d?.cameraShot || "closeup_hands";
     const shakeX = phase === "TAPI" && sceneElapsedSec < 0.8 ? Math.sin(tSec * 52) * 0.08 * (1 - sceneElapsedSec / 0.8) : 0;
     const shakeY = phase === "TAPI" && sceneElapsedSec < 0.8 ? Math.cos(tSec * 44) * 0.05 * (1 - sceneElapsedSec / 0.8) : 0;
@@ -1572,6 +2369,21 @@ export class Maou3DStage {
     } else if (shot === "disaster_shake") {
       this.camPosGoal.set(0.32 + shakeX, 1.45 + shakeY, 2.38);
       this.camLookGoal.set(0, 0.52, 0.05);
+    } else if (shot === "room_closeup") {
+      this.camPosGoal.set(0.28 + Math.sin(tSec * 0.35) * 0.12, 1.05, 2.08);
+      this.camLookGoal.set(0.15, 0.58, -0.35);
+    } else if (shot === "bunker_view") {
+      this.camPosGoal.set(0.32 + Math.sin(tSec * 0.4) * 0.18, -0.48, 2.65);
+      this.camLookGoal.set(0.05, -0.82, -0.2);
+    } else if (shot === "rooftop_view") {
+      this.camPosGoal.set(0.68 + Math.sin(tSec * 0.35) * 0.18, 2.48, 2.75);
+      this.camLookGoal.set(0.4, 1.55, -0.25);
+    } else if (shot === "full_cross_section") {
+      this.camPosGoal.set(0.15 + Math.sin(tSec * 0.3) * 0.16, 0.55, 4.45);
+      this.camLookGoal.set(0, 0.15, -0.15);
+    } else if (shot === "macro_plate") {
+      this.camPosGoal.set(0.18 + Math.sin(tSec * 0.5) * 0.08, 1.25, 1.62);
+      this.camLookGoal.set(0, 0.46, 0.52);
     } else {
       this.camPosGoal.set(0.34 + Math.sin(tSec * 0.4) * 0.2, 1.35, 2.28 - Math.min(0.18, sceneElapsedSec * 0.06));
       this.camLookGoal.set(0, 0.5, 0.08);
@@ -1581,34 +2393,55 @@ export class Maou3DStage {
     this.cameraTarget.lerp(this.camLookGoal, 0.08);
     this.camera.lookAt(this.cameraTarget);
 
-    // 2. ANIMATE "IPUL" BEHIND EXPERIMENT
+    // 2. ANIMATE "IPUL" BEHIND EXPERIMENT OR IN BUNKER
     const wk = this.worker;
     const action = visual.workerAction || (phase === "TAPI" ? "panic" : phase === "CLIMAX" ? "celebrate" : "build");
-    wk.root.position.set(0, -0.32, -0.88);
+    if (visual.stage3d?.environment === "house_bunker" || hero === "bitcoin_bunker") {
+      if (shot === "bunker_view" || shot === "full_cross_section") {
+        wk.root.position.set(-1.12, -1.45, -0.35);
+      } else {
+        wk.root.position.set(-0.25, 0.0, -0.58);
+      }
+    } else if (hero === "supersonic_jet") {
+      wk.root.position.set(-1.35, 0.0, 0.35);
+    } else {
+      wk.root.position.set(0, -0.32, -0.88);
+    }
     if (this.worker.capingHat.visible) wk.root.position.set(-0.55, 0, 0.25);
 
     wk.flameTip.visible = action === "heat";
-    wk.basketRim.visible = this.worker.capingHat.visible;
+    wk.basketRim.visible = action === "long_net" || this.worker.capingHat.visible;
 
-    if (action === "panic" || phase === "TAPI") {
+    if (action === "cover_ears") {
+      wk.hips.position.y = 0.68 + Math.sin(tSec * 14) * 0.03;
+      wk.leftArm.rotation.set(-2.25, 0, -0.45);
+      wk.rightArm.rotation.set(-2.25, 0, 0.45);
+      wk.head.rotation.y = Math.sin(tSec * 14) * 0.28;
+      wk.toolGroup.visible = false;
+    } else if (action === "long_net") {
+      wk.hips.position.y = 0.68 + Math.sin(tSec * 3.5) * 0.025;
+      wk.leftArm.rotation.set(-1.1, 0, 0);
+      wk.rightArm.rotation.set(-1.35 + Math.sin(tSec * 4) * 0.22, 0, 0.1);
+      wk.head.rotation.x = 0.15;
+      wk.toolGroup.visible = true;
+    } else if (action === "panic" || phase === "TAPI") {
       wk.hips.position.y = 0.68 + Math.abs(Math.sin(tSec * 12)) * 0.1;
-      wk.leftArm.rotation.x = -2.35 + Math.sin(tSec * 15) * 0.4;
-      wk.rightArm.rotation.x = -2.35 - Math.sin(tSec * 15) * 0.4;
+      wk.leftArm.rotation.set(-2.35 + Math.sin(tSec * 15) * 0.4, 0, 0);
+      wk.rightArm.rotation.set(-2.35 - Math.sin(tSec * 15) * 0.4, 0, 0);
       wk.head.rotation.y = Math.sin(tSec * 12) * 0.3;
       wk.toolGroup.visible = false;
     } else if (action === "celebrate" || phase === "CLIMAX") {
       wk.hips.position.y = 0.68 + Math.abs(Math.sin(tSec * 7.5)) * 0.14;
-      wk.leftArm.rotation.x = -2.65;
-      wk.rightArm.rotation.x = -2.65;
+      wk.leftArm.rotation.set(-2.65, 0, 0);
+      wk.rightArm.rotation.set(-2.65, 0, 0);
       wk.head.rotation.y = Math.sin(tSec * 3) * 0.15;
       wk.toolGroup.visible = false;
     } else {
       const w = Math.sin(tSec * 5.2);
       wk.hips.position.y = 0.68 + Math.abs(w) * 0.025;
       wk.hips.rotation.x = 0.18 + w * 0.06;
-      wk.rightArm.rotation.x = -1.18 + w * 0.42;
-      wk.rightArm.rotation.z = Math.cos(tSec * 5.2) * 0.2;
-      wk.leftArm.rotation.x = -1.05 - w * 0.3;
+      wk.rightArm.rotation.set(-1.18 + w * 0.42, 0, Math.cos(tSec * 5.2) * 0.2);
+      wk.leftArm.rotation.set(-1.05 - w * 0.3, 0, 0);
       wk.head.rotation.x = 0.22 + w * 0.06;
       wk.toolGroup.visible = action === "stir" || action === "heat" || this.worker.capingHat.visible;
     }
@@ -1639,7 +2472,23 @@ export class Maou3DStage {
       node.mesh.scale.setScalar(scale);
 
       if (node.mesh.userData?.spinChild) {
-        node.mesh.userData.spinChild.rotation.z = tSec * 9.5;
+        node.mesh.userData.spinChild.rotation.z = tSec * (node.speed || 9.5);
+      }
+      if (Array.isArray(node.mesh.userData?.spinFans)) {
+        node.mesh.userData.spinFans.forEach((f) => {
+          f.rotation.z = tSec * 12;
+        });
+      }
+      if (Array.isArray(node.mesh.userData?.ringMeshes)) {
+        node.mesh.userData.ringMeshes.forEach((rm) => {
+          const s = 0.8 + ((tSec * 1.4 + rm.idx * 0.25) % 1) * 0.65;
+          rm.mesh.scale.setScalar(s);
+        });
+      }
+      if (Array.isArray(node.mesh.userData?.bioSpheres)) {
+        node.mesh.userData.bioSpheres.forEach((b) => {
+          b.mesh.position.y = b.baseY + Math.sin(tSec * 3.5 + b.seed) * 0.04;
+        });
       }
       if (node.kind === "fan" || node.kind === "gear") {
         node.mesh.rotation.z = tSec * (node.motion === "spin_reverse" ? -Math.abs(node.speed) : node.speed);
@@ -1748,6 +2597,80 @@ export class Maou3DStage {
         f.group.position.z = ((tSec * 0.65 + f.seed) % 4.5) - 2.2;
         if (f.tail) f.tail.rotation.y = Math.PI + Math.sin(tSec * 12 + idx) * 0.35;
       });
+    } else if (hero === "stingray_pond") {
+      const isDry = visual.problemVisual === "dry_seep";
+      const isMurky = visual.problemVisual === "murky_mud";
+      if (p.rebarGroup) p.rebarGroup.visible = visual.solutionVisual === "concrete_rebar" || sceneNum === 3;
+      if (p.sandBed) p.sandBed.visible = sceneNum >= 5 || visual.solutionVisual === "sand_bed" || visual.solutionVisual === "baby_stingrays";
+      if (p.filterGroup) p.filterGroup.visible = sceneNum >= 6 || visual.solutionVisual === "filter_sump" || visual.solutionVisual === "baby_stingrays";
+      if (p.waterMat) p.waterMat.color.setHex(isMurky ? 0x7c582d : 0x38bdf8);
+      if (p.waterBox) p.waterBox.scale.y = isDry ? 0.16 : 1;
+      if (p.sumpMesh && Array.isArray(p.sumpMesh.userData?.bioSpheres)) {
+        p.sumpMesh.userData.bioSpheres.forEach((b) => {
+          b.mesh.position.y = b.baseY + Math.sin(tSec * 4 + b.seed) * 0.04;
+        });
+      }
+      const glideList = [...(p.stingrays || [])];
+      if (p.babyRays) {
+        p.babyRays.forEach((br) => {
+          br.group.visible = phase === "CLIMAX" || visual.solutionVisual === "baby_stingrays";
+          if (br.group.visible) glideList.push(br);
+        });
+      }
+      glideList.forEach((sr, idx) => {
+        const ang = tSec * (1.2 + idx * 0.25) + sr.seed;
+        sr.group.position.set(Math.sin(ang) * 0.58, isDry ? 0.08 : 0.16 + Math.cos(tSec * 2 + idx) * 0.04, Math.cos(ang) * 0.34);
+        sr.group.rotation.y = Math.atan2(Math.cos(ang), -Math.sin(ang));
+        const flap = Math.sin(tSec * 6.5 + idx) * 0.24;
+        if (sr.leftWing) sr.leftWing.rotation.z = flap;
+        if (sr.rightWing) sr.rightWing.rotation.z = -flap;
+        if (sr.tail) sr.tail.rotation.y = Math.sin(tSec * 8 + idx) * 0.22;
+        if (sr.spineTip) sr.spineTip.visible = visual.problemVisual === "venom_tail" || sceneNum === 7;
+      });
+    } else if (hero === "bitcoin_bunker") {
+      if (p.roomMiner) {
+        p.roomMiner.visible = sceneNum <= 2;
+        (p.roomMiner.userData?.spinFans || []).forEach((f) => { f.rotation.z = tSec * 14; });
+      }
+      if (p.soundRings) {
+        p.soundRings.visible = sceneNum <= 2 || visual.problemVisual === "sound_waves";
+        (p.soundRings.userData?.ringMeshes || []).forEach((rm) => {
+          rm.mesh.scale.setScalar(0.75 + ((tSec * 1.6 + rm.idx * 0.25) % 1) * 0.75);
+        });
+      }
+      if (p.bunkerMiner) {
+        p.bunkerMiner.visible = sceneNum >= 3;
+        (p.bunkerMiner.userData?.spinFans || []).forEach((f) => { f.rotation.z = tSec * 12; });
+      }
+      if (p.solarGroup) p.solarGroup.visible = sceneNum >= 5;
+      if (p.pltuGroup) p.pltuGroup.visible = sceneNum >= 7 || visual.solutionVisual === "pltu_loop" || visual.solutionVisual === "house_lit";
+      if (p.turbine && p.turbine.userData?.spinChild && p.pltuGroup?.visible) {
+        p.turbine.userData.spinChild.rotation.z = tSec * 11;
+      }
+      if (p.roomBulbMat) {
+        const isBlackout = visual.problemVisual === "night_outage" || (sceneNum === 5 && skyMode === "night");
+        p.roomBulbMat.emissiveIntensity = isBlackout ? 0.0 : phase === "CLIMAX" ? 1.5 : 0.75;
+        p.roomBulbMat.color.setHex(isBlackout ? 0x475569 : 0xfef08a);
+      }
+    } else if (hero === "supersonic_jet") {
+      const showMacro = visual.stage3d?.cameraShot === "macro_plate";
+      const isExpanded = visual.solutionVisual === "thermal_expand" || visual.solutionVisual === "sealed_jet" || phase === "CLIMAX";
+      if (p.jet) {
+        p.jet.visible = !showMacro;
+        if (visual.solutionVisual === "afterburner_heat" || visual.solutionVisual === "sealed_jet" || phase === "CLIMAX") {
+          p.jet.position.y = 0.56 + Math.sin(tSec * 4) * 0.05;
+        }
+      }
+      if (p.fuelPuddle) p.fuelPuddle.visible = !showMacro && (visual.problemVisual === "fuel_leak" || sceneNum === 1);
+      if (p.plateRig) {
+        p.plateRig.visible = showMacro;
+        if (Array.isArray(p.plateRig.userData?.tiles)) {
+          const animGap = isExpanded ? THREE.MathUtils.lerp(1.18, 1.01, Math.min(1, sceneElapsedSec * 1.1)) : 1.18;
+          p.plateRig.userData.tiles.forEach((t) => {
+            t.mesh.position.set(t.col * t.tw * animGap, 0.07, t.row * t.td * animGap);
+          });
+        }
+      }
     }
 
     this.renderer.render(this.scene, this.camera);

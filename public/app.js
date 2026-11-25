@@ -1466,6 +1466,127 @@ function draw3dCalloutBadge(ctx, scene) {
   ctx.restore();
 }
 
+function drawDekodaHookCard(ctx, visual, tSec, sceneElapsedSec) {
+  const hc = visual?.hookCard;
+  if (!hc || !hc.title) return;
+  const W = canvas.width;
+  const cardW = 224;
+  const cardH = hc.subtitle ? 56 : 38;
+  const x = W - cardW - 18;
+  const y = 116;
+  const pop = sceneElapsedSec < 0.25 ? 0.85 + (sceneElapsedSec / 0.25) * 0.15 : 1;
+
+  ctx.save();
+  ctx.translate(x + cardW / 2, y + cardH / 2);
+  ctx.scale(pop, pop);
+  ctx.translate(-(x + cardW / 2), -(y + cardH / 2));
+
+  // Soft shadow
+  drawRoundedRect(ctx, x + 2, y + 4, cardW, cardH, 12);
+  ctx.fillStyle = "rgba(9, 10, 15, 0.28)";
+  ctx.fill();
+
+  // Warm @dekodaid cream plaque
+  drawRoundedRect(ctx, x, y, cardW, cardH, 12);
+  ctx.fillStyle = "#fffbeb";
+  ctx.fill();
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = "#1e293b";
+  ctx.stroke();
+
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "900 13px 'Plus Jakarta Sans', sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillText(hc.title, x + 12, y + 9, cardW - 24);
+
+  if (hc.subtitle) {
+    ctx.fillStyle = "#0284c7";
+    ctx.font = "800 11px 'Plus Jakarta Sans', sans-serif";
+    ctx.fillText(hc.subtitle, x + 12, y + 30, cardW - 24);
+  }
+  ctx.restore();
+}
+
+function drawBelajarInfoPills(ctx, visual, phase, tSec) {
+  const cards = visual?.infoCards;
+  if (!Array.isArray(cards) || !cards.length) return;
+  const startY = visual?.meter ? 172 : 116;
+  const cardW = 196;
+  const cardH = 44;
+
+  cards.slice(0, 2).forEach((card, idx) => {
+    const x = 18;
+    const y = startY + idx * (cardH + 8);
+    const accent =
+      card.tone === "warn" ? "#e11d48" : card.tone === "good" ? "#10b981" : "#0284c7";
+
+    ctx.save();
+    drawRoundedRect(ctx, x + 2, y + 3, cardW, cardH, 10);
+    ctx.fillStyle = "rgba(9, 10, 15, 0.26)";
+    ctx.fill();
+
+    drawRoundedRect(ctx, x, y, cardW, cardH, 10);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
+    ctx.fill();
+    ctx.lineWidth = 2.2;
+    ctx.strokeStyle = "#090a0f";
+    ctx.stroke();
+
+    // Colored left indicator bar
+    drawRoundedRect(ctx, x + 5, y + 6, 6, cardH - 12, 3);
+    ctx.fillStyle = accent;
+    ctx.fill();
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "#475569";
+    ctx.font = "800 9.5px 'Plus Jakarta Sans', sans-serif";
+    ctx.fillText(String(card.label || "INFO").toUpperCase(), x + 18, y + 7, cardW - 26);
+
+    ctx.fillStyle = card.tone === "warn" ? "#be123c" : card.tone === "good" ? "#047857" : "#0f172a";
+    ctx.font = "900 12.5px 'Plus Jakarta Sans', sans-serif";
+    ctx.fillText(String(card.value || ""), x + 18, y + 21, cardW - 26);
+    ctx.restore();
+  });
+}
+
+function drawMilestoneStampBanner(ctx, visual, scene, tSec, sceneElapsedSec) {
+  const txt = visual?.bannerText;
+  if (!txt) return;
+  if (scene.phase === "CLIMAX" && txt === "SELAMAT!") return;
+
+  const W = canvas.width;
+  const punch = sceneElapsedSec < 0.28 ? 1.25 - (sceneElapsedSec / 0.28) * 0.25 : 1 + Math.sin(tSec * 4) * 0.015;
+
+  ctx.save();
+  ctx.font = "900 17px 'Plus Jakarta Sans', sans-serif";
+  const boxW = Math.min(260, Math.max(140, ctx.measureText(txt).width + 32));
+  const boxH = 38;
+
+  ctx.translate(W - boxW / 2 - 20, 198);
+  ctx.rotate(-0.06);
+  ctx.scale(punch, punch);
+
+  // @belajar.iai solid offset shadow + crisp white black-bordered card
+  drawRoundedRect(ctx, -boxW / 2 + 4, -boxH / 2 + 4, boxW, boxH, 7);
+  ctx.fillStyle = "#090a0f";
+  ctx.fill();
+
+  drawRoundedRect(ctx, -boxW / 2, -boxH / 2, boxW, boxH, 7);
+  ctx.fillStyle = scene.phase === "TAPI" ? "#fef2f2" : "#ffffff";
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#090a0f";
+  ctx.stroke();
+
+  ctx.fillStyle = scene.phase === "TAPI" ? "#e11d48" : "#090a0f";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(txt, 0, 1, boxW - 16);
+  ctx.restore();
+}
+
 function startRenderLoop() {
   function frame(now) {
     try {
@@ -1508,6 +1629,9 @@ function startRenderLoop() {
 
         drawTopVideoHeader(ctx, scene);
         draw3dCalloutBadge(ctx, scene);
+        drawDekodaHookCard(ctx, scene.visual, tSec, sceneElapsedSec);
+        drawBelajarInfoPills(ctx, scene.visual, scene.phase, tSec);
+        drawMilestoneStampBanner(ctx, scene.visual, scene, tSec, sceneElapsedSec);
         drawSelamatStamp(ctx, scene, tSec);
 
         // 2. Consistent 2D Anime MC Raja Iblis Host reacting & pointing outside the video!
