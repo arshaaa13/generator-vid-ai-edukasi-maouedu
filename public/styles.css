@@ -191,14 +191,6 @@ body {
   white-space: nowrap;
 }
 
-.prompt-meta-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
 .pipeline-bar {
   display: flex;
   align-items: center;
@@ -340,37 +332,6 @@ input:focus,
 textarea:focus,
 select:focus {
   border-color: var(--crimson);
-}
-
-.preset-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-.chip-label {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-.chip {
-  background: #202436;
-  border: 1px solid #323854;
-  color: #cbd5e1;
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 5px 10px;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.chip:hover {
-  background: rgba(225, 29, 72, 0.2);
-  border-color: var(--crimson);
-  color: #fff;
 }
 
 .research-box {

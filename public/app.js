@@ -276,7 +276,16 @@ function parseSubtitlePhrasesClient(narration) {
 // ============================================================================
 async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
   const cleanPrompt = (promptText || simplePromptInput.value).trim();
-  if (!cleanPrompt) return;
+  if (!cleanPrompt) {
+    simplePromptInput.value = "";
+    simplePromptInput.placeholder = "Isi dulu topik atau ide video kamu di sini!";
+    simplePromptInput.focus();
+    return;
+  }
+
+  // Always keep prompt column clean & ready for the next generation
+  simplePromptInput.value = "";
+  videoTitleDisplay.textContent = `⏳ Merancang: ${cleanPrompt.slice(0, 46)}`;
 
   stopPlayback();
   autoBuildVideoBtn.disabled = true;
@@ -1371,19 +1380,23 @@ function drawUntabiruSubtitles(ctx, scene) {
       const boxW = textW + (tok.highlight ? 20 : 10);
 
       if (tok.highlight) {
+        const isDangerWord = /^(tapi|bahaya|plot twist|rewind|awas|bocor|gagal|panas|overheat|ambles|karatan|bising|mogok)/i.test(
+          tok.text.trim()
+        );
+        const isWinWord = /^(selamat!?|berhasil!?|jadi|solusi|mantap!?|hidup!?)$/i.test(tok.text.trim());
         ctx.save();
         drawRoundedRect(ctx, cursorX, y - 20, boxW, 42, 10);
         ctx.fillStyle = "#090a0f";
         ctx.fill();
 
         drawRoundedRect(ctx, cursorX - 2, y - 22, boxW, 42, 10);
-        ctx.fillStyle = "#fbbf24";
+        ctx.fillStyle = isDangerWord ? "#e11d48" : isWinWord ? "#10b981" : "#fbbf24";
         ctx.fill();
         ctx.lineWidth = 3.2;
         ctx.strokeStyle = "#090a0f";
         ctx.stroke();
 
-        ctx.fillStyle = "#090a0f";
+        ctx.fillStyle = isDangerWord ? "#ffffff" : "#090a0f";
         ctx.textAlign = "left";
         ctx.fillText(tok.text, cursorX + 8, y);
         ctx.restore();
@@ -1587,6 +1600,116 @@ function drawMilestoneStampBanner(ctx, visual, scene, tSec, sceneElapsedSec) {
   ctx.restore();
 }
 
+function drawMaouVersusCard(ctx, visual, tSec) {
+  const vs = visual?.vsCard;
+  if (!vs || !vs.leftTitle || !vs.rightTitle) return;
+  const W = canvas.width;
+  const cardW = 310;
+  const cardH = 68;
+  const x = (W - cardW) / 2;
+  const y = 248;
+
+  ctx.save();
+  drawRoundedRect(ctx, x + 3, y + 4, cardW, cardH, 12);
+  ctx.fillStyle = "rgba(9, 10, 15, 0.35)";
+  ctx.fill();
+
+  drawRoundedRect(ctx, x, y, cardW, cardH, 12);
+  ctx.fillStyle = "rgba(15, 18, 28, 0.94)";
+  ctx.fill();
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = "#f59e0b";
+  ctx.stroke();
+
+  // Left block
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "800 9.5px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillText(vs.leftTitle.toUpperCase(), x + 76, y + 18, 128);
+  ctx.fillStyle = "#fb7185";
+  ctx.font = "900 13.5px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillText(vs.leftValue || "-", x + 76, y + 40, 128);
+
+  // VS badge
+  drawRoundedRect(ctx, x + cardW / 2 - 16, y + 19, 32, 24, 999);
+  ctx.fillStyle = "#e11d48";
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "900 10.5px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillText("VS", x + cardW / 2, y + 32);
+
+  // Right block
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "800 9.5px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillText(vs.rightTitle.toUpperCase(), x + cardW - 76, y + 18, 128);
+  ctx.fillStyle = "#34d399";
+  ctx.font = "900 13.5px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillText(vs.rightValue || "-", x + cardW - 76, y + 40, 128);
+
+  if (vs.verdict) {
+    ctx.fillStyle = "#fde047";
+    ctx.font = "800 10px 'Plus Jakarta Sans', sans-serif";
+    ctx.fillText(vs.verdict.toUpperCase(), x + cardW / 2, y + 58, cardW - 20);
+  }
+  ctx.restore();
+}
+
+function drawIdleStandbyCanvas(ctx, tSec) {
+  const W = canvas.width;
+  const H = canvas.height;
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, "#0b0d14");
+  bg.addColorStop(0.55, "#191122");
+  bg.addColorStop(1, "#090a0f");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  for (let i = 0; i < 9; i++) {
+    const px = W / 2 + Math.sin(tSec * 0.9 + i * 1.3) * 190;
+    const py = H * 0.45 + Math.cos(tSec * 1.1 + i * 0.9) * 260;
+    const r = 38 + Math.sin(tSec * 2 + i) * 12;
+    const g = ctx.createRadialGradient(px, py, 2, px, py, r);
+    g.addColorStop(0, i % 2 === 0 ? "rgba(225, 29, 72, 0.25)" : "rgba(245, 158, 11, 0.2)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.save();
+  if (mcImage.complete && mcImage.naturalWidth > 0) {
+    const cw = 210;
+    const ch = 260;
+    const cx = (W - cw) / 2;
+    const cy = 225 + Math.sin(tSec * 1.8) * 6;
+    drawRoundedRect(ctx, cx, cy, cw, ch, 22);
+    ctx.save();
+    ctx.clip();
+    ctx.drawImage(mcImage, cx, cy, cw, ch * 1.1);
+    ctx.restore();
+    drawRoundedRect(ctx, cx, cy, cw, ch, 22);
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = "#f59e0b";
+    ctx.stroke();
+  }
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#fbbf24";
+  ctx.font = "900 14px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillText("👑  MAOUEDU 3D STUDIO", W / 2, 535);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "900 24px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillText("Kolom Prompt Kosong & Siap!", W / 2, 575);
+
+  ctx.fillStyle = "#cbd5e1";
+  ctx.font = "600 14.5px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillText("Ketik ide videomu di kolom atas,", W / 2, 610);
+  ctx.fillText("Raja Iblis + 3D Ipul siap beraksi.", W / 2, 632);
+  ctx.restore();
+}
+
 function startRenderLoop() {
   function frame(now) {
     try {
@@ -1632,11 +1755,14 @@ function startRenderLoop() {
         drawDekodaHookCard(ctx, scene.visual, tSec, sceneElapsedSec);
         drawBelajarInfoPills(ctx, scene.visual, scene.phase, tSec);
         drawMilestoneStampBanner(ctx, scene.visual, scene, tSec, sceneElapsedSec);
+        drawMaouVersusCard(ctx, scene.visual, tSec);
         drawSelamatStamp(ctx, scene, tSec);
 
         // 2. Consistent 2D Anime MC Raja Iblis Host reacting & pointing outside the video!
         drawMcRajaIblisPresenter(ctx, scene, tSec);
         drawUntabiruSubtitles(ctx, scene);
+      } else {
+        drawIdleStandbyCanvas(ctx, tSec);
       }
     } catch (err) {
       console.error("Render frame error:", err);
@@ -1759,23 +1885,12 @@ async function initStudio() {
 
   startRenderLoop();
 
-  // Initial load without auto-playing audio (browsers block autoplay before user gesture)
-  setPipelineState("research");
-  const resp = await fetch("/api/research-and-script", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      prompt: simplePromptInput.value.trim(),
-      geminiApiKey: getLocalKeys().geminiApiKey
-    })
-  });
-  currentScript = await resp.json();
-  videoTitleDisplay.textContent = currentScript.title;
-  aiEngineBadge.textContent = currentScript.aiEngine || "Auto-Research";
-  renderResearchBox(currentScript.research);
-  renderSceneList();
-  updateActiveSceneUI();
-  setPipelineState("allDone");
+  // Always start with an empty prompt column ready for user input
+  simplePromptInput.value = "";
+  videoTitleDisplay.textContent = "MaouEdu 9:16 Stage — Siap Prompt Baru";
+  aiEngineBadge.textContent = "Siap • Ketik Prompt";
+  sceneCounterDisplay.textContent = "Menunggu topikmu";
+  renderResearchBox(null);
 }
 
 autoBuildVideoBtn.addEventListener("click", () => {
@@ -1786,13 +1901,6 @@ simplePromptInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     runAutonomousPromptBuild(simplePromptInput.value.trim(), true);
   }
-});
-
-document.querySelectorAll(".prompt-chip").forEach((chip) => {
-  chip.addEventListener("click", () => {
-    simplePromptInput.value = chip.dataset.prompt;
-    runAutonomousPromptBuild(chip.dataset.prompt, true);
-  });
 });
 
 analyzeTiktokBtn.addEventListener("click", async () => {
