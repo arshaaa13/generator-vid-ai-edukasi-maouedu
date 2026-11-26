@@ -11,7 +11,9 @@ export async function POST(request) {
     const result = await synthesizeSpeechStateless({
       text,
       voiceId: body?.voiceId,
-      elevenlabsApiKey: body?.elevenlabsApiKey || ""
+      elevenlabsApiKey: body?.elevenlabsApiKey || "",
+      geminiApiKey: body?.geminiApiKey || "",
+      forceFallback: Boolean(body?.forceFallback)
     });
 
     return Response.json(result);

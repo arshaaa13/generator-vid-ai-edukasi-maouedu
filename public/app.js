@@ -125,6 +125,96 @@ function unlockAudioContextSync() {
   }
 }
 
+function shiftAudioBufferWsola(actx, audioBuf, pitchFactor = 0.83) {
+  if (!audioBuf || Math.abs(pitchFactor - 1.0) < 0.01) return audioBuf;
+  try {
+    const sr = audioBuf.sampleRate;
+    const chCount = audioBuf.numberOfChannels;
+    const len = audioBuf.length;
+    const stretch = 1 / pitchFactor;
+    const winSize = Math.round(sr * 0.024);
+    const halfWin = Math.floor(winSize / 2);
+    const synHop = Math.floor(winSize / 4);
+    const anaHopFloat = synHop / stretch;
+    const searchRad = Math.round(sr * 0.008);
+    if (len < winSize * 2) return audioBuf;
+
+    const hann = new Float32Array(winSize);
+    for (let i = 0; i < winSize; i++) hann[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (winSize - 1)));
+
+    const outBuf = actx.createBuffer(chCount, len, sr);
+    const refInput = audioBuf.getChannelData(0);
+    const outLen = Math.floor(len * stretch) + winSize;
+    const chosenStarts = [];
+
+    // Compute cross-correlated optimal WSOLA offsets once from channel 0
+    let outPos = synHop;
+    let inNominal = anaHopFloat;
+    let lastBestStart = 0;
+    while (Math.round(inNominal) + winSize < len && outPos + winSize < outLen) {
+      const nomIdx = Math.round(inNominal);
+      const natStart = lastBestStart + synHop;
+      let bestOffset = nomIdx;
+      if (natStart >= 0 && natStart + winSize < len) {
+        let bestCorr = -Infinity;
+        const lo = Math.max(0, nomIdx - searchRad);
+        const hi = Math.min(len - winSize - 1, nomIdx + searchRad);
+        for (let cand = lo; cand <= hi; cand += 6) {
+          let dot = 0;
+          for (let k = 0; k < halfWin; k += 6) dot += refInput[cand + k] * refInput[natStart + k];
+          if (dot > bestCorr) {
+            bestCorr = dot;
+            bestOffset = cand;
+          }
+        }
+        const fLo = Math.max(lo, bestOffset - 5);
+        const fHi = Math.min(hi, bestOffset + 5);
+        for (let cand = fLo; cand <= fHi; cand++) {
+          let dot = 0;
+          for (let k = 0; k < halfWin; k += 3) dot += refInput[cand + k] * refInput[natStart + k];
+          if (dot > bestCorr) {
+            bestCorr = dot;
+            bestOffset = cand;
+          }
+        }
+      }
+      lastBestStart = bestOffset;
+      chosenStarts.push([outPos, bestOffset]);
+      outPos += synHop;
+      inNominal += anaHopFloat;
+    }
+
+    for (let ch = 0; ch < chCount; ch++) {
+      const input = audioBuf.getChannelData(ch);
+      const stretched = new Float32Array(outLen);
+      const norm = new Float32Array(outLen);
+      for (let i = 0; i < winSize && i < len; i++) {
+        stretched[i] += input[i] * hann[i];
+        norm[i] += hann[i];
+      }
+      for (const [oPos, inOff] of chosenStarts) {
+        for (let i = 0; i < winSize; i++) {
+          stretched[oPos + i] += (input[inOff + i] || 0) * hann[i];
+          norm[oPos + i] += hann[i];
+        }
+      }
+      for (let i = 0; i < outPos; i++) if (norm[i] > 1e-4) stretched[i] /= norm[i];
+
+      const dst = outBuf.getChannelData(ch);
+      for (let i = 0; i < len; i++) {
+        const idx = i * stretch;
+        const i0 = Math.floor(idx);
+        const f = idx - i0;
+        const s0 = stretched[i0] || 0;
+        dst[i] = s0 + ((stretched[i0 + 1] || s0) - s0) * f;
+      }
+    }
+    return outBuf;
+  } catch {
+    return audioBuf;
+  }
+}
+
 function concatAudioBuffers(actx, buffers) {
   if (!buffers.length) return null;
   if (buffers.length === 1) return buffers[0];
@@ -356,11 +446,24 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
     renderSceneList();
     updateActiveSceneUI();
 
-    // 3: Generate all male voiceovers
+    // 3: Generate uniform voiceovers across all scenes (no mid-video voice flipping)
     setPipelineState("voice");
+    let forceFallbackMode = false;
+    const generatedEntries = [];
     for (let i = 0; i < currentScript.scenes.length; i++) {
       autoBuildVideoBtn.textContent = `🎙️ Rekam Suara Scene ${i + 1}/${currentScript.scenes.length}...`;
-      await ensureSceneAudio(i);
+      const entry = await ensureSceneAudio(i, { forceFallback: forceFallbackMode });
+      generatedEntries.push(entry);
+      if (entry?.provider === "free-male-baritone-fallback" && !forceFallbackMode) {
+        forceFallbackMode = true;
+        // Re-align any earlier scene that used Gemini/ElevenLabs so Scene 1 matches Scenes 2..N identically
+        for (let prev = 0; prev < i; prev++) {
+          if (generatedEntries[prev]?.provider !== "free-male-baritone-fallback") {
+            sceneAudioBuffers.delete(prev);
+            generatedEntries[prev] = await ensureSceneAudio(prev, { forceFallback: true });
+          }
+        }
+      }
     }
 
     setPipelineState("allDone");
@@ -580,8 +683,9 @@ function updateActiveSceneUI() {
   });
 }
 
-async function ensureSceneAudio(index) {
-  if (sceneAudioBuffers.has(index)) return sceneAudioBuffers.get(index);
+async function ensureSceneAudio(index, opts = {}) {
+  const forceFallback = Boolean(opts?.forceFallback);
+  if (!forceFallback && sceneAudioBuffers.has(index)) return sceneAudioBuffers.get(index);
   const scene = currentScript.scenes[index];
   const st = document.getElementById(`audioStatus_${index}`);
   if (st) st.textContent = "⏳ Rekam suara cowok...";
@@ -593,7 +697,9 @@ async function ensureSceneAudio(index) {
     body: JSON.stringify({
       text: scene.narration,
       voiceId: keys.elevenlabsVoiceId,
-      elevenlabsApiKey: keys.elevenlabsApiKey
+      elevenlabsApiKey: keys.elevenlabsApiKey,
+      geminiApiKey: keys.geminiApiKey,
+      forceFallback
     })
   });
   const data = await resp.json();
@@ -619,6 +725,10 @@ async function ensureSceneAudio(index) {
       decoded = await actx.decodeAudioData(arrayBuf);
     }
 
+    if (data.provider === "free-male-baritone-fallback" && decoded) {
+      decoded = shiftAudioBufferWsola(actx, decoded, 0.83);
+    }
+
     const entry = {
       buffer: decoded,
       provider: data.provider,
@@ -628,14 +738,17 @@ async function ensureSceneAudio(index) {
     if (st) {
       if (data.provider === "elevenlabs") {
         st.textContent = data.voiceFallbackNote
-          ? `✅ ElevenLabs Deep Male (${data.voiceId} • Free API)`
+          ? `✅ ElevenLabs Deep Male (${data.voiceId})`
           : `✅ ElevenLabs (${data.voiceId})`;
         st.classList.add("ready");
+      } else if (data.provider === "gemini-tts-charon") {
+        st.textContent = "✅ Gemini AI Cowok (Charon)";
+        st.classList.add("ready");
       } else if (data.elevenlabsError) {
-        st.textContent = `⚠️ ElevenLabs Error (pakai fallback): ${data.elevenlabsError.slice(0, 55)}`;
+        st.textContent = `⚠️ Mode Cadangan (API error): ${data.elevenlabsError.slice(0, 48)}`;
         st.classList.remove("ready");
       } else {
-        st.textContent = "✅ Suara Cowok Bariton Siap";
+        st.textContent = "✅ Free Baritone Konsisten Siap";
         st.classList.add("ready");
       }
     }
@@ -643,13 +756,15 @@ async function ensureSceneAudio(index) {
     const dot = document.getElementById("voiceStatusDot");
     if (data.provider === "elevenlabs") {
       if (dot) dot.classList.add("active-el");
+      if (lbl) lbl.textContent = `ElevenLabs Active (${data.voiceId})`;
+    } else if (data.provider === "gemini-tts-charon") {
+      if (dot) dot.classList.add("active-el");
+      if (lbl) lbl.textContent = `Gemini AI Cowok (Charon)`;
+    } else {
+      if (dot) dot.classList.remove("active-el");
       if (lbl) {
-        lbl.textContent = data.voiceFallbackNote
-          ? `ElevenLabs Active (${data.voiceId} • Free Premade)`
-          : `ElevenLabs Active (${data.voiceId})`;
+        lbl.textContent = `Free Baritone Mode (Kuota Charon/ElevenLabs Habis — Isi Key di API & Voice)`;
       }
-    } else if (data.elevenlabsError && lbl) {
-      lbl.textContent = `ElevenLabs Error: cek izin/kuota API key`;
     }
     return entry;
   }
@@ -1941,11 +2056,13 @@ async function initStudio() {
     document.getElementById("elevenlabsApiKeyInput").value = keys.elevenlabsApiKey;
     document.getElementById("geminiApiKeyInput").value = keys.geminiApiKey;
 
-    const hasEl = serverConfig.hasElevenlabsEnvKey || Boolean(keys.elevenlabsApiKey);
-    document.getElementById("voiceStatusDot").classList.toggle("active-el", hasEl);
-    document.getElementById("voiceStatusLabel").textContent = hasEl
-      ? `ElevenLabs Active (${keys.elevenlabsVoiceId})`
-      : `Suara Cowok Bariton Siap (${keys.elevenlabsVoiceId})`;
+    const hasCustomEl = Boolean(keys.elevenlabsApiKey);
+    document.getElementById("voiceStatusDot").classList.toggle("active-el", hasCustomEl || serverConfig.hasGeminiEnvKey);
+    document.getElementById("voiceStatusLabel").textContent = hasCustomEl
+      ? `ElevenLabs Custom (${keys.elevenlabsVoiceId})`
+      : serverConfig.hasGeminiEnvKey
+      ? `Gemini AI Cowok (Charon) / Free Baritone Siap`
+      : `Free Baritone Konsisten Siap`;
   } catch {}
 
   try {
