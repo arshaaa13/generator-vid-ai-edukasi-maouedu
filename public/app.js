@@ -73,7 +73,6 @@ const toggleMcOverlay = document.getElementById("toggleMcOverlay");
 const toggleYellowSubtitles = document.getElementById("toggleYellowSubtitles");
 const toggleSfx = document.getElementById("toggleSfx");
 const toggleBgm = document.getElementById("toggleBgm");
-const toggleHailuo = document.getElementById("toggleHailuo");
 
 // Local browser settings (never sent to GitHub)
 function getLocalKeys() {
@@ -81,8 +80,7 @@ function getLocalKeys() {
     elevenlabsVoiceId:
       localStorage.getItem("maou_el_voice") || serverConfig.elevenlabsVoiceId || "cPoqAvGWCPfCfyPMwe4z",
     elevenlabsApiKey: localStorage.getItem("maou_el_key") || "",
-    geminiApiKey: localStorage.getItem("maou_gemini_key") || "",
-    minimaxApiKey: localStorage.getItem("maou_minimax_key") || ""
+    geminiApiKey: localStorage.getItem("maou_gemini_key") || ""
   };
 }
 
@@ -440,10 +438,6 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
     activePhraseIndex = 0;
     sceneAudioBuffers.clear();
     sceneVideoClips.clear();
-    hailuoRunId++;
-    hailuoJobs.clear();
-    hailuoPoolPromise = null;
-    hailuoBlockedReason = "";
 
     videoTitleDisplay.textContent = currentScript.title;
     aiEngineBadge.textContent = currentScript.aiEngine || "Auto-Research";
@@ -451,9 +445,6 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
     if (currentScript.referenceMetadata) showTikTokAnalysis(currentScript.referenceMetadata);
     renderSceneList();
     updateActiveSceneUI();
-
-    // Klip animasi Hailuo (opsional) berjalan paralel dengan perekaman suara; klip masuk otomatis saat selesai
-    if (toggleHailuo?.checked) startHailuoForAllScenes();
 
     // 3: Generate uniform voiceovers across all scenes (no mid-video voice flipping)
     setPipelineState("voice");
@@ -575,11 +566,9 @@ function renderSceneList() {
             📁 MP4
             <input type="file" accept="video/mp4,video/webm" class="upload-scene-mp4 hidden" data-idx="${index}" />
           </label>
-          <button class="btn btn-secondary btn-sm hailuo-btn" data-idx="${index}" title="Buat klip animasi AI MiniMax Hailuo untuk scene ini (memakai saldo)">🎞️ Hailuo</button>
           <button class="btn btn-secondary btn-sm play-single-btn" data-idx="${index}">🔊 Tes</button>
         </div>
       </div>
-      <div class="audio-status" id="hailuoStatus_${index}" style="margin-top:4px;font-size:11px;"></div>
     `;
 
     card.addEventListener("click", (e) => {
@@ -621,15 +610,6 @@ function renderSceneList() {
         st.textContent = "⚪ Teks berubah (klik Tes Scene)";
         st.classList.remove("ready");
       }
-    });
-  });
-
-  document.querySelectorAll(".hailuo-btn").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const idx = Number(btn.dataset.idx);
-      hailuoBlockedReason = ""; // klik manual = coba lagi, mungkin saldo sudah diisi
-      generateHailuoClip(idx, { force: true });
     });
   });
 
@@ -692,131 +672,6 @@ function drawCoverVideo(ctx, videoEl, x, y, w, h) {
   ctx.drawImage(videoEl, dx, dy, dw, dh);
 }
 
-// ============================================================================
-// MINIMAX HAILUO — klip animasi AI per scene (opt-in, memakai saldo MiniMax)
-// ============================================================================
-const hailuoJobs = new Map(); // sceneIndex -> Promise
-let hailuoBlockedReason = ""; // diisi saat saldo/key bermasalah supaya tidak memanggil API berulang-ulang
-let hailuoRunId = 0; // naik tiap video baru, job lama berhenti sendiri
-let hailuoPoolPromise = null;
-
-function setHailuoStatus(index, text, tone = "") {
-  const el = document.getElementById(`hailuoStatus_${index}`);
-  if (!el) return;
-  el.textContent = text;
-  el.style.color = tone === "ok" ? "#6ee7b7" : tone === "bad" ? "#fda4af" : "#fcd34d";
-}
-
-async function hailuoApi(payload) {
-  const keys = getLocalKeys();
-  const resp = await fetch("/api/minimax-video", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...payload, minimaxApiKey: keys.minimaxApiKey })
-  });
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    const err = new Error(data.error || `HTTP ${resp.status}`);
-    err.kind = data.errorKind || "other";
-    throw err;
-  }
-  return data;
-}
-
-async function fetchHailuoBlob(status) {
-  // 1) langsung dari CDN MiniMax (jalan kalau CORS mengizinkan), 2) lewat proxy streaming server kita
-  if (status.downloadUrl) {
-    try {
-      const r = await fetch(status.downloadUrl);
-      if (r.ok) return await r.blob();
-    } catch {}
-  }
-  const keys = getLocalKeys();
-  const r = await fetch(`/api/minimax-video?action=download&fileId=${encodeURIComponent(status.fileId)}`, {
-    headers: keys.minimaxApiKey ? { "x-minimax-key": keys.minimaxApiKey } : {}
-  });
-  if (!r.ok) throw new Error("Gagal mengunduh klip dari MiniMax");
-  return await r.blob();
-}
-
-function generateHailuoClip(index, { force = false } = {}) {
-  if (!currentScript?.scenes?.[index]) return Promise.resolve(null);
-  if (hailuoBlockedReason && !force) {
-    setHailuoStatus(index, hailuoBlockedReason, "bad");
-    return Promise.resolve(null);
-  }
-  if (hailuoJobs.has(index)) return hailuoJobs.get(index);
-
-  const runId = hailuoRunId;
-  const job = (async () => {
-    try {
-      setHailuoStatus(index, "⏳ Hailuo: mengirim ke MiniMax...");
-      const created = await hailuoApi({
-        action: "create",
-        scene: currentScript.scenes[index],
-        topic: currentScript.topic || ""
-      });
-      const started = Date.now();
-      while (true) {
-        await new Promise((r) => setTimeout(r, 6000));
-        if (runId !== hailuoRunId) return null; // video baru dimulai, hentikan job lama
-        if (Date.now() - started > 8 * 60 * 1000) throw new Error("Hailuo terlalu lama (>8 menit)");
-        const st = await hailuoApi({ action: "status", taskId: created.taskId });
-        if (st.status === "success") {
-          setHailuoStatus(index, "⬇️ Hailuo: mengunduh klip...");
-          const blob = await fetchHailuoBlob(st);
-          if (runId !== hailuoRunId) return null;
-          const blobUrl = URL.createObjectURL(blob);
-          const videoEl = await loadVideoElement(blobUrl);
-          sceneVideoClips.set(index, {
-            videoEl,
-            url: blobUrl,
-            status: "succeed",
-            message: "✅ Klip AI MiniMax Hailuo"
-          });
-          setHailuoStatus(index, "✅ Klip Hailuo siap (menggantikan 3D)", "ok");
-          return videoEl;
-        }
-        if (st.status === "fail") throw new Error(st.error || "Hailuo gagal membuat video");
-        setHailuoStatus(index, `⏳ Hailuo: ${Math.round((Date.now() - started) / 1000)} dtk — memproses...`);
-      }
-    } catch (e) {
-      if (e.kind === "balance") {
-        hailuoBlockedReason = "⚠️ Saldo MiniMax habis — top up di platform.minimax.io. Pakai 3D bawaan.";
-      } else if (e.kind === "auth" || e.kind === "nokey") {
-        hailuoBlockedReason = "⚠️ API key MiniMax tidak valid / belum diisi (⚙️ API & Voice).";
-      }
-      setHailuoStatus(index, hailuoBlockedReason || `⚠️ Hailuo gagal: ${String(e.message).slice(0, 70)}`, "bad");
-      return null;
-    }
-  })();
-  hailuoJobs.set(index, job);
-  job.finally(() => {
-    if (hailuoJobs.get(index) === job) hailuoJobs.delete(index);
-  });
-  return job;
-}
-
-function startHailuoForAllScenes() {
-  if (!currentScript?.scenes?.length) return;
-  const keys = getLocalKeys();
-  const total = currentScript.scenes.length;
-  if (!keys.minimaxApiKey && !serverConfig.hasMinimaxEnvKey) {
-    hailuoBlockedReason = "⚠️ API key MiniMax belum diisi (⚙️ API & Voice).";
-    for (let i = 0; i < total; i++) setHailuoStatus(i, hailuoBlockedReason, "bad");
-    return;
-  }
-  let next = 0;
-  const worker = async () => {
-    while (next < total) {
-      const i = next++;
-      await generateHailuoClip(i);
-    }
-  };
-  // 2 klip paralel supaya tidak kena rate limit MiniMax
-  hailuoPoolPromise = Promise.allSettled([worker(), worker()]);
-}
-
 function updateActiveSceneUI() {
   if (!currentScript?.scenes?.length) return;
   const sc = currentScript.scenes[activeSceneIndex];
@@ -844,7 +699,6 @@ async function ensureSceneAudio(index, opts = {}) {
       voiceId: keys.elevenlabsVoiceId,
       elevenlabsApiKey: keys.elevenlabsApiKey,
       geminiApiKey: keys.geminiApiKey,
-      minimaxApiKey: keys.minimaxApiKey,
       forceFallback
     })
   });
@@ -887,9 +741,6 @@ async function ensureSceneAudio(index, opts = {}) {
           ? `✅ ElevenLabs Deep Male (${data.voiceId})`
           : `✅ ElevenLabs (${data.voiceId})`;
         st.classList.add("ready");
-      } else if (data.provider === "minimax-tts") {
-        st.textContent = `✅ MiniMax Cowok (${data.voiceId})`;
-        st.classList.add("ready");
       } else if (data.provider === "gemini-tts-charon") {
         st.textContent = "✅ Gemini AI Cowok (Charon)";
         st.classList.add("ready");
@@ -906,19 +757,13 @@ async function ensureSceneAudio(index, opts = {}) {
     if (data.provider === "elevenlabs") {
       if (dot) dot.classList.add("active-el");
       if (lbl) lbl.textContent = `ElevenLabs Active (${data.voiceId})`;
-    } else if (data.provider === "minimax-tts") {
-      if (dot) dot.classList.add("active-el");
-      if (lbl) lbl.textContent = `MiniMax Cowok (${data.voiceId})`;
     } else if (data.provider === "gemini-tts-charon") {
       if (dot) dot.classList.add("active-el");
       if (lbl) lbl.textContent = `Gemini AI Cowok (Charon)`;
     } else {
       if (dot) dot.classList.remove("active-el");
       if (lbl) {
-        const mmNote = data.minimaxError
-          ? (/balance|saldo/i.test(data.minimaxError) ? "Saldo MiniMax habis • " : "MiniMax gagal • ")
-          : "";
-        lbl.textContent = `Free Baritone Mode (${mmNote}Kuota Charon/ElevenLabs Habis — Isi Key di API & Voice)`;
+        lbl.textContent = `Free Baritone Mode (Kuota Charon/ElevenLabs Habis — Isi Key di API & Voice)`;
       }
     }
     return entry;
@@ -2131,11 +1976,6 @@ async function exportFullVideo() {
       await ensureSceneAudio(i);
     }
 
-    if (hailuoPoolPromise || hailuoJobs.size) {
-      exportProgressText.textContent = "Menunggu klip animasi Hailuo selesai...";
-      await Promise.allSettled([hailuoPoolPromise, ...hailuoJobs.values()].filter(Boolean));
-    }
-
     const actx = getAudioContext();
     const audioDest = actx.createMediaStreamDestination();
     const canvasStream = canvas.captureStream(30);
@@ -2215,8 +2055,6 @@ async function initStudio() {
     document.getElementById("elevenlabsVoiceIdInput").value = keys.elevenlabsVoiceId;
     document.getElementById("elevenlabsApiKeyInput").value = keys.elevenlabsApiKey;
     document.getElementById("geminiApiKeyInput").value = keys.geminiApiKey;
-    document.getElementById("minimaxApiKeyInput").value = keys.minimaxApiKey;
-    if (toggleHailuo) toggleHailuo.checked = localStorage.getItem("maou_hailuo_on") === "1";
 
     const hasCustomEl = Boolean(keys.elevenlabsApiKey);
     document.getElementById("voiceStatusDot").classList.toggle("active-el", hasCustomEl || serverConfig.hasGeminiEnvKey);
@@ -2352,13 +2190,10 @@ document.getElementById("saveSettingsBtn").addEventListener("click", () => {
   const voiceId = document.getElementById("elevenlabsVoiceIdInput").value.trim() || "cPoqAvGWCPfCfyPMwe4z";
   const elKey = document.getElementById("elevenlabsApiKeyInput").value.trim();
   const gemKey = document.getElementById("geminiApiKeyInput").value.trim();
-  const mmKey = document.getElementById("minimaxApiKeyInput").value.trim();
 
   localStorage.setItem("maou_el_voice", voiceId);
   localStorage.setItem("maou_el_key", elKey);
   localStorage.setItem("maou_gemini_key", gemKey);
-  localStorage.setItem("maou_minimax_key", mmKey);
-  hailuoBlockedReason = ""; // key baru -> boleh coba lagi
 
   const hasEl = serverConfig.hasElevenlabsEnvKey || Boolean(elKey);
   document.getElementById("voiceStatusDot").classList.toggle("active-el", hasEl);
@@ -2368,10 +2203,6 @@ document.getElementById("saveSettingsBtn").addEventListener("click", () => {
 
   sceneAudioBuffers.clear();
   settingsModal.classList.add("hidden");
-});
-
-toggleHailuo?.addEventListener("change", () => {
-  localStorage.setItem("maou_hailuo_on", toggleHailuo.checked ? "1" : "0");
 });
 
 initStudio();

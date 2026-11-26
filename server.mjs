@@ -2,7 +2,6 @@ import http from "node:http";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import {
   CHARACTER_BIBLE,
@@ -10,7 +9,6 @@ import {
   generateScriptFromPrompt,
   synthesizeSpeechStateless
 } from "./lib/maou-engine.js";
-import { handleMinimaxVideo, openMinimaxDownload } from "./lib/minimax.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -78,7 +76,6 @@ const server = http.createServer(async (req, res) => {
         elevenlabsVoiceId: process.env.ELEVENLABS_VOICE_ID || CHARACTER_BIBLE.defaultVoiceId,
         hasElevenlabsEnvKey: Boolean(process.env.ELEVENLABS_API_KEY),
         hasGeminiEnvKey: Boolean(process.env.GEMINI_API_KEY),
-        hasMinimaxEnvKey: Boolean(process.env.MINIMAX_API_KEY),
         character: CHARACTER_BIBLE
       });
     }
@@ -110,29 +107,9 @@ const server = http.createServer(async (req, res) => {
       const result = await synthesizeSpeechStateless({
         text: body.text,
         voiceId: body.voiceId,
-        elevenlabsApiKey: body.elevenlabsApiKey || "",
-        geminiApiKey: body.geminiApiKey || "",
-        minimaxApiKey: body.minimaxApiKey || "",
-        forceFallback: Boolean(body.forceFallback)
+        elevenlabsApiKey: body.elevenlabsApiKey || ""
       });
       return sendJson(res, 200, result);
-    }
-
-    if (pathname === "/api/minimax-video" && req.method === "POST") {
-      const out = await handleMinimaxVideo(await readJsonBody(req));
-      return sendJson(res, out.status, out.json);
-    }
-
-    if (pathname === "/api/minimax-video" && req.method === "GET") {
-      if (parsedUrl.searchParams.get("action") !== "download") {
-        return sendJson(res, 400, { error: "Gunakan POST, atau GET ?action=download&fileId=..." });
-      }
-      const fileId = parsedUrl.searchParams.get("fileId") || "";
-      if (!/^[A-Za-z0-9_-]{4,80}$/.test(fileId)) return sendJson(res, 400, { error: "fileId tidak valid" });
-      const dl = await openMinimaxDownload({ fileId, apiKey: req.headers["x-minimax-key"] || "" });
-      if (!dl.ok) return sendJson(res, dl.status, { error: dl.error });
-      res.writeHead(200, { "Content-Type": "video/mp4", "Cache-Control": "no-store" });
-      return Readable.fromWeb(dl.upstream.body).pipe(res);
     }
 
     const filePath = path.join(PUBLIC_DIR, pathname === "/" ? "index.html" : pathname);
