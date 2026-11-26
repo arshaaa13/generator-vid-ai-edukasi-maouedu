@@ -29,8 +29,9 @@ let sceneEnterTimestamp = performance.now();
 let activeAudioSource = null;
 let activePhraseTimers = [];
 let bgmInterval = null;
+const DEFAULT_FREE_MALE_VOICE_ID = "nPczCjzI2devNBz1zQrb"; // ElevenLabs Brian (Deep Resonant Male — Free & Paid API)
 let serverConfig = {
-  elevenlabsVoiceId: "cPoqAvGWCPfCfyPMwe4z",
+  elevenlabsVoiceId: DEFAULT_FREE_MALE_VOICE_ID,
   hasElevenlabsEnvKey: false,
   hasGeminiEnvKey: false
 };
@@ -76,9 +77,18 @@ const toggleBgm = document.getElementById("toggleBgm");
 
 // Local browser settings (never sent to GitHub)
 function getLocalKeys() {
+  let savedVoice = (localStorage.getItem("maou_el_voice") || "").trim();
+  // Auto-migrate legacy paid-only library voice ID that fails with 402 on ElevenLabs Free API
+  if (savedVoice === "cPoqAvGWCPfCfyPMwe4z") {
+    savedVoice = DEFAULT_FREE_MALE_VOICE_ID;
+    localStorage.setItem("maou_el_voice", savedVoice);
+  }
+  const serverVoice =
+    serverConfig.elevenlabsVoiceId && serverConfig.elevenlabsVoiceId !== "cPoqAvGWCPfCfyPMwe4z"
+      ? serverConfig.elevenlabsVoiceId
+      : DEFAULT_FREE_MALE_VOICE_ID;
   return {
-    elevenlabsVoiceId:
-      localStorage.getItem("maou_el_voice") || serverConfig.elevenlabsVoiceId || "cPoqAvGWCPfCfyPMwe4z",
+    elevenlabsVoiceId: savedVoice || serverVoice || DEFAULT_FREE_MALE_VOICE_ID,
     elevenlabsApiKey: localStorage.getItem("maou_el_key") || "",
     geminiApiKey: localStorage.getItem("maou_gemini_key") || ""
   };
@@ -1911,12 +1921,19 @@ async function initStudio() {
     const cfgResp = await fetch("/api/config");
     serverConfig = await cfgResp.json();
     const keys = getLocalKeys();
-    document.getElementById("elevenlabsVoiceIdInput").value = keys.elevenlabsVoiceId;
+    const voiceInputEl = document.getElementById("elevenlabsVoiceIdInput");
+    const voicePresetEl = document.getElementById("elevenlabsVoicePreset");
+    voiceInputEl.value = keys.elevenlabsVoiceId;
+    if (voicePresetEl) {
+      const hasPreset = Array.from(voicePresetEl.options).some((o) => o.value === keys.elevenlabsVoiceId);
+      voicePresetEl.value = hasPreset ? keys.elevenlabsVoiceId : "";
+    }
     document.getElementById("elevenlabsApiKeyInput").value = keys.elevenlabsApiKey;
     document.getElementById("geminiApiKeyInput").value = keys.geminiApiKey;
 
     const hasEl = serverConfig.hasElevenlabsEnvKey || Boolean(keys.elevenlabsApiKey);
     document.getElementById("voiceStatusDot").classList.toggle("active-el", hasEl);
+    document.getElementById("voiceStatusPill").title = `ElevenLabs Voice ID: ${keys.elevenlabsVoiceId}`;
     document.getElementById("voiceStatusLabel").textContent = hasEl
       ? `ElevenLabs Only (${keys.elevenlabsVoiceId})`
       : `ElevenLabs Belum Diatur (Isi Key di ⚙️ API & Voice)`;
@@ -2043,8 +2060,18 @@ document.getElementById("closeCharacterBtn").addEventListener("click", () => {
   characterModal.classList.add("hidden");
 });
 
+const voicePresetSelect = document.getElementById("elevenlabsVoicePreset");
+if (voicePresetSelect) {
+  voicePresetSelect.addEventListener("change", () => {
+    if (voicePresetSelect.value) {
+      document.getElementById("elevenlabsVoiceIdInput").value = voicePresetSelect.value;
+    }
+  });
+}
+
 document.getElementById("saveSettingsBtn").addEventListener("click", () => {
-  const voiceId = document.getElementById("elevenlabsVoiceIdInput").value.trim() || "cPoqAvGWCPfCfyPMwe4z";
+  const voiceId =
+    document.getElementById("elevenlabsVoiceIdInput").value.trim() || DEFAULT_FREE_MALE_VOICE_ID;
   const elKey = document.getElementById("elevenlabsApiKeyInput").value.trim();
   const gemKey = document.getElementById("geminiApiKeyInput").value.trim();
 
@@ -2054,6 +2081,7 @@ document.getElementById("saveSettingsBtn").addEventListener("click", () => {
 
   const hasEl = serverConfig.hasElevenlabsEnvKey || Boolean(elKey);
   document.getElementById("voiceStatusDot").classList.toggle("active-el", hasEl);
+  document.getElementById("voiceStatusPill").title = `ElevenLabs Voice ID: ${voiceId}`;
   document.getElementById("voiceStatusLabel").textContent = hasEl
     ? `ElevenLabs Only (${voiceId})`
     : `ElevenLabs Belum Diatur (Isi Key di ⚙️ API & Voice)`;
