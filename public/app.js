@@ -1,18 +1,17 @@
-// MaouEdu AI — 1-Prompt Auto-Research & Gemini Cinema (Kling-Class 3D PBR/Shader) + 2D Anime Host Video Studio
+// MaouEdu AI — 1-Prompt Auto-Research & Pure 2D Studio MAPPA Anime + 3D Classic Video Studio
 import {
   renderToonVideoFrame,
   drawScienceMeter,
   drawCelebrationConfetti
 } from "/toon-renderer.js";
 import { Maou3DStage } from "/scene3d.js";
-import { MaouGeminiCinema } from "/gemini-cinema.js";
 import { MaouAnimeMappaEngine } from "/anime-mappa-engine.js";
 import { exportDeterministicMp4Video } from "/video-engine/mp4-video-exporter.js";
 
 const canvas = document.getElementById("videoCanvas");
 const ctx = canvas.getContext("2d");
 
-// Load Locked MC Raja Iblis Character Asset
+// Load Locked MC Raja Iblis Character Asset (used in Standby & 3D Classic Host overlay)
 const mcImage = new Image();
 mcImage.crossOrigin = "anonymous";
 mcImage.src = "/assets/mc_default.jpg";
@@ -25,8 +24,6 @@ let isPlaying = false;
 let playbackRunId = 0;
 let stage3d = null;
 let stage3dReady = false;
-let geminiCinema = null;
-let geminiCinemaReady = false;
 let animeMappaEngine = null;
 let animeMappaReady = false;
 let audioCtx = null;
@@ -53,7 +50,6 @@ const autoBuildVideoBtn = document.getElementById("autoBuildVideoBtn");
 const pipelineBar = document.getElementById("pipelineBar");
 const stepResearch = document.getElementById("stepResearch");
 const stepScript = document.getElementById("stepScript");
-const stepVisualResearch = document.getElementById("stepVisualResearch");
 const stepCinema = document.getElementById("stepCinema");
 const stepVoice = document.getElementById("stepVoice");
 const stepReady = document.getElementById("stepReady");
@@ -91,11 +87,12 @@ const toggleBgm = document.getElementById("toggleBgm");
 
 function getSelectedRenderMode() {
   const checked = document.querySelector('input[name="renderMode"]:checked');
-  return checked?.value || localStorage.getItem("maou_render_mode") || "anime_mappa";
+  const raw = checked?.value || localStorage.getItem("maou_render_mode") || "anime_mappa";
+  return raw === "classic_3d" ? "classic_3d" : "anime_mappa";
 }
 
 function syncRenderModeUI(mode) {
-  const activeMode = ["anime_mappa", "cinema_3d", "classic_3d"].includes(mode) ? mode : "anime_mappa";
+  const activeMode = mode === "classic_3d" ? "classic_3d" : "anime_mappa";
   localStorage.setItem("maou_render_mode", activeMode);
   document.querySelectorAll(".render-mode-card").forEach((card) => {
     const isMatch = card.dataset.mode === activeMode;
@@ -105,10 +102,7 @@ function syncRenderModeUI(mode) {
   });
   if (renderGeminiCinemaBtn) {
     if (activeMode === "anime_mappa") {
-      renderGeminiCinemaBtn.textContent = "⚔️ Render Animasi Anime MAPPA (Gemini AI)";
-      renderGeminiCinemaBtn.disabled = false;
-    } else if (activeMode === "cinema_3d") {
-      renderGeminiCinemaBtn.textContent = "🎬 Render Animasi 3D Sinematik (Gemini AI)";
+      renderGeminiCinemaBtn.textContent = "⚔️ Render Ulang Anime 2D MAPPA (Gemini AI)";
       renderGeminiCinemaBtn.disabled = false;
     } else {
       renderGeminiCinemaBtn.textContent = "🧱 Mode 3D Klasik Aktif (Instant)";
@@ -180,8 +174,8 @@ function base64ToArrayBuffer(base64) {
 
 function setPipelineState(stage) {
   pipelineBar.classList.remove("hidden");
-  const stages = [stepResearch, stepScript, stepVisualResearch, stepCinema, stepVoice, stepReady].filter(Boolean);
-  const order = { research: 0, script: 1, visualResearch: 2, cinema: 3, voice: 4, ready: 5, allDone: 6 };
+  const stages = [stepResearch, stepScript, stepCinema, stepVoice, stepReady].filter(Boolean);
+  const order = { research: 0, script: 1, cinema: 2, voice: 3, ready: 4, allDone: 5 };
   const activeIdx = order[stage] ?? 0;
 
   stages.forEach((el, idx) => {
@@ -380,26 +374,12 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
     renderSceneList();
     updateActiveSceneUI();
 
-    // 3 & 4: Compile Active Render Mode (Anime MAPPA Sakuga OR 3D Sinematik OR Instant Classic 3D)
+    // 3: Compile Active Render Mode (Pure 2D Studio MAPPA Anime OR Instant Classic 3D)
     const activeMode = getSelectedRenderMode();
     if (activeMode === "anime_mappa") {
-      setPipelineState("visualResearch");
-      autoBuildVideoBtn.textContent = `⚔️ Menyusun Anime MAPPA (${currentScript.scenes.length} Scene)...`;
-      await renderScenesForActiveMode(null, (phase) => {
-        if (phase === "cinema") {
-          setPipelineState("cinema");
-          autoBuildVideoBtn.textContent = `⚔️ Koreografi Sakuga ${currentScript.scenes.length} Scene...`;
-        }
-      });
-    } else if (activeMode === "cinema_3d") {
-      setPipelineState("visualResearch");
-      autoBuildVideoBtn.textContent = "🏛️ Riset Referensi Visual & Fondasi 3D...";
-      await renderScenesForActiveMode(null, (phase) => {
-        if (phase === "cinema") {
-          setPipelineState("cinema");
-          autoBuildVideoBtn.textContent = `🎬 Menyusun 3D Sinematik ${currentScript.scenes.length} Scene...`;
-        }
-      });
+      setPipelineState("cinema");
+      autoBuildVideoBtn.textContent = `⚔️ Produksi Anime 2D MAPPA (${currentScript.scenes.length} Scene)...`;
+      await renderScenesWithAnimeMappa();
     } else {
       setPipelineState("cinema");
     }
@@ -452,39 +432,7 @@ function saveCinemaStyleLesson(lesson, score) {
   } catch {}
 }
 
-function renderVisualFoundationBox(visualPlan, sceneCount = 0) {
-  if (!visualFoundationBox) return;
-  if (!visualPlan?.worldFoundation) {
-    visualFoundationBox.classList.add("hidden");
-    return;
-  }
-  const wf = visualPlan.worldFoundation;
-  const catalog = Array.isArray(visualPlan.assetCatalog) ? visualPlan.assetCatalog : [];
-  const refs = Array.isArray(visualPlan.visualReferences) ? visualPlan.visualReferences : [];
-
-  const assetsText = catalog
-    .slice(0, 6)
-    .map((a) => `<code>${a.name || a.id}</code>`)
-    .join(" • ");
-
-  const refsHtml = refs.length
-    ? `<div style="margin-top:4px;font-size:0.74rem;"><strong>Referensi Visual:</strong> ${refs
-        .slice(0, 3)
-        .map((r) => `<a class="research-source-link" href="${r.url}" target="_blank" rel="noreferrer">${r.title}</a>`)
-        .join(" • ")}</div>`
-    : "";
-
-  visualFoundationBox.classList.remove("hidden");
-  visualFoundationBox.innerHTML = `
-    <div><strong>🏛️ Fondasi Set 3D Konsisten (${sceneCount || currentScript?.scenes?.length || 0} Scene)</strong></div>
-    <div style="font-size:0.76rem;margin-top:2px;">Set: <code>${wf.roomType}</code> • Cahaya: <code>${wf.lightingPreset}</code> • Dinding: <code>${wf.walls?.enabled ? wf.walls.backWallMaterial : "terbuka"}</code></div>
-    <div style="font-size:0.76rem;margin-top:3px;">${wf.storySummary || ""}</div>
-    ${assetsText ? `<div style="font-size:0.74rem;margin-top:4px;"><strong>Aset Persisten:</strong> ${assetsText}</div>` : ""}
-    ${refsHtml}
-  `;
-}
-
-async function renderScenesWithAnimeMappa(singleIdx = null, onStageChange = null) {
+async function renderScenesWithAnimeMappa(singleIdx = null) {
   if (!currentScript?.scenes?.length) return false;
   const keys = getLocalKeys();
   const targetScenes =
@@ -496,12 +444,11 @@ async function renderScenesWithAnimeMappa(singleIdx = null, onStageChange = null
     renderGeminiCinemaBtn.disabled = true;
     renderGeminiCinemaBtn.textContent =
       singleIdx !== null
-        ? `⏳ Menyutradarai Anime Scene #${singleIdx + 1}...`
-        : `⚔️ Studio MAPPA Director (${currentScript.scenes.length} Scene)...`;
+        ? `⏳ Menggambar Genga 2D Scene #${singleIdx + 1}...`
+        : `⚔️ Studio MAPPA 2D Director (${currentScript.scenes.length} Scene)...`;
   }
 
   try {
-    onStageChange?.("cinema");
     const styleMemoryHints = getCinemaStyleMemory()
       .sort((a, b) => (b.score || 0) - (a.score || 0))
       .slice(0, 4)
@@ -520,7 +467,7 @@ async function renderScenesWithAnimeMappa(singleIdx = null, onStageChange = null
     });
     const data = await resp.json();
     if (!resp.ok || data.error) {
-      throw new Error(data.error || "Gagal merender animasi Anime MAPPA.");
+      throw new Error(data.error || "Gagal merender animasi Anime 2D Studio MAPPA.");
     }
 
     if (singleIdx !== null && data.scenes?.[0]) {
@@ -536,143 +483,38 @@ async function renderScenesWithAnimeMappa(singleIdx = null, onStageChange = null
     }
 
     if (visualFoundationBox) {
-      const envs = Array.from(new Set((data.scenes || []).map((s) => s.animeEnvironment))).slice(0, 3);
-      const impactCount = (data.scenes || []).filter((s) => s.impactBeat?.enabled).length;
+      const allBps = currentScript.scenes.map((s) => s.animeBlueprint).filter(Boolean);
+      const bgs = Array.from(new Set(allBps.map((s) => s.haikeiBg || "shibuya_night"))).slice(0, 4);
+      const impactCount = allBps.filter((s) => s.impactBeat?.enabled).length;
+      const gengaLabel =
+        typeof data.customGengaCount === "number"
+          ? `${data.customGengaCount}/${(data.scenes || []).length} Genga SVG Gemini`
+          : `${allBps.length} Genga 2D`;
       visualFoundationBox.classList.remove("hidden");
       visualFoundationBox.innerHTML = `
-        <div><strong>⚔️ Produksi Anime Sakuga — Studio MAPPA / JJK (${currentScript.scenes.length} Scene)</strong></div>
-        <div style="font-size:0.76rem;margin-top:2px;">Latar: <code>${envs.join(" → ")}</code> • Impact Frames: <code>${impactCount} momen</code></div>
+        <div><strong>⚔️ Produksi Anime 2D — Studio MAPPA (${currentScript.scenes.length} Scene)</strong></div>
+        <div style="font-size:0.76rem;margin-top:2px;">Haikei 2D: <code>${bgs.join(" → ")}</code> • <code>${gengaLabel}</code> • Impact Frames: <code>${impactCount} momen</code></div>
         <div style="font-size:0.75rem;margin-top:3px;">${data.directorNotes || ""}</div>
       `;
     }
 
-    aiEngineBadge.textContent = `⚔️ Anime MAPPA (${data.directorModel} • ${currentScript.scenes.length} Scene)`;
+    aiEngineBadge.textContent = `⚔️ Anime 2D MAPPA (${data.directorModel} • ${currentScript.scenes.length} Scene)`;
     sceneEnterTimestamp = performance.now();
     renderSceneList();
     updateActiveSceneUI();
     return true;
   } catch (err) {
-    console.warn("Anime MAPPA render warning:", err);
+    console.warn("Anime 2D MAPPA render warning:", err);
     return false;
   } finally {
     syncRenderModeUI(getSelectedRenderMode());
   }
 }
 
-async function renderScenesForActiveMode(singleIdx = null, onStageChange = null) {
+async function renderScenesForActiveMode(singleIdx = null) {
   const mode = getSelectedRenderMode();
-  if (mode === "anime_mappa") return renderScenesWithAnimeMappa(singleIdx, onStageChange);
-  if (mode === "cinema_3d") return renderScenesWithGeminiCinema(singleIdx, onStageChange);
+  if (mode === "anime_mappa") return renderScenesWithAnimeMappa(singleIdx);
   return true;
-}
-
-async function renderScenesWithGeminiCinema(singleIdx = null, onStageChange = null) {
-  if (!currentScript?.scenes?.length) return false;
-  const keys = getLocalKeys();
-  const targetScenes =
-    singleIdx !== null && currentScript.scenes[singleIdx]
-      ? [currentScript.scenes[singleIdx]]
-      : currentScript.scenes;
-
-  if (renderGeminiCinemaBtn) {
-    renderGeminiCinemaBtn.disabled = true;
-    renderGeminiCinemaBtn.textContent =
-      singleIdx !== null
-        ? `⏳ Gemini Merender Scene #${singleIdx + 1}...`
-        : "🏛️ Riset Visual & Menyusun Set 3D...";
-  }
-
-  try {
-    // Stage 0: Research real-world visual references & lock 1 coherent room + persistent asset catalog
-    if (singleIdx === null || !currentScript.visualPlan?.worldFoundation) {
-      onStageChange?.("visualResearch");
-      try {
-        const vrResp = await fetch("/api/visual-research", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            topic: currentScript.topic || "",
-            title: currentScript.title || "",
-            scenes: currentScript.scenes,
-            geminiApiKey: keys.geminiApiKey
-          })
-        });
-        const vrData = await vrResp.json();
-        if (vrResp.ok && vrData?.worldFoundation) {
-          currentScript.visualPlan = vrData;
-          renderVisualFoundationBox(vrData, currentScript.scenes.length);
-        }
-      } catch (vrErr) {
-        console.warn("Visual research non-fatal warning:", vrErr);
-      }
-    }
-
-    onStageChange?.("cinema");
-    if (renderGeminiCinemaBtn && singleIdx === null) {
-      renderGeminiCinemaBtn.textContent = `🎬 Koreografi ${currentScript.scenes.length} Scene Sesuai Naskah...`;
-    }
-
-    const styleMemoryHints = getCinemaStyleMemory()
-      .sort((a, b) => (b.score || 0) - (a.score || 0))
-      .slice(0, 4)
-      .map((m) => m.lesson);
-
-    const resp = await fetch("/api/gemini-render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        topic: currentScript.topic || "",
-        title: currentScript.title || "",
-        scenes: targetScenes,
-        visualPlan: currentScript.visualPlan || null,
-        geminiApiKey: keys.geminiApiKey,
-        enableKeyframes: false,
-        enableCustomRigs: true,
-        styleMemoryHints
-      })
-    });
-    const data = await resp.json();
-    if (!resp.ok || data.error) {
-      throw new Error(data.error || "Gagal merender animasi Gemini Cinema.");
-    }
-
-    if (data.worldFoundation && !currentScript.visualPlan?.worldFoundation) {
-      currentScript.visualPlan = {
-        worldFoundation: data.worldFoundation,
-        assetCatalog: data.assetCatalog || [],
-        visualReferences: data.visualReferences || []
-      };
-      renderVisualFoundationBox(currentScript.visualPlan, currentScript.scenes.length);
-    }
-
-    if (singleIdx !== null && data.scenes?.[0]) {
-      currentScript.scenes[singleIdx].cinemaBlueprint = data.scenes[0];
-      currentScript.scenes[singleIdx].cinemaRenderVersion = Date.now();
-    } else if (Array.isArray(data.scenes)) {
-      data.scenes.forEach((bp, idx) => {
-        if (currentScript.scenes[idx]) {
-          currentScript.scenes[idx].cinemaBlueprint = bp;
-          currentScript.scenes[idx].cinemaRenderVersion = Date.now();
-        }
-      });
-    }
-
-    const rigSuffix = data.customRigCount > 0 ? ` • ${data.customRigCount} Custom Rig` : "";
-    const modeTag =
-      data.keyframeCount > 0
-        ? `🍌 Nano Banana + Diorama (${data.imageModel})`
-        : `🏛️ Diorama 3D (${data.directorModel}${rigSuffix} • ${currentScript.scenes.length} Scene)`;
-    aiEngineBadge.textContent = modeTag;
-    sceneEnterTimestamp = performance.now();
-    renderSceneList();
-    updateActiveSceneUI();
-    return true;
-  } catch (err) {
-    console.warn("Gemini Cinema render warning:", err);
-    return false;
-  } finally {
-    syncRenderModeUI(getSelectedRenderMode());
-  }
 }
 
 async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
@@ -684,8 +526,6 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
   const activeMode = getSelectedRenderMode();
   if (activeMode === "anime_mappa" && !scene.animeBlueprint) {
     await renderScenesWithAnimeMappa(targetIdx);
-  } else if (activeMode === "cinema_3d" && !scene.cinemaBlueprint) {
-    await renderScenesWithGeminiCinema(targetIdx);
   }
   activeSceneIndex = targetIdx;
   updateActiveSceneUI();
@@ -696,7 +536,7 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
   }
   if (criticResultBox) {
     criticResultBox.classList.remove("hidden");
-    criticResultBox.innerHTML = `<div>👁️ Mengirim tangkapan layar Scene #${targetIdx + 1} (${activeMode === "anime_mappa" ? "Anime MAPPA" : "3D"}) ke <strong>Gemini Multimodal Vision</strong>...</div>`;
+    criticResultBox.innerHTML = `<div>👁️ Mengirim tangkapan layar Scene #${targetIdx + 1} (${activeMode === "anime_mappa" ? "Anime 2D MAPPA" : "3D Klasik"}) ke <strong>Gemini Multimodal Vision</strong>...</div>`;
   }
 
   try {
@@ -709,7 +549,7 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
     });
     const frameDataUrl = canvas.toDataURL("image/jpeg", 0.78);
     const keys = getLocalKeys();
-    const targetBlueprint = activeMode === "anime_mappa" ? scene.animeBlueprint : scene.cinemaBlueprint;
+    const targetBlueprint = activeMode === "anime_mappa" ? scene.animeBlueprint : null;
 
     const resp = await fetch("/api/video-critic", {
       method: "POST",
@@ -725,14 +565,11 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
     const data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || "Gagal mengevaluasi frame.");
 
-    if (data.refinedBlueprint) {
-      if (activeMode === "anime_mappa") {
-        currentScript.scenes[targetIdx].animeBlueprint = data.refinedBlueprint;
-        currentScript.scenes[targetIdx].animeRenderVersion = Date.now();
-      } else {
-        currentScript.scenes[targetIdx].cinemaBlueprint = data.refinedBlueprint;
-        currentScript.scenes[targetIdx].cinemaRenderVersion = Date.now();
-      }
+    if (data.refinedBlueprint && activeMode === "anime_mappa") {
+      currentScript.scenes[targetIdx].animeBlueprint = data.refinedBlueprint;
+      currentScript.scenes[targetIdx].animeRenderVersion = Date.now();
+    }
+    if (data.overallScore) {
       currentScript.scenes[targetIdx].criticScore = data.overallScore;
     }
     if (data.styleLesson) {
@@ -745,7 +582,7 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
       criticResultBox.classList.remove("hidden");
       criticResultBox.innerHTML = `
         <div><strong>👁️ Skor Gemini Vision (${data.visionModel}): ${data.overallScore}/100</strong></div>
-        <div style="font-size:0.72rem;opacity:0.9;margin-top:2px;">Framing ${bd.framing || "-"} • Lighting ${bd.lighting || "-"} • Bokeh ${bd.depthAndBokeh || "-"} • Kling Vibe ${bd.cinematicVibe || "-"}</div>
+        <div style="font-size:0.72rem;opacity:0.9;margin-top:2px;">Framing ${bd.framing || "-"} • Lighting ${bd.lighting || "-"} • Depth ${bd.depthAndBokeh || "-"} • Vibe ${bd.cinematicVibe || "-"}</div>
         <div style="margin-top:4px;">${data.critique}</div>
         <div style="margin-top:4px;color:#fde68a;">✅ Patch otomatis diterapkan • Memori Gaya Tersimpan: <strong>${memCount} pelajaran</strong></div>
       `;
@@ -814,16 +651,14 @@ function renderSceneList() {
     card.className = `scene-card ${index === activeSceneIndex ? "active" : ""}`;
     const hasAudio = sceneAudioBuffers.has(index);
     const clipInfo = sceneVideoClips.get(index);
-    const hasCustomRig = Boolean(scene.cinemaBlueprint?.actors?.some((a) => a.prefab === "custom_rig"));
     const qcScore = scene.criticScore ? ` • ⭐${scene.criticScore}` : "";
-    const animBadge = scene.cinemaBlueprint
-      ? scene.cinemaBlueprint.aiKeyframe
-        ? `🍌 Gemini AI Keyframe${qcScore}`
-        : `🎬 Cinema (${scene.cinemaBlueprint.actors?.length || 0} aktor${hasCustomRig ? " • 🧬Rig" : ""}${qcScore})`
+    const abp = scene.animeBlueprint;
+    const animBadge = abp
+      ? `⚔️ Anime 2D (${abp.haikeiBg || "shibuya_night"}${abp.impactBeat?.enabled ? " • ⚡Impact" : ""}${qcScore})`
       : scene.visual?.stage3d?.objects?.length
-        ? `🎬 3D AI (${scene.visual.stage3d.objects.length} objek)`
+        ? `🧱 3D Klasik (${scene.visual.stage3d.objects.length} objek)`
         : scene.visual?.heroObject
-          ? `🎬 3D @untabiru5`
+          ? `🧱 3D @untabiru5`
           : "";
     const clipBadge = clipInfo?.videoEl ? "🎥 Klip MP4 Siap" : animBadge;
 
@@ -853,7 +688,7 @@ function renderSceneList() {
           ${hasAudio ? "✅ Suara Siap" : "⚪ Belum direkam"}
         </span>
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
-          <button class="btn btn-secondary btn-sm rerender-cinema-btn" data-idx="${index}" title="Render ulang animasi scene ini via Gemini Cinema">🎬 Gemini</button>
+          <button class="btn btn-secondary btn-sm rerender-cinema-btn" data-idx="${index}" title="Gambar ulang ilustrasi & animasi Anime 2D MAPPA untuk scene ini">⚔️ Anime 2D</button>
           <button class="btn btn-secondary btn-sm critic-scene-btn" data-idx="${index}" title="Evaluasi & upgrade visual scene ini via Gemini Vision">👁️ QC</button>
           <label class="btn btn-secondary btn-sm" style="cursor:pointer;" title="Upload klip MP4 sendiri">
             📁 MP4
@@ -911,10 +746,13 @@ function renderSceneList() {
       e.stopPropagation();
       const idx = Number(btn.dataset.idx);
       activeSceneIndex = idx;
+      if (getSelectedRenderMode() !== "anime_mappa") {
+        syncRenderModeUI("anime_mappa");
+      }
       updateActiveSceneUI();
       btn.disabled = true;
       btn.textContent = "⏳...";
-      await renderScenesWithGeminiCinema(idx);
+      await renderScenesWithAnimeMappa(idx);
     });
   });
 
@@ -2195,7 +2033,7 @@ function drawIdleStandbyCanvas(ctx, tSec) {
   ctx.textAlign = "center";
   ctx.fillStyle = "#fbbf24";
   ctx.font = "900 14px 'Plus Jakarta Sans', sans-serif";
-  ctx.fillText("👑  MAOUEDU 3D STUDIO", W / 2, 535);
+  ctx.fillText("⚔️  MAOUEDU ANIME 2D STUDIO", W / 2, 535);
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "900 24px 'Plus Jakarta Sans', sans-serif";
@@ -2204,7 +2042,7 @@ function drawIdleStandbyCanvas(ctx, tSec) {
   ctx.fillStyle = "#cbd5e1";
   ctx.font = "600 14.5px 'Plus Jakarta Sans', sans-serif";
   ctx.fillText("Ketik ide videomu di kolom atas,", W / 2, 610);
-  ctx.fillText("Raja Iblis + 3D Ipul siap beraksi.", W / 2, 632);
+  ctx.fillText("Studio MAPPA 2D Anime siap beraksi.", W / 2, 632);
   ctx.restore();
 }
 
@@ -2242,90 +2080,77 @@ function renderCompositeFrame({
   const clip = sceneVideoClips.get(sceneIndex);
   const liveVoice = deterministicPhrase ? 0.45 + Math.abs(Math.sin(tSec * 11)) * 0.45 : getLiveVoiceEnergy();
   const mode = getSelectedRenderMode();
-  let rendered3d = false;
+  let renderedPrimary = false;
+  let renderedPureAnime2D = false;
 
   if (clip?.videoEl && clip.videoEl.readyState >= 2) {
     drawCoverVideo(ctx, clip.videoEl, 0, 0, canvas.width, canvas.height);
+    renderedPrimary = true;
   } else {
     if (mode === "anime_mappa" && animeMappaReady && animeMappaEngine) {
       try {
         const bp = scene.animeBlueprint || {
-          animeEnvironment: "shibuya_night",
-          satsueiMood: scene.phase === "TAPI" ? "sukuna_crimson" : scene.phase === "CLIMAX" ? "hollow_purple" : "jjk_cursed_blue",
-          cameraMove: scene.phase === "TAPI" ? "dutch_tension_tilt" : "low_angle_hero_push",
-          impactBeat: { enabled: scene.phase === "TAPI" || scene.phase === "CLIMAX", triggerProgress: 0.48, style: scene.phase === "TAPI" ? "black_flash" : "bw_manga_invert" },
-          characters: [
-            {
-              id: "maou_hero",
-              role: "protagonist",
-              animePose: scene.phase === "TAPI" ? "charge_cursed_energy" : scene.phase === "CLIMAX" ? "floating_overlord" : "point_reveal",
-              hairColor: "#cbd5e1",
-              streakColor: "#e11d48",
-              outfitColor: "#111827",
-              accentColor: "#f59e0b",
-              eyeColor: scene.phase === "TAPI" ? "#ef4444" : "#38bdf8",
-              auraColor: scene.phase === "TAPI" ? "#f43f5e" : "#38bdf8",
-              hasHorns: true,
-              startPos: [-0.42, 0, -0.05],
-              endPos: [-0.36, 0, 0.02],
-              rotY: 0.28,
-              scale: 1.0
-            }
-          ],
-          subjectProps: [
-            { id: "main", prefab: "crystal_core", color: "#38bdf8", secondaryColor: "#fbbf24", pos: [0.44, 0.3, 0.08], rot: [0, -0.25, 0], scale: 0.85, motion: "hover_pulse" }
-          ],
-          animeVfx: [
-            { type: scene.phase === "TAPI" ? "black_flash_lightning" : "cursed_energy_aura", origin: [-0.4, 0.8, 0], color: scene.phase === "TAPI" ? "#ef4444" : "#38bdf8" }
-          ],
-          satsueiGrade: { bloomStrength: 0.42, rimIntensity: 1.2, contrast: 1.12, saturation: 1.18, speedLines: scene.phase === "TAPI" }
+          engine: "anime-mappa-2d",
+          haikeiBg: scene.phase === "CLIMAX" ? "domain_void" : "shibuya_night",
+          characterPose:
+            scene.phase === "TAPI"
+              ? "shock_alert"
+              : scene.phase === "CLIMAX"
+                ? "domain_seal"
+                : scene.phase === "JADI"
+                  ? "point_reveal"
+                  : "stance",
+          shotLayout:
+            scene.phase === "CLIMAX"
+              ? "dramatic_closeup_domain"
+              : scene.phase === "TAPI"
+                ? "action_clash_diagonal"
+                : "hero_and_genga_split",
+          cameraMotion2d:
+            scene.phase === "TAPI"
+              ? "dutch_shibuya_shake"
+              : scene.phase === "CLIMAX"
+                ? "crash_zoom_impact"
+                : "slow_push_in",
+          satsueiMood:
+            scene.phase === "TAPI"
+              ? "sukuna_crimson"
+              : scene.phase === "CLIMAX"
+                ? "hollow_purple"
+                : "jjk_cursed_blue",
+          auraColor: scene.phase === "TAPI" ? "#fb7185" : scene.phase === "CLIMAX" ? "#c084fc" : "#38bdf8",
+          sakugaVfx2d:
+            scene.phase === "TAPI"
+              ? ["black_flash_2d", "manga_speed_lines_2d", "slash_smear_2d"]
+              : scene.phase === "CLIMAX"
+                ? ["domain_seal_2d", "cursed_flames_2d", "embers_petals_2d"]
+                : ["cursed_flames_2d", "rain_streaks_2d"],
+          impactBeat: {
+            enabled: scene.phase === "TAPI" || scene.phase === "CLIMAX",
+            triggerProgress: 0.48,
+            style: scene.phase === "TAPI" ? "black_flash" : "bw_manga_invert"
+          },
+          mangaSfxText: scene.phase === "TAPI" ? "ドォォン!!" : scene.phase === "CLIMAX" ? "領域展開!" : "ゴゴゴ...",
+          satsueiGrade: {
+            bloomStrength: scene.phase === "CLIMAX" ? 0.48 : 0.36,
+            contrast: 1.12,
+            saturation: 1.18,
+            chromaticPeak: 0.014
+          }
         };
-        const aKey = `anime::${currentScript.topic || ""}::${sceneIndex}::${scene.animeRenderVersion || 1}`;
-        animeMappaEngine.renderFrame(bp, aKey, tSec, sceneElapsedSec, sceneDurationSec, liveVoice);
+        const aKey = `anime2d::${currentScript.topic || ""}::${sceneIndex}::${scene.animeRenderVersion || 1}`;
+        animeMappaEngine.renderFrame(bp, aKey, tSec, sceneElapsedSec, sceneDurationSec, liveVoice, {
+          showCharacter: Boolean(toggleMcOverlay?.checked)
+        });
         ctx.drawImage(animeMappaEngine.domElement, 0, 0, canvas.width, canvas.height);
-
-        // Draw crisp MAPPA Manga Impact Stamp if defined on this anime cut!
-        if (bp.mangaCaption) {
-          ctx.save();
-          ctx.font = "900 18px 'Plus Jakarta Sans', sans-serif";
-          ctx.translate(canvas.width - 110, 245);
-          ctx.rotate(-0.08);
-          ctx.lineWidth = 5;
-          ctx.strokeStyle = "#07080d";
-          ctx.strokeText(bp.mangaCaption, 0, 0);
-          ctx.fillStyle = scene.phase === "TAPI" ? "#fb7185" : "#fde047";
-          ctx.fillText(bp.mangaCaption, 0, 0);
-          ctx.restore();
-        }
-        drawScienceMeter(ctx, scene.visual?.meter, scene.phase, tSec);
-        rendered3d = true;
+        renderedPrimary = true;
+        renderedPureAnime2D = true;
       } catch (animeErr) {
-        console.warn("Anime MAPPA fallback:", animeErr);
+        console.warn("Anime 2D MAPPA fallback:", animeErr);
         animeMappaReady = false;
       }
-    } else if (mode === "cinema_3d" && geminiCinemaReady && geminiCinema && scene.cinemaBlueprint) {
-      try {
-        const cKey = `${currentScript.topic || ""}::${sceneIndex}::${scene.cinemaRenderVersion || 1}`;
-        geminiCinema.renderFrame(
-          scene.cinemaBlueprint,
-          cKey,
-          tSec,
-          sceneElapsedSec,
-          sceneDurationSec,
-          liveVoice
-        );
-        ctx.drawImage(geminiCinema.domElement, 0, 0, canvas.width, canvas.height);
-        drawScienceMeter(ctx, scene.visual?.meter, scene.phase, tSec);
-        if (scene.phase === "CLIMAX" || scene.visual?.fx?.includes("confetti")) {
-          drawCelebrationConfetti(ctx, canvas.width, tSec);
-        }
-        rendered3d = true;
-      } catch (cinErr) {
-        console.warn("Gemini Cinema fallback to classic 3D:", cinErr);
-        geminiCinemaReady = false;
-      }
     }
-    if (!rendered3d && stage3dReady && stage3d) {
+    if (!renderedPrimary && stage3dReady && stage3d) {
       try {
         stage3d.renderFrame(scene, currentScript.topic || "", tSec, sceneElapsedSec);
         ctx.drawImage(stage3d.domElement, 0, 0, canvas.width, canvas.height);
@@ -2333,34 +2158,36 @@ function renderCompositeFrame({
         if (scene.phase === "CLIMAX" || scene.visual?.fx?.includes("confetti")) {
           drawCelebrationConfetti(ctx, canvas.width, tSec);
         }
-        rendered3d = true;
+        renderedPrimary = true;
       } catch (glErr) {
         console.warn("3D frame fallback to 2.5D:", glErr);
         stage3dReady = false;
       }
     }
-    if (!rendered3d) {
+    if (!renderedPrimary) {
       renderToonVideoFrame(ctx, canvas.width, canvas.height, scene, tSec, sceneElapsedSec);
     }
   }
 
-  // Light bottom gradient only near subtitle zone so 3D diorama stays bright @untabiru5 style!
+  // Light bottom gradient only near subtitle zone so the anime / 3D stage stays crystal clear!
   const subGrad = ctx.createLinearGradient(0, canvas.height - 175, 0, canvas.height);
   subGrad.addColorStop(0, "rgba(9, 10, 15, 0)");
-  subGrad.addColorStop(1, "rgba(9, 10, 15, 0.58)");
+  subGrad.addColorStop(1, "rgba(9, 10, 15, 0.62)");
   ctx.fillStyle = subGrad;
   ctx.fillRect(0, canvas.height - 175, canvas.width, 175);
 
   drawTopVideoHeader(ctx, scene);
   draw3dCalloutBadge(ctx, scene);
-  drawDekodaHookCard(ctx, scene.visual, tSec, sceneElapsedSec);
-  drawBelajarInfoPills(ctx, scene.visual, scene.phase, tSec);
-  drawMilestoneStampBanner(ctx, scene.visual, scene, tSec, sceneElapsedSec);
-  drawMaouVersusCard(ctx, scene.visual, tSec);
-  drawSelamatStamp(ctx, scene, tSec);
 
-  // 2. Consistent 2D Anime MC Raja Iblis Host reacting & pointing outside the video!
-  drawMcRajaIblisPresenter(ctx, scene, tSec);
+  if (!renderedPureAnime2D) {
+    // Classic 3D @untabiru5 / @dekodaid educational cards + separate 2D MC host box
+    drawDekodaHookCard(ctx, scene.visual, tSec, sceneElapsedSec);
+    drawBelajarInfoPills(ctx, scene.visual, scene.phase, tSec);
+    drawMilestoneStampBanner(ctx, scene.visual, scene, tSec, sceneElapsedSec);
+    drawMaouVersusCard(ctx, scene.visual, tSec);
+    drawMcRajaIblisPresenter(ctx, scene, tSec);
+  }
+  drawSelamatStamp(ctx, scene, tSec);
   drawUntabiruSubtitles(ctx, scene);
 }
 
@@ -2400,7 +2227,7 @@ async function exportFullVideo() {
   exportVideoBtn.disabled = true;
   exportProgressBox.classList.remove("hidden");
   exportProgressFill.style.width = "8%";
-  exportProgressText.textContent = "1/3: Memastikan animasi Gemini Cinema & audio siap...";
+  exportProgressText.textContent = "1/3: Memastikan animasi & audio ElevenLabs siap...";
 
   const [targetW, targetH] = (exportQualitySelect?.value || "720x1280").split("x").map(Number);
   const safeName = (currentScript.topic || "maou_edu")
@@ -2410,11 +2237,8 @@ async function exportFullVideo() {
   try {
     const activeMode = getSelectedRenderMode();
     if (activeMode === "anime_mappa" && currentScript.scenes.some((s) => !s.animeBlueprint)) {
-      exportProgressText.textContent = "1/3: Studio MAPPA menyusun animasi Anime Sakuga...";
+      exportProgressText.textContent = "1/3: Studio MAPPA menyusun animasi Anime 2D...";
       await renderScenesWithAnimeMappa();
-    } else if (activeMode === "cinema_3d" && currentScript.scenes.some((s) => !s.cinemaBlueprint)) {
-      exportProgressText.textContent = "1/3: Gemini Cinema mengompilasi animasi 3D HD...";
-      await renderScenesWithGeminiCinema();
     }
 
     for (let i = 0; i < currentScript.scenes.length; i++) {
@@ -2436,16 +2260,12 @@ async function exportFullVideo() {
 
     // Try Deterministic Frame-by-Frame H.264/AAC MP4 Encoder first (ZERO dropped frames!)
     isOfflineExporting = true;
-    const prevCinemaW = geminiCinema?.width || 720;
-    const prevCinemaH = geminiCinema?.height || 1280;
     const prevAnimeW = animeMappaEngine?.width || 720;
     const prevAnimeH = animeMappaEngine?.height || 1280;
     let mp4Result = { ok: false, fallbackRequired: true };
     try {
       if (activeMode === "anime_mappa" && animeMappaEngine && targetW && targetH) {
         animeMappaEngine.resize(targetW, targetH);
-      } else if (activeMode === "cinema_3d" && geminiCinema && targetW && targetH) {
-        geminiCinema.resize(targetW, targetH);
       }
       mp4Result = await exportDeterministicMp4Video({
         canvas,
@@ -2474,7 +2294,6 @@ async function exportFullVideo() {
       mp4Result = { ok: false, fallbackRequired: true };
     } finally {
       if (animeMappaEngine) animeMappaEngine.resize(prevAnimeW, prevAnimeH);
-      if (geminiCinema) geminiCinema.resize(prevCinemaW, prevCinemaH);
       isOfflineExporting = false;
     }
 
@@ -2482,7 +2301,8 @@ async function exportFullVideo() {
       const url = URL.createObjectURL(mp4Result.blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${safeName}_gemini_cinema_${mp4Result.width}x${mp4Result.height}.mp4`;
+      const modeSlug = activeMode === "anime_mappa" ? "anime_mappa_2d" : "edukasi_3d";
+      a.download = `${safeName}_${modeSlug}_${mp4Result.width}x${mp4Result.height}.mp4`;
       a.click();
       exportProgressFill.style.width = "100%";
       exportProgressText.textContent = `✅ Video MP4 HD selesai (${mp4Result.frames} frame • ${mp4Result.width}×${mp4Result.height})!`;
@@ -2589,16 +2409,8 @@ async function initStudio() {
     animeMappaEngine = new MaouAnimeMappaEngine(720, 1280);
     animeMappaReady = true;
   } catch (err) {
-    console.warn("Anime MAPPA WebGL unavailable:", err);
+    console.warn("Anime 2D MAPPA unavailable:", err);
     animeMappaReady = false;
-  }
-
-  try {
-    geminiCinema = new MaouGeminiCinema(720, 1280);
-    geminiCinemaReady = true;
-  } catch (err) {
-    console.warn("Gemini Cinema WebGL unavailable:", err);
-    geminiCinemaReady = false;
   }
 
   try {
@@ -2609,6 +2421,7 @@ async function initStudio() {
     stage3dReady = false;
   }
 
+  // Migrate any legacy saved cinema_3d mode cleanly to Pure 2D Studio MAPPA Anime
   syncRenderModeUI(localStorage.getItem("maou_render_mode") || "anime_mappa");
   if (renderModeGroup) {
     renderModeGroup.addEventListener("change", async (e) => {
@@ -2619,8 +2432,6 @@ async function initStudio() {
       if (!currentScript?.scenes?.length) return;
       if (nextMode === "anime_mappa" && currentScript.scenes.some((s) => !s.animeBlueprint)) {
         await renderScenesWithAnimeMappa();
-      } else if (nextMode === "cinema_3d" && currentScript.scenes.some((s) => !s.cinemaBlueprint)) {
-        await renderScenesWithGeminiCinema();
       } else if (nextMode === "classic_3d") {
         aiEngineBadge.textContent = `🧱 3D Edukasi Klasik (${currentScript.scenes.length} Scene)`;
       }

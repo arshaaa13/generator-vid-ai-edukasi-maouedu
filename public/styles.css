@@ -445,12 +445,6 @@ select:focus {
   border: 1px solid rgba(244, 63, 94, 0.5);
 }
 
-.mode-pill-3d {
-  background: rgba(56, 189, 248, 0.18);
-  color: #7dd3fc;
-  border: 1px solid rgba(56, 189, 248, 0.45);
-}
-
 .mode-pill-classic {
   background: rgba(245, 158, 11, 0.18);
   color: #fde68a;

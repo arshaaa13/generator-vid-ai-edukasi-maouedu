@@ -20,7 +20,7 @@
       <div>
         <div class="brand-title-row">
           <h1>MaouEdu AI Video Studio</h1>
-          <span class="badge badge-crimson">HOST 2D ANIME + ANIMASI PRAKTEK KONSISTEN</span>
+          <span class="badge badge-crimson">ANIME 2D STUDIO MAPPA • 3D EDUKASI KLASIK</span>
         </div>
         <p class="brand-sub">
           Ciri Khas Terkunci: <strong>MC Raja Iblis (Modern Overlord)</strong> • Suara Cowok ElevenLabs: <code>Brian (nPczCjzI2devNBz1zQrb)</code>
@@ -55,19 +55,17 @@
         </button>
       </div>
 
-      <!-- Live 6-Step Autonomous Pipeline Tracker -->
+      <!-- Live 5-Step Autonomous Pipeline Tracker -->
       <div class="pipeline-bar hidden" id="pipelineBar">
         <div class="pipe-step" id="stepResearch">1. 🔍 Riset Topik</div>
         <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepScript">2. ✍️ Script Bebas</div>
+        <div class="pipe-step" id="stepScript">2. ✍️ Script Utuh</div>
         <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepVisualResearch">3. 🏛️ Riset Visual 3D</div>
+        <div class="pipe-step" id="stepCinema">3. ⚔️ Produksi Anime 2D / 3D</div>
         <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepCinema">4. 🎬 Animasi Naskah</div>
+        <div class="pipe-step" id="stepVoice">4. 🎙️ ElevenLabs Voice</div>
         <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepVoice">5. 🎙️ ElevenLabs Voice</div>
-        <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepReady">6. ✨ Video HD Siap!</div>
+        <div class="pipe-step" id="stepReady">5. ✨ Video HD Siap!</div>
       </div>
     </div>
   </section>
@@ -87,7 +85,7 @@
           <span class="badge badge-outline" id="aiEngineBadge">Menunggu prompt</span>
         </div>
         <div id="researchResultsBox" class="research-box">
-          Ketik prompt di atas lalu klik <strong>✨ Buat Video Otomatis</strong>. AI akan otomatis meriset fakta ilmiahnya, memilih jumlah scene bebas sesuai alur topik (4–12 scene), meriset referensi bentuk ruangan &amp; benda 3D, merekam suara cowok ElevenLabs, dan langsung memutar videonya.
+          Ketik prompt di atas lalu klik <strong>✨ Buat Video Otomatis</strong>. AI akan otomatis meriset fakta ilmiahnya, menulis cerita penuh tanpa dipotong, menyutradarai &amp; menggambar animasi <strong>Anime 2D Style Studio MAPPA</strong> (latar lukisan Haikei + karakter cel 2D Live2D + ilustrasi Genga SVG + VFX Sakuga 2D &amp; Impact Frames), merekam suara cowok ElevenLabs, dan langsung memutar videonya.
         </div>
         <div id="visualFoundationBox" class="analysis-box hidden" style="margin-top:8px;"></div>
       </div>
@@ -111,15 +109,8 @@
           <label class="render-mode-card active" data-mode="anime_mappa">
             <input type="radio" name="renderMode" value="anime_mappa" checked />
             <div class="render-mode-body">
-              <div class="render-mode-title">⚔️ Anime Sakuga <span class="mode-pill mode-pill-anime">MAPPA / JJK</span></div>
-              <div class="render-mode-desc">Cel-shading GLSL, ink outline, Impact Frames B&amp;W / Black Flash, aura &amp; kamera sakuga.</div>
-            </div>
-          </label>
-          <label class="render-mode-card" data-mode="cinema_3d">
-            <input type="radio" name="renderMode" value="cinema_3d" />
-            <div class="render-mode-body">
-              <div class="render-mode-title">🎬 3D Sinematik <span class="mode-pill mode-pill-3d">Pixar / VT</span></div>
-              <div class="render-mode-desc">Riset referensi visual 3D, set ruangan konsisten, objek berongga &amp; framing 9:16 presisi.</div>
+              <div class="render-mode-title">⚔️ Anime 2D <span class="mode-pill mode-pill-anime">Style Studio MAPPA / JJK</span></div>
+              <div class="render-mode-desc">100% Anime 2D: Latar lukisan MAPPA, cel karakter 2D Live2D-sway, ilustrasi Genga SVG per scene, VFX Sakuga 2D &amp; Impact Frames.</div>
             </div>
           </label>
           <label class="render-mode-card" data-mode="classic_3d">
@@ -135,7 +126,7 @@
         <div class="toggle-list">
           <label class="toggle-item">
             <input type="checkbox" id="toggleMcOverlay" checked />
-            <span>👑 <strong>Host 2D Anime MC Raja Iblis</strong> (tampil di layar)</span>
+            <span>👑 <strong>Karakter Anime MC Raja Iblis</strong> (tampil di layar)</span>
           </label>
           <label class="toggle-item">
             <input type="checkbox" id="toggleYellowSubtitles" checked />
@@ -153,7 +144,7 @@
 
         <div class="action-stack" style="display:flex;flex-direction:column;gap:8px;">
           <button class="btn btn-crimson btn-full" id="renderGeminiCinemaBtn">
-            ⚔️ Render Animasi Anime MAPPA (Gemini AI)
+            ⚔️ Render Ulang Anime 2D MAPPA (Gemini AI)
           </button>
           <button class="btn btn-secondary btn-full" id="criticRefineBtn" title="Gemini Vision melihat frame saat ini, memberi skor 0-100, dan meng-upgrade visual otomatis">
             👁️ Evaluasi &amp; Upgrade Visual (Gemini Vision)
