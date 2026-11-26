@@ -38,7 +38,9 @@ let bgmInterval = null;
 let serverConfig = {
   elevenlabsVoiceId: "nPczCjzI2devNBz1zQrb",
   hasElevenlabsEnvKey: false,
-  hasGeminiEnvKey: false
+  hasGeminiEnvKey: false,
+  enableVeoHeroShots: false,
+  styleAnchors: { haikei: false, kyara: false, masterSheet: false }
 };
 
 const sceneAudioBuffers = new Map();
@@ -89,6 +91,9 @@ const toggleMcOverlay = document.getElementById("toggleMcOverlay");
 const toggleYellowSubtitles = document.getElementById("toggleYellowSubtitles");
 const toggleSfx = document.getElementById("toggleSfx");
 const toggleBgm = document.getElementById("toggleBgm");
+const toggleDualDnaAssets = document.getElementById("toggleDualDnaAssets");
+const veoHeroToggleWrap = document.getElementById("veoHeroToggleWrap");
+const toggleVeoHeroShots = document.getElementById("toggleVeoHeroShots");
 
 function getSelectedRenderMode() {
   const checked = document.querySelector('input[name="renderMode"]:checked');
@@ -638,7 +643,8 @@ async function renderScenesWithAnimeMappa(singleIdx = null) {
         title: currentScript.title || "",
         scenes: targetScenes,
         geminiApiKey: keys.geminiApiKey,
-        styleMemoryHints
+        styleMemoryHints,
+        enableDualDnaAssets: Boolean(toggleDualDnaAssets?.checked)
       })
     });
     const data = await resp.json();
@@ -674,7 +680,7 @@ async function renderScenesWithAnimeMappa(singleIdx = null) {
       `;
     }
 
-    if (activeMode === "anime_mappa" && animeMappaEngine) {
+    if (getSelectedRenderMode() === "anime_mappa" && animeMappaEngine) {
       const targetBps = singleIdx !== null
         ? [currentScript.scenes[singleIdx]?.animeBlueprint].filter(Boolean)
         : currentScript.scenes.map((s) => s.animeBlueprint).filter(Boolean);
@@ -775,21 +781,64 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
     }
     if (data.overallScore) {
       currentScript.scenes[targetIdx].criticScore = data.overallScore;
+      currentScript.scenes[targetIdx].criticPass = data.pass !== false;
     }
     if (data.styleLesson) {
       saveCinemaStyleLesson(data.styleLesson, data.overallScore);
     }
 
+    // Optional Dual-DNA Auto-Regeneration if Vision QC explicitly flagged haikei/kyara AND Dual-DNA is enabled
+    let regenNote = "";
+    if (
+      activeMode === "anime_mappa" &&
+      (data.regenerate_asset === "haikei" || data.regenerate_asset === "kyara") &&
+      toggleDualDnaAssets?.checked
+    ) {
+      const regenRes = await regenerateDualDnaAsset(targetIdx, data.regenerate_asset);
+      regenNote = regenRes?.ok
+        ? ` • 🎨 Aset ${data.regenerate_asset} diregenerasi via Style Anchor`
+        : ` • ⚠️ Regen ${data.regenerate_asset} dilewati (fallback lokal aktif)`;
+    }
+
     const memCount = getCinemaStyleMemory().length;
     if (criticResultBox) {
+      const cr = data.criteria || null;
       const bd = data.breakdown || {};
+      const passBadge = data.pass === false ? "⚠️ PERLU POLES" : "✅ PASS";
+      const metricsHtml = cr
+        ? `Cel 2D <strong>${cr.celAuthenticity}</strong> • Key/Light <strong>${cr.chromaLightIntegration}</strong> • Readability <strong>${cr.satsueiReadability}</strong> • Balance <strong>${cr.compositionBalance}</strong>`
+        : `Framing ${bd.framing || "-"} • Lighting ${bd.lighting || "-"} • Depth ${bd.depthAndBokeh || "-"} • Vibe ${bd.cinematicVibe || "-"}`;
+      const issuesHtml =
+        Array.isArray(data.issues) && data.issues.length
+          ? `<div style="margin-top:3px;font-size:0.72rem;color:#fca5a5;">Isu: ${data.issues.join(" • ")}</div>`
+          : "";
+      const adj = data.shader_adjustments || null;
+      const adjSummary = adj
+        ? `Bloom ${adj.bloom_intensity ?? "-"} • LightWrap ${adj.light_wrap_strength ?? "-"} • Crush ${adj.shadow_crush ?? "-"} • Ambient ${adj.ambient_harmonization ?? "-"}`
+        : "Patch otomatis diterapkan";
+      const regenBtnHtml =
+        activeMode === "anime_mappa" && (data.regenerate_asset === "haikei" || data.regenerate_asset === "kyara")
+          ? `<button type="button" class="btn btn-secondary btn-sm" id="qcRegenAssetBtn" style="margin-top:5px;">🎨 Regenerasi ${data.regenerate_asset.toUpperCase()} (Dual-DNA)</button>`
+          : "";
+
       criticResultBox.classList.remove("hidden");
       criticResultBox.innerHTML = `
-        <div><strong>👁️ Skor Gemini Vision (${data.visionModel}): ${data.overallScore}/100</strong></div>
-        <div style="font-size:0.72rem;opacity:0.9;margin-top:2px;">Framing ${bd.framing || "-"} • Lighting ${bd.lighting || "-"} • Depth ${bd.depthAndBokeh || "-"} • Vibe ${bd.cinematicVibe || "-"}</div>
+        <div><strong>👁️ Art-Director QC (${data.visionModel}): ${data.overallScore}/100 • ${passBadge}</strong></div>
+        <div style="font-size:0.72rem;opacity:0.92;margin-top:2px;">${metricsHtml}</div>
         <div style="margin-top:4px;">${data.critique}</div>
-        <div style="margin-top:4px;color:#fde68a;">✅ Patch otomatis diterapkan • Memori Gaya Tersimpan: <strong>${memCount} pelajaran</strong></div>
+        ${issuesHtml}
+        <div style="margin-top:4px;color:#fde68a;font-size:0.74rem;">✅ ${adjSummary}${regenNote} • Memori: <strong>${memCount}</strong></div>
+        ${regenBtnHtml}
       `;
+      const qcRegenBtn = document.getElementById("qcRegenAssetBtn");
+      if (qcRegenBtn) {
+        qcRegenBtn.addEventListener("click", async () => {
+          qcRegenBtn.disabled = true;
+          qcRegenBtn.textContent = "⏳ Meregenerasi...";
+          const r = await regenerateDualDnaAsset(targetIdx, data.regenerate_asset);
+          qcRegenBtn.textContent = r?.ok ? `✅ ${data.regenerate_asset.toUpperCase()} Diperbarui!` : `⚠️ ${r?.reason || "Fallback lokal"}`;
+        });
+      }
     }
     sceneEnterTimestamp = performance.now();
     renderSceneList();
@@ -817,6 +866,129 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
       criticRefineBtn.textContent = "👁️ Evaluasi & Upgrade Visual (Gemini Vision)";
     }
   }
+}
+
+async function regenerateDualDnaAsset(targetIdx, assetType = "haikei") {
+  const scene = currentScript?.scenes?.[targetIdx];
+  if (!scene?.animeBlueprint) return { ok: false, reason: "Blueprint belum tersedia" };
+  const keys = getLocalKeys();
+  try {
+    const resp = await fetch("/api/anime-asset-regen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        assetType,
+        phase: scene.phase || "HOOK",
+        poseHint: scene.animeBlueprint.kyaraExpression || "",
+        sceneDescription: scene.animeBlueprint.haikeiPrompt || scene.narration || "",
+        mood: scene.animeBlueprint.satsueiMood || "dramatic moody lighting",
+        topic: currentScript.topic || currentScript.title || "",
+        geminiApiKey: keys.geminiApiKey
+      })
+    });
+    const data = await resp.json();
+    if (data.ok && data.dataUrl) {
+      if (assetType === "kyara") {
+        scene.animeBlueprint.customKyaraUrl = data.dataUrl;
+      } else {
+        scene.animeBlueprint.customHaikeiUrl = data.dataUrl;
+      }
+      scene.animeRenderVersion = Date.now();
+      if (animeMappaEngine) await animeMappaEngine.ensureAssetsReady([scene.animeBlueprint]);
+      renderSceneList();
+      updateActiveSceneUI();
+      return { ok: true, model: data.model };
+    }
+    return { ok: false, reason: data.reason || data.error || "Quota gambar tidak aktif" };
+  } catch (err) {
+    return { ok: false, reason: err.message };
+  }
+}
+
+async function runVeoHeroShot(targetIdx) {
+  const scene = currentScript?.scenes?.[targetIdx];
+  if (!scene?.animeBlueprint) return;
+  if (!serverConfig.enableVeoHeroShots) {
+    alert("Veo Hero-Shot Mode sedang nonaktif (ENABLE_VEO_HERO_SHOTS=false).");
+    return;
+  }
+  if (!scene.animeBlueprint.is_hero_shot) {
+    alert("Cost-Control Guard: Hanya scene berstatus Hero Shot (Hook / Climax) yang dapat dianimasikan via Veo.");
+    return;
+  }
+
+  activeSceneIndex = targetIdx;
+  updateActiveSceneUI();
+  if (animeMappaEngine) {
+    await animeMappaEngine.ensureAssetsReady([scene.animeBlueprint]);
+  }
+  // Render pure clean Satsuei keyframe (without subtitles/header) for Veo Image-to-Video!
+  animeMappaEngine.renderFrame(
+    scene.animeBlueprint,
+    `veo_seed_${targetIdx}_${Date.now()}`,
+    1.2,
+    1.2,
+    4.6,
+    0.2,
+    { showCharacter: Boolean(toggleMcOverlay?.checked), scene }
+  );
+  const keyframeDataUrl = animeMappaEngine.captureSnapshotDataUrl(0.9);
+  if (!keyframeDataUrl) {
+    alert("Gagal mengambil keyframe 2D untuk Veo Hero-Shot.");
+    return;
+  }
+
+  const keys = getLocalKeys();
+  const startResp = await fetch("/api/veo-hero", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "start",
+      keyframeDataUrl,
+      scene,
+      blueprint: scene.animeBlueprint,
+      topic: currentScript.topic || currentScript.title || "",
+      geminiApiKey: keys.geminiApiKey
+    })
+  });
+  const startData = await startResp.json();
+  if (!startData.ok || !startData.operationName) {
+    alert("Veo Hero-Shot gagal dimulai: " + (startData.error || "Unknown error"));
+    return;
+  }
+
+  // Poll up to ~120s without hitting Vercel 60s single-request limit
+  for (let attempt = 0; attempt < 24; attempt++) {
+    await new Promise((r) => setTimeout(r, 5000));
+    const pollResp = await fetch("/api/veo-hero", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "poll",
+        operationName: startData.operationName,
+        geminiApiKey: keys.geminiApiKey
+      })
+    });
+    const pollData = await pollResp.json();
+    if (!pollData.ok) {
+      alert("Veo Hero-Shot gagal: " + (pollData.error || "Polling error"));
+      return;
+    }
+    if (pollData.done && pollData.videoDataUrl) {
+      const videoEl = await loadVideoElement(pollData.videoDataUrl);
+      sceneVideoClips.set(targetIdx, {
+        videoEl,
+        url: pollData.videoDataUrl,
+        isVeoHero: true,
+        status: "succeed",
+        message: "✅ Veo Hero-Shot (2D Satsuei)"
+      });
+      renderSceneList();
+      updateActiveSceneUI();
+      return;
+    }
+  }
+  alert("Veo Hero-Shot masih memproses di server Google; coba lagi beberapa saat.");
 }
 
 function renderResearchBox(research) {
@@ -870,13 +1042,21 @@ function renderSceneList() {
     const qcScore = scene.criticScore ? ` • ⭐${scene.criticScore}` : "";
     const abp = scene.animeBlueprint;
     const animBadge = abp
-      ? `⚔️ Anime 2D (${abp.haikeiBg || "shibuya_night"}${abp.impactBeat?.enabled ? " • ⚡Impact" : ""}${qcScore})`
+      ? `⚔️ Anime 2D (${abp.haikeiBg || "shibuya_night"}${abp.is_hero_shot ? " • ⭐Hero" : ""}${abp.impactBeat?.enabled ? " • ⚡Impact" : ""}${qcScore})`
       : scene.visual?.stage3d?.objects?.length
         ? `🧱 3D Klasik (${scene.visual.stage3d.objects.length} objek)`
         : scene.visual?.heroObject
           ? `🧱 3D @untabiru5`
           : "";
-    const clipBadge = clipInfo?.videoEl ? "🎥 Klip MP4 Siap" : animBadge;
+    const clipBadge = clipInfo?.videoEl
+      ? clipInfo.isVeoHero
+        ? "🎞️ Veo Hero-Shot (Satsuei)"
+        : "🎥 Klip MP4 Siap"
+      : animBadge;
+    const veoBtnHtml =
+      serverConfig.enableVeoHeroShots && abp?.is_hero_shot
+        ? `<button class="btn btn-secondary btn-sm veo-hero-scene-btn" data-idx="${index}" title="Animasikan keyframe Hero Shot ini via Google Veo (cost-controlled)">🎞️ Veo</button>`
+        : "";
 
     card.innerHTML = `
       <div class="scene-card-top">
@@ -906,6 +1086,7 @@ function renderSceneList() {
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm rerender-cinema-btn" data-idx="${index}" title="Gambar ulang ilustrasi & animasi Anime 2D MAPPA untuk scene ini">⚔️ Anime 2D</button>
           <button class="btn btn-secondary btn-sm critic-scene-btn" data-idx="${index}" title="Evaluasi & upgrade visual scene ini via Gemini Vision">👁️ QC</button>
+          ${veoBtnHtml}
           <label class="btn btn-secondary btn-sm" style="cursor:pointer;" title="Upload klip MP4 sendiri">
             📁 MP4
             <input type="file" accept="video/mp4,video/webm" class="upload-scene-mp4 hidden" data-idx="${index}" />
@@ -979,6 +1160,21 @@ function renderSceneList() {
       btn.disabled = true;
       btn.textContent = "⏳...";
       await runGeminiVisualCritic(idx);
+    });
+  });
+
+  document.querySelectorAll(".veo-hero-scene-btn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.idx);
+      btn.disabled = true;
+      btn.textContent = "⏳ Veo...";
+      try {
+        await runVeoHeroShot(idx);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "🎞️ Veo";
+      }
     });
   });
 
@@ -1972,6 +2168,70 @@ function drawUntabiruSubtitles(ctx, scene) {
   ctx.restore();
 }
 
+function drawBroadcastAnimeTitleCard(ctx, scene, sceneElapsedSec = 1) {
+  const W = canvas.width;
+  const SAFE_PAD = Math.round(48 * (W / 720)); // Strict >= 48px at 720w safe margin!
+  const phase = scene.phase || "HOOK";
+  const phaseMeta = {
+    HOOK: { tag: "ACT 01 // PROLOG", accent: "#f59e0b" },
+    TAPI: { tag: "ACT 02 // ANOMALI", accent: "#f43f5e" },
+    JADI: { tag: "ACT 03 // ANALISIS", accent: "#38bdf8" },
+    CLIMAX: { tag: "FINAL // RESOLUSI", accent: "#c084fc" }
+  };
+  const meta = phaseMeta[phase] || phaseMeta.HOOK;
+  const enterEase = Math.min(1, sceneElapsedSec / 0.16);
+  const slideX = (1 - enterEase) * -18;
+
+  ctx.save();
+  ctx.globalAlpha = 0.94 * enterEase;
+  ctx.translate(slideX, 0);
+
+  // Minimal sharp broadcast anime title-card typography (NO rounded mobile-app pills!)
+  const labelRaw = String(scene.componentLabel || currentScript?.topic || "").trim().toUpperCase();
+  const titleLine = labelRaw.slice(0, 34);
+  const maxBoxW = W - SAFE_PAD * 2;
+
+  ctx.font = "700 10.5px 'JetBrains Mono', monospace";
+  const tagW = ctx.measureText(meta.tag).width;
+  ctx.font = "800 13px 'Plus Jakarta Sans', sans-serif";
+  const titleW = titleLine ? ctx.measureText(titleLine).width : 0;
+  const boxW = Math.min(maxBoxW, Math.max(tagW, titleW) + 28);
+  const boxH = titleLine ? 46 : 26;
+  const bx = SAFE_PAD;
+  const by = 26;
+
+  // Sharp dark translucent broadcast backing + crisp 1px hairline border + 3px accent bar
+  ctx.fillStyle = "rgba(6, 9, 16, 0.74)";
+  ctx.fillRect(bx, by, boxW, boxH);
+
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(bx + 0.5, by + 0.5, boxW - 1, boxH - 1);
+
+  ctx.fillStyle = meta.accent;
+  ctx.fillRect(bx, by, 3.5, boxH);
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = meta.accent;
+  ctx.font = "700 10px 'JetBrains Mono', monospace";
+  ctx.fillText(meta.tag, bx + 12, by + 7, boxW - 20);
+
+  if (titleLine) {
+    ctx.fillStyle = "#f8fafc";
+    ctx.font = "800 12.5px 'Plus Jakarta Sans', sans-serif";
+    ctx.fillText(titleLine, bx + 12, by + 23, boxW - 20);
+  }
+
+  // Subtle broadcast channel signature in top-right safe margin (zero rounded pill!)
+  ctx.textAlign = "right";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "rgba(248, 250, 252, 0.62)";
+  ctx.font = "700 10px 'JetBrains Mono', monospace";
+  ctx.fillText("@MAOUEDU.ID", W - SAFE_PAD, by + 7);
+  ctx.restore();
+}
+
 function drawTopVideoHeader(ctx, scene) {
   const W = canvas.width;
   ctx.save();
@@ -2300,7 +2560,19 @@ function renderCompositeFrame({
   let renderedPureAnime2D = false;
 
   if (clip?.videoEl && clip.videoEl.readyState >= 2) {
-    drawCoverVideo(ctx, clip.videoEl, 0, 0, canvas.width, canvas.height);
+    if (clip.isVeoHero && mode === "anime_mappa" && animeMappaReady && animeMappaEngine) {
+      animeMappaEngine.renderVideoClipWithSatsuei(
+        clip.videoEl,
+        scene.animeBlueprint,
+        tSec,
+        sceneElapsedSec,
+        sceneDurationSec
+      );
+      ctx.drawImage(animeMappaEngine.domElement, 0, 0, canvas.width, canvas.height);
+      renderedPureAnime2D = true;
+    } else {
+      drawCoverVideo(ctx, clip.videoEl, 0, 0, canvas.width, canvas.height);
+    }
     renderedPrimary = true;
   } else {
     if (mode === "anime_mappa" && animeMappaReady && animeMappaEngine) {
@@ -2310,18 +2582,21 @@ function renderCompositeFrame({
           haikeiBg: scene.phase === "CLIMAX" ? "domain_void" : "shibuya_night",
           characterPose:
             scene.phase === "TAPI"
-              ? "shock_alert"
+              ? "pose_shock_panic"
               : scene.phase === "CLIMAX"
-                ? "domain_seal"
+                ? "pose_climax_domain"
                 : scene.phase === "JADI"
-                  ? "point_reveal"
-                  : "stance",
+                  ? "pose_explaining"
+                  : "pose_default_smirk",
           shotLayout:
             scene.phase === "CLIMAX"
               ? "dramatic_closeup_domain"
               : scene.phase === "TAPI"
                 ? "action_clash_diagonal"
-                : "hero_and_genga_split",
+                : "host_hero_alternating_cutaway",
+          enableAlternatingCutaway: scene.phase !== "CLIMAX",
+          cutawayStartSec: 2.55,
+          transitionStyle: scene.phase === "HOOK" || scene.phase === "CLIMAX" ? "zoom_punch" : "whip_cut",
           cameraMotion2d:
             scene.phase === "TAPI"
               ? "dutch_shibuya_shake"
@@ -2340,23 +2615,29 @@ function renderCompositeFrame({
               ? ["black_flash_2d", "manga_speed_lines_2d", "slash_smear_2d"]
               : scene.phase === "CLIMAX"
                 ? ["domain_seal_2d", "cursed_flames_2d", "embers_petals_2d"]
-                : ["cursed_flames_2d", "rain_streaks_2d"],
+                : ["rain_streaks_2d", "embers_petals_2d"],
           impactBeat: {
             enabled: scene.phase === "TAPI" || scene.phase === "CLIMAX",
-            triggerProgress: 0.48,
+            beatSynced: true,
+            triggerProgress: 0.46,
             style: scene.phase === "TAPI" ? "black_flash" : "bw_manga_invert"
           },
           mangaSfxText: scene.phase === "TAPI" ? "ドォォン!!" : scene.phase === "CLIMAX" ? "領域展開!" : "ゴゴゴ...",
           satsueiGrade: {
-            bloomStrength: scene.phase === "CLIMAX" ? 0.48 : 0.36,
-            contrast: 1.12,
-            saturation: 1.18,
+            bloomStrength: scene.phase === "CLIMAX" ? 0.36 : 0.28,
+            lightWrapStrength: 0.42,
+            ambientHarmonization: 0.22,
+            shadowCrush: 0.14,
+            dofBlur: 0.28,
+            contrast: 1.1,
+            saturation: 1.14,
             chromaticPeak: 0.014
           }
         };
         const aKey = `anime2d::${currentScript.topic || ""}::${sceneIndex}::${scene.animeRenderVersion || 1}`;
         animeMappaEngine.renderFrame(bp, aKey, tSec, sceneElapsedSec, sceneDurationSec, liveVoice, {
-          showCharacter: Boolean(toggleMcOverlay?.checked)
+          showCharacter: Boolean(toggleMcOverlay?.checked),
+          scene
         });
         ctx.drawImage(animeMappaEngine.domElement, 0, 0, canvas.width, canvas.height);
         renderedPrimary = true;
@@ -2392,18 +2673,23 @@ function renderCompositeFrame({
   ctx.fillStyle = subGrad;
   ctx.fillRect(0, canvas.height - 175, canvas.width, 175);
 
-  drawTopVideoHeader(ctx, scene);
-  draw3dCalloutBadge(ctx, scene);
-
-  if (!renderedPureAnime2D) {
-    // Classic 3D @untabiru5 / @dekodaid educational cards + separate 2D MC host box
+  if (renderedPureAnime2D) {
+    // Sharp minimal broadcast anime typography (NO rounded mobile-app pills & hidden during Impact Frames!)
+    const isImpactNow = Boolean(animeMappaEngine && animeMappaEngine.lastImpactMode > 0.5);
+    if (!isImpactNow) {
+      drawBroadcastAnimeTitleCard(ctx, scene, sceneElapsedSec);
+    }
+  } else {
+    // Classic 3D @untabiru5 / @dekodaid educational cards + rounded pills untouched!
+    drawTopVideoHeader(ctx, scene);
+    draw3dCalloutBadge(ctx, scene);
     drawDekodaHookCard(ctx, scene.visual, tSec, sceneElapsedSec);
     drawBelajarInfoPills(ctx, scene.visual, scene.phase, tSec);
     drawMilestoneStampBanner(ctx, scene.visual, scene, tSec, sceneElapsedSec);
     drawMaouVersusCard(ctx, scene.visual, tSec);
     drawMcRajaIblisPresenter(ctx, scene, tSec);
+    drawSelamatStamp(ctx, scene, tSec);
   }
-  drawSelamatStamp(ctx, scene, tSec);
   drawUntabiruSubtitles(ctx, scene);
 }
 
@@ -2620,6 +2906,18 @@ async function initStudio() {
   try {
     const cfgResp = await fetch("/api/config");
     serverConfig = await cfgResp.json();
+    const anchorBadge = document.getElementById("charAnchorDebugBadge");
+    if (anchorBadge) {
+      const okAnchor = Boolean(serverConfig?.styleAnchors?.mcDefault);
+      anchorBadge.textContent = okAnchor
+        ? "Character Anchor: mc_default.jpg (ACTIVE)"
+        : "Character Anchor: mc_default.jpg (FALLBACK)";
+      anchorBadge.style.borderColor = okAnchor ? "rgba(16,185,129,0.55)" : "rgba(245,158,11,0.55)";
+      anchorBadge.style.color = okAnchor ? "#6ee7b7" : "#fde68a";
+    }
+    if (veoHeroToggleWrap) {
+      veoHeroToggleWrap.classList.toggle("hidden", !serverConfig.enableVeoHeroShots);
+    }
     const keys = getLocalKeys();
     const voiceInputEl = document.getElementById("elevenlabsVoiceIdInput");
     const voicePresetEl = document.getElementById("elevenlabsVoicePreset");

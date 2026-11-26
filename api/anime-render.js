@@ -6,7 +6,7 @@ export async function POST(request) {
     const scenes = Array.isArray(body?.scenes) ? body.scenes : [];
     if (!scenes.length) {
       return Response.json(
-        { error: "Scenes tidak boleh kosong untuk Mode Anime MAPPA Sakuga." },
+        { error: "Scenes tidak boleh kosong untuk Mode Anime 2D Broadcast." },
         { status: 400 }
       );
     }
@@ -16,14 +16,15 @@ export async function POST(request) {
       title: body?.title || "",
       scenes,
       geminiApiKey: body?.geminiApiKey || "",
-      styleMemoryHints: Array.isArray(body?.styleMemoryHints) ? body.styleMemoryHints : []
+      styleMemoryHints: Array.isArray(body?.styleMemoryHints) ? body.styleMemoryHints : [],
+      enableDualDnaAssets: Boolean(body?.enableDualDnaAssets)
     });
 
     return Response.json(result);
   } catch (error) {
-    console.error("Anime MAPPA render error:", error);
+    console.error("Anime 2D render error:", error);
     return Response.json(
-      { error: error.message || "Gagal merender blueprint Anime MAPPA Sakuga." },
+      { error: error.message || "Gagal merender blueprint Anime 2D." },
       { status: 500 }
     );
   }

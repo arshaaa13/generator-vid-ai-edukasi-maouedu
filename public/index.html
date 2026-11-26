@@ -151,6 +151,14 @@
             <input type="checkbox" id="toggleBgm" checked />
             <span>🎵 <strong>Musik Latar (BGM)</strong></span>
           </label>
+          <label class="toggle-item" title="Opt-in: generate latar Haikei & pose Kyara baru memakai Style Anchor (/public/style-anchors/) via Gemini Image API (butuh kuota gambar; otomatis fallback ke aset lokal jika limit)">
+            <input type="checkbox" id="toggleDualDnaAssets" />
+            <span>🎨 <strong>Dual-DNA Multimodal Gen</strong> (opsional • kunci berbayar)</span>
+          </label>
+          <label class="toggle-item hidden" id="veoHeroToggleWrap" title="Aktif karena ENABLE_VEO_HERO_SHOTS=true: hanya menganimasikan scene is_hero_shot (Hook/Climax) via Google Veo">
+            <input type="checkbox" id="toggleVeoHeroShots" />
+            <span>🎞️ <strong>Veo Hero-Shot Mode</strong> (Hook/Climax saja)</span>
+          </label>
         </div>
 
         <div class="action-stack" style="display:flex;flex-direction:column;gap:8px;">
@@ -186,6 +194,7 @@
           <span class="preview-meta" id="sceneCounterDisplay">Siap Membuat Video</span>
         </div>
         <div class="preview-badges">
+          <span class="badge badge-outline" id="charAnchorDebugBadge" style="border-color:rgba(16,185,129,0.55);color:#6ee7b7;" title="Single Source of Truth Character Lock untuk semua pose & generasi multimodal">Character Anchor: mc_default.jpg (ACTIVE)</span>
           <span class="badge badge-outline">9:16 TikTok</span>
           <span class="badge badge-gold" id="activePoseBadge">MC Pose: DEFAULT</span>
         </div>
@@ -278,10 +287,10 @@
         <div class="character-details-col">
           <h4>Maou Vaelen — "The Modern Overlord" (100% Original & Copyright-Safe)</h4>
           <ul class="trait-list">
-            <li><strong>Peran di Video:</strong> MC / Karakter Utama & Narator yang menjelaskan ilmu pengetahuan (Bukan NPC bisu).</li>
-            <li><strong>Rambut & Wajah:</strong> Wajah anime tampan tajam, rambut <em>ash-silver wolf-cut</em> dengan 1 helai merah darah (<em>crimson streak</em>) di poni depan.</li>
-            <li><strong>Tanduk Ikonik:</strong> Tanduk hitam obsidian asimetris — <strong>tanduk kanan utuh</strong>, <strong>tanduk kiri patah di ujung dengan efek retakan cahaya merah menyala</strong>.</li>
-            <li><strong>Outfit & Aura:</strong> <em>Turtleneck</em> hitam ketat + <em>long coat</em> hitam modern beraksen garis emas & pin permata merah di dada + <strong>aura bayangan tipis di sekitar bahu</strong>.</li>
+            <li><strong>Canonical Anchor:</strong> Terkunci penuh ke <code>/style-anchors/mc_default.jpg</code> (Single Source of Truth untuk seluruh pose &amp; generasi multimodal).</li>
+            <li><strong>Wajah &amp; Rambut:</strong> Rahang pria anime dewasa tajam (ZERO chibi), rambut spiky <em>silver-gray</em> dengan 1 helai poni tengah warna <em>crimson-red</em>, mata <em>golden-amber</em> menyala dengan eyeliner hitam tajam, anting stud &amp; ring hitam di telinga kiri.</li>
+            <li><strong>Tanduk Asimetris (Kunci Tetap):</strong> <strong>Tanduk kiri layar utuh melengkung tinggi</strong>, <strong>tanduk kanan layar patah dengan retakan magma merah menyala</strong>.</li>
+            <li><strong>Outfit:</strong> <em>Turtleneck</em> hitam + jas panjang hitam berkerah tegak dengan garis emas tipis di kerah &amp; bahu, 1 bros permata merah kecil di dada kiri, serta <strong>sarung tangan hitam dengan cincin perak</strong>.</li>
             <li><strong>Vibe Pembawaan:</strong> Kalem, elegan, blak-blakan, asik kayak temen nongkrong tapi tetap punya aura "bos besar", sedikit arogan/sarkas.</li>
             <li><strong>Suara Cowok:</strong> ElevenLabs Premade Deep Male <code>nPczCjzI2devNBz1zQrb</code> (Brian — 100% ElevenLabs Free &amp; Paid API).</li>
           </ul>

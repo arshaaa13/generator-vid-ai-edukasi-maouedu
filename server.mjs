@@ -11,6 +11,18 @@ import {
 } from "./lib/maou-engine.js";
 import { compileGeminiCinemaVideo } from "./lib/gemini-video-renderer.js";
 import { compileAnimeMappaVideo } from "./lib/video-ai/anime-director.js";
+import {
+  generateDualDnaHaikei,
+  generateDualDnaKyara,
+  generateFullScreenAnimeCutaway,
+  generateFullScreenHostInScene,
+  getStyleAnchorsStatus
+} from "./lib/video-ai/mappa-asset-generator.js";
+import {
+  isVeoHeroEnabled,
+  startVeoHeroShotJob,
+  pollVeoHeroShotJob
+} from "./lib/video-ai/veo-hero-adapter.js";
 import { researchAndPlanVisualWorld } from "./lib/video-ai/visual-researcher.js";
 import { critiqueAndRefineRenderedFrame } from "./lib/video-ai/visual-critic.js";
 
@@ -80,6 +92,8 @@ const server = http.createServer(async (req, res) => {
         elevenlabsVoiceId: process.env.ELEVENLABS_VOICE_ID || CHARACTER_BIBLE.defaultVoiceId,
         hasElevenlabsEnvKey: Boolean(process.env.ELEVENLABS_API_KEY),
         hasGeminiEnvKey: Boolean(process.env.GEMINI_API_KEY),
+        enableVeoHeroShots: isVeoHeroEnabled(),
+        styleAnchors: getStyleAnchorsStatus(),
         character: CHARACTER_BIBLE
       });
     }
@@ -125,15 +139,81 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       const scenes = Array.isArray(body?.scenes) ? body.scenes : [];
       if (!scenes.length) {
-        return sendJson(res, 400, { error: "Scenes tidak boleh kosong untuk Mode Anime MAPPA." });
+        return sendJson(res, 400, { error: "Scenes tidak boleh kosong untuk Mode Anime 2D." });
       }
       const result = await compileAnimeMappaVideo({
         topic: body?.topic || "",
         title: body?.title || "",
         scenes,
         geminiApiKey: body?.geminiApiKey || "",
-        styleMemoryHints: Array.isArray(body?.styleMemoryHints) ? body.styleMemoryHints : []
+        styleMemoryHints: Array.isArray(body?.styleMemoryHints) ? body.styleMemoryHints : [],
+        enableDualDnaAssets: Boolean(body?.enableDualDnaAssets)
       });
+      return sendJson(res, 200, result);
+    }
+
+    if (pathname === "/api/anime-asset-regen" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      const assetType = String(body?.assetType || "haikei").toLowerCase();
+      let result;
+      if (assetType === "kyara") {
+        result = await generateDualDnaKyara({
+          phase: body?.phase || "HOOK",
+          poseKey: body?.poseKey || "",
+          poseHint: body?.poseHint || "",
+          topic: body?.topic || "",
+          geminiApiKey: body?.geminiApiKey || ""
+        });
+      } else if (assetType === "cutaway") {
+        result = await generateFullScreenAnimeCutaway({
+          subjectDescription: body?.subjectDescription || body?.sceneDescription || body?.topic || "",
+          topic: body?.topic || "",
+          phase: body?.phase || "JADI",
+          mood: body?.mood || "dark dramatic tungsten",
+          geminiApiKey: body?.geminiApiKey || ""
+        });
+      } else if (assetType === "fullscreen_host") {
+        result = await generateFullScreenHostInScene({
+          sceneDescription: body?.sceneDescription || body?.topic || "",
+          phase: body?.phase || "HOOK",
+          poseHint: body?.poseHint || "",
+          topic: body?.topic || "",
+          geminiApiKey: body?.geminiApiKey || ""
+        });
+      } else {
+        result = await generateDualDnaHaikei({
+          sceneDescription: body?.sceneDescription || body?.narration || body?.topic || "",
+          topic: body?.topic || "",
+          mood: body?.mood || "dramatic moody lighting",
+          geminiApiKey: body?.geminiApiKey || ""
+        });
+      }
+      return sendJson(res, 200, { ...result, styleAnchors: getStyleAnchorsStatus() });
+    }
+
+    if (pathname === "/api/veo-hero" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      const action = body?.action === "poll" ? "poll" : "start";
+      if (!isVeoHeroEnabled()) {
+        return sendJson(res, 200, {
+          ok: false,
+          disabled: true,
+          error: "Veo Hero-Shot Mode nonaktif (ENABLE_VEO_HERO_SHOTS=false)."
+        });
+      }
+      const result =
+        action === "poll"
+          ? await pollVeoHeroShotJob({
+              operationName: body?.operationName || "",
+              geminiApiKey: body?.geminiApiKey || ""
+            })
+          : await startVeoHeroShotJob({
+              keyframeDataUrl: body?.keyframeDataUrl || "",
+              scene: body?.scene || {},
+              blueprint: body?.blueprint || {},
+              topic: body?.topic || "",
+              geminiApiKey: body?.geminiApiKey || ""
+            });
       return sendJson(res, 200, result);
     }
 
