@@ -105,6 +105,7 @@ export class MaouAnimeMappaEngine {
     this.bgCache = new Map();
     this.charCache = new Map();
     this.gengaSvgCache = new Map();
+    this.preloadPromises = [];
     this.activeSceneKey = "";
     this.transStartSec = -10;
     this.lastImpactMode = 0;
@@ -135,20 +136,35 @@ export class MaouAnimeMappaEngine {
 
   preloadAssets() {
     if (typeof Image === "undefined") return;
+    this.preloadPromises = [];
     for (const [key, url] of Object.entries(HAIKEI_URLS)) {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => this.bgCache.set(key, img);
-      img.src = url;
+      this.preloadPromises.push(
+        new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => {
+            this.bgCache.set(key, img);
+            resolve();
+          };
+          img.onerror = () => resolve();
+          img.src = url;
+        })
+      );
     }
     for (const [pose, url] of Object.entries(CHAR_POSE_URLS)) {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        const cleanCel = chromaKeyAnimeCel(img);
-        this.charCache.set(pose, cleanCel);
-      };
-      img.src = url;
+      this.preloadPromises.push(
+        new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => {
+            const cleanCel = chromaKeyAnimeCel(img);
+            this.charCache.set(pose, cleanCel);
+            resolve();
+          };
+          img.onerror = () => resolve();
+          img.src = url;
+        })
+      );
     }
   }
 
@@ -157,17 +173,42 @@ export class MaouAnimeMappaEngine {
     const cached = this.gengaSvgCache.get(svgMarkup);
     if (cached) return cached.ready ? cached.img : null;
 
-    const entry = { img: new Image(), ready: false };
-    entry.img.onload = () => {
-      entry.ready = true;
-    };
-    entry.img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgMarkup)}`;
+    const entry = { img: new Image(), ready: false, promise: null };
+    entry.promise = new Promise((resolve) => {
+      entry.img.onload = () => {
+        entry.ready = true;
+        resolve(entry.img);
+      };
+      entry.img.onerror = () => resolve(null);
+      entry.img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgMarkup)}`;
+    });
     this.gengaSvgCache.set(svgMarkup, entry);
     if (this.gengaSvgCache.size > 40) {
       const firstKey = this.gengaSvgCache.keys().next().value;
       this.gengaSvgCache.delete(firstKey);
     }
     return null;
+  }
+
+  /**
+   * Ensures all Haikei plates, chroma-keyed character cels, and scene Genga SVG images
+   * are decoded before capturing Vision QC screenshots or deterministic MP4 export frames.
+   */
+  async ensureAssetsReady(blueprints = [], timeoutMs = 4500) {
+    if (typeof Image === "undefined") return;
+    const waiters = [...(this.preloadPromises || [])];
+    for (const bp of blueprints || []) {
+      if (bp?.gengaSvg) {
+        this.getGengaImage(bp.gengaSvg);
+        const cached = this.gengaSvgCache.get(bp.gengaSvg);
+        if (cached?.promise) waiters.push(cached.promise);
+      }
+    }
+    if (!waiters.length) return;
+    await Promise.race([
+      Promise.allSettled(waiters),
+      new Promise((resolve) => setTimeout(resolve, timeoutMs))
+    ]);
   }
 
   // ============================================================================

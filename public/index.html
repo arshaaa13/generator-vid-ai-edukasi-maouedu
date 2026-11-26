@@ -33,6 +33,7 @@
         <span class="dot" id="voiceStatusDot"></span>
         <span id="voiceStatusLabel">Mode Suara Cowok Siap</span>
       </div>
+      <button class="btn btn-secondary" id="openWorkflowBtn" title="Lihat jalan kerjanya dari Prompt sampai jadi Video MP4">🗺️ Alur Kerja</button>
       <button class="btn btn-secondary" id="openCharacterBibleBtn">👑 Character Bible</button>
       <button class="btn btn-primary" id="openSettingsBtn">⚙️ API & Voice</button>
     </div>
@@ -55,18 +56,28 @@
         </button>
       </div>
 
-      <!-- Live 5-Step Autonomous Pipeline Tracker -->
-      <div class="pipeline-bar hidden" id="pipelineBar">
-        <div class="pipe-step" id="stepResearch">1. 🔍 Riset Topik</div>
-        <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepScript">2. ✍️ Script Utuh</div>
-        <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepCinema">3. ⚔️ Produksi Anime 2D / 3D</div>
-        <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepVoice">4. 🎙️ ElevenLabs Voice</div>
-        <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepReady">5. ✨ Video HD Siap!</div>
+      <!-- Workflow Automation Toggles & Summary -->
+      <div class="workflow-controls-bar">
+        <div class="workflow-toggles">
+          <label class="wf-toggle" title="Otomatis menyuruh Gemini Vision menilai & memoles frame video sebelum suara & export">
+            <input type="checkbox" id="toggleAutoVisionQc" checked />
+            <span>👁️ <strong>Auto Vision QC</strong> (poles visual otomatis)</span>
+          </label>
+          <label class="wf-toggle" title="Begitu seluruh workflow selesai, langsung render & download file .mp4 HD tanpa klik lagi">
+            <input type="checkbox" id="toggleAutoExportMp4" />
+            <span>⬇️ <strong>Auto-Download MP4</strong> saat selesai (1-Klik Full Auto)</span>
+          </label>
+        </div>
+        <div class="workflow-meta-right">
+          <span class="wf-timer-badge" id="workflowTotalTimer">⚡ Workflow Siap • 7 Tahap</span>
+          <button type="button" class="btn btn-secondary btn-sm" id="openWorkflowMapBtn">
+            🗺️ Detail Alur (Prompt → Video)
+          </button>
+        </div>
       </div>
+
+      <!-- Always-Visible Interactive 7-Stage Prompt-to-Video Workflow Strip -->
+      <div class="workflow-strip" id="workflowStrip" aria-label="Alur Kerja Prompt ke Video MP4"></div>
     </div>
   </section>
 
@@ -275,6 +286,25 @@
             <li><strong>Suara Cowok:</strong> ElevenLabs Premade Deep Male <code>nPczCjzI2devNBz1zQrb</code> (Brian — 100% ElevenLabs Free &amp; Paid API).</li>
           </ul>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interactive Prompt-to-Video Workflow Modal -->
+  <div class="modal-backdrop hidden" id="workflowModal">
+    <div class="modal modal-lg modal-workflow">
+      <div class="modal-header">
+        <div>
+          <h3>🗺️ Alur Kerja (Workflow): Dari Prompt Sampai Jadi Video MP4</h3>
+          <p class="panel-subtitle" id="workflowModalSubtitle">Semua tahap berjalan berurutan secara otomatis dalam 1 klik tombol ✨ Buat Video Otomatis</p>
+        </div>
+        <button class="btn-close" id="closeWorkflowBtn">✕</button>
+      </div>
+      <div class="modal-body wf-modal-body">
+        <div class="wf-node-list" id="workflowModalList"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="closeWorkflowFooterBtn">Tutup</button>
       </div>
     </div>
   </div>

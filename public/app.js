@@ -7,6 +7,7 @@ import {
 import { Maou3DStage } from "/scene3d.js";
 import { MaouAnimeMappaEngine } from "/anime-mappa-engine.js";
 import { exportDeterministicMp4Video } from "/video-engine/mp4-video-exporter.js";
+import { MaouPromptToVideoWorkflow } from "/video-engine/prompt-to-video-workflow.js";
 
 const canvas = document.getElementById("videoCanvas");
 const ctx = canvas.getContext("2d");
@@ -47,12 +48,16 @@ let mcAnimatedVideo = null;
 // UI Elements
 const simplePromptInput = document.getElementById("simplePromptInput");
 const autoBuildVideoBtn = document.getElementById("autoBuildVideoBtn");
-const pipelineBar = document.getElementById("pipelineBar");
-const stepResearch = document.getElementById("stepResearch");
-const stepScript = document.getElementById("stepScript");
-const stepCinema = document.getElementById("stepCinema");
-const stepVoice = document.getElementById("stepVoice");
-const stepReady = document.getElementById("stepReady");
+const toggleAutoVisionQc = document.getElementById("toggleAutoVisionQc");
+const toggleAutoExportMp4 = document.getElementById("toggleAutoExportMp4");
+const workflowStrip = document.getElementById("workflowStrip");
+const workflowTotalTimer = document.getElementById("workflowTotalTimer");
+const workflowModal = document.getElementById("workflowModal");
+const workflowModalSubtitle = document.getElementById("workflowModalSubtitle");
+const workflowModalList = document.getElementById("workflowModalList");
+const openWorkflowBtn = document.getElementById("openWorkflowBtn");
+const openWorkflowMapBtn = document.getElementById("openWorkflowMapBtn");
+const promptWorkflow = new MaouPromptToVideoWorkflow();
 
 const researchResultsBox = document.getElementById("researchResultsBox");
 const visualFoundationBox = document.getElementById("visualFoundationBox");
@@ -172,24 +177,147 @@ function base64ToArrayBuffer(base64) {
   return bytes.buffer;
 }
 
-function setPipelineState(stage) {
-  pipelineBar.classList.remove("hidden");
-  const stages = [stepResearch, stepScript, stepCinema, stepVoice, stepReady].filter(Boolean);
-  const order = { research: 0, script: 1, cinema: 2, voice: 3, ready: 4, allDone: 5 };
-  const activeIdx = order[stage] ?? 0;
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
-  stages.forEach((el, idx) => {
-    el.classList.remove("active", "done");
-    if (idx < activeIdx) el.classList.add("done");
-    else if (idx === activeIdx) el.classList.add("active");
-  });
-  if (stage === "allDone") {
-    stages.forEach((el) => {
-      el.classList.remove("active");
-      el.classList.add("done");
+function formatStageDuration(ms) {
+  if (!ms || ms <= 0) return "";
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+}
+
+function getStatusBadgeLabel(stage) {
+  if (stage.status === "running") return "⏳ Proses...";
+  if (stage.status === "done") return stage.metric || formatStageDuration(stage.elapsedMs) || "✅ OK";
+  if (stage.status === "skipped") return "⏭️ Lewat";
+  if (stage.status === "error") return "⚠️ Error";
+  return "Menunggu";
+}
+
+function renderWorkflowUI(snapshot) {
+  if (workflowTotalTimer) {
+    if (snapshot.isRunning) {
+      const runningStage = snapshot.stages.find((s) => s.status === "running");
+      workflowTotalTimer.textContent = runningStage
+        ? `⏳ Tahap ${runningStage.step}/7: ${runningStage.shortLabel.replace(/^\d+\.\s*/, "")}`
+        : "⏳ Menjalankan Workflow...";
+    } else if (snapshot.totalElapsedMs > 0) {
+      workflowTotalTimer.textContent = `✅ Selesai dalam ${formatStageDuration(snapshot.totalElapsedMs)}`;
+    } else {
+      workflowTotalTimer.textContent = "⚡ Workflow Siap • 7 Tahap";
+    }
+  }
+
+  if (workflowStrip) {
+    workflowStrip.innerHTML = snapshot.stages
+      .map((st, idx) => {
+        const arrow = idx < snapshot.stages.length - 1 ? `<div class="wf-chip-arrow">→</div>` : "";
+        const safeTitle = escapeHtml(st.title);
+        const safeDetail = escapeHtml(st.detail);
+        const safeBadge = escapeHtml(getStatusBadgeLabel(st));
+        return `
+          <button type="button" class="wf-chip ${escapeHtml(st.status)}" data-stage-id="${escapeHtml(st.id)}" title="${safeTitle}: ${safeDetail}">
+            <div class="wf-chip-top">
+              <span>${st.icon} ${escapeHtml(st.shortLabel)}</span>
+              <span class="wf-chip-badge">${safeBadge}</span>
+            </div>
+            <div class="wf-chip-detail">${safeDetail}</div>
+          </button>${arrow}
+        `;
+      })
+      .join("");
+
+    workflowStrip.querySelectorAll(".wf-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        openWorkflowModal(chip.dataset.stageId);
+      });
+    });
+  }
+
+  if (workflowModalSubtitle && snapshot.activeTopic) {
+    workflowModalSubtitle.textContent = `Topik aktif: "${snapshot.activeTopic}" • Mode: ${
+      snapshot.renderMode === "classic_3d" ? "🧱 3D Klasik" : "⚔️ Anime 2D Studio MAPPA"
+    }${snapshot.totalElapsedMs ? ` • Total waktu: ${formatStageDuration(snapshot.totalElapsedMs)}` : ""}`;
+  }
+
+  if (workflowModalList) {
+    workflowModalList.innerHTML = snapshot.stages
+      .map((st, idx) => {
+        const dur = formatStageDuration(st.elapsedMs);
+        const canRerun = Boolean(st.rerunAction && currentScript?.scenes?.length && !snapshot.isRunning);
+        const rerunLabelMap = {
+          rerunProduction: "⚔️ Render Ulang Visual",
+          rerunVisionQc: "👁️ Jalankan Vision QC",
+          rerunVoice: "🎙️ Rekam Ulang Suara",
+          rerunExport: "⬇️ Export Video MP4"
+        };
+        const arrow = idx < snapshot.stages.length - 1 ? `<div class="wf-node-arrow">↓</div>` : "";
+        return `
+          <div class="wf-node-card ${escapeHtml(st.status)}" data-modal-stage="${escapeHtml(st.id)}">
+            <div class="wf-node-head">
+              <div class="wf-node-title">${st.step}. ${st.icon} ${escapeHtml(st.title)}</div>
+              <div class="wf-node-meta">
+                <span class="badge badge-outline">${escapeHtml(st.actor)}</span>
+                <code>${escapeHtml(st.endpoint)}</code>
+                <span class="wf-chip-badge">${escapeHtml(getStatusBadgeLabel(st))}${dur ? ` • ${escapeHtml(dur)}` : ""}</span>
+              </div>
+            </div>
+            <div class="wf-node-desc">${escapeHtml(st.description)}</div>
+            <div class="wf-node-foot">
+              <span><strong>Status &amp; Output:</strong> ${escapeHtml(st.detail)}</span>
+              ${
+                canRerun
+                  ? `<button type="button" class="btn btn-secondary btn-sm wf-rerun-btn" data-rerun="${escapeHtml(st.rerunAction)}">${
+                      rerunLabelMap[st.rerunAction] || "🔄 Jalankan"
+                    }</button>`
+                  : ""
+              }
+            </div>
+          </div>${arrow}
+        `;
+      })
+      .join("");
+
+    workflowModalList.querySelectorAll(".wf-rerun-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const act = btn.dataset.rerun;
+        workflowModal?.classList.add("hidden");
+        if (act === "rerunProduction") await renderScenesForActiveMode();
+        else if (act === "rerunVisionQc") await runGeminiVisualCritic(activeSceneIndex);
+        else if (act === "rerunVoice") {
+          promptWorkflow.beginStage("voice", "Merekam ulang suara ElevenLabs...");
+          let okCount = 0;
+          for (let i = 0; i < (currentScript?.scenes?.length || 0); i++) {
+            const e = await ensureSceneAudio(i);
+            if (e?.buffer) okCount++;
+          }
+          promptWorkflow.completeStage(
+            "voice",
+            `${okCount}/${currentScript?.scenes?.length || 0} audio ElevenLabs siap`,
+            `${okCount}/${currentScript?.scenes?.length || 0} OK`
+          );
+        } else if (act === "rerunExport") await exportFullVideo();
+      });
     });
   }
 }
+
+function openWorkflowModal(focusStageId = null) {
+  if (!workflowModal) return;
+  renderWorkflowUI(promptWorkflow.getSnapshot());
+  workflowModal.classList.remove("hidden");
+  if (focusStageId) {
+    const targetCard = workflowModalList?.querySelector(`[data-modal-stage="${focusStageId}"]`);
+    targetCard?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
+promptWorkflow.subscribe(renderWorkflowUI);
 
 // Procedural Sound Effects
 function playProceduralSfx(type, destNode = null) {
@@ -322,7 +450,7 @@ function parseSubtitlePhrasesClient(narration) {
 }
 
 // ============================================================================
-// 1-PROMPT AUTONOMOUS PIPELINE (Research -> Script -> Male Voice -> Auto-Play)
+// 1-PROMPT AUTONOMOUS WORKFLOW (Prompt -> Research -> Script -> Visual 2D/3D -> Vision QC -> ElevenLabs -> Video/MP4)
 // ============================================================================
 async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
   unlockAudioContextSync();
@@ -340,66 +468,114 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
 
   stopPlayback();
   autoBuildVideoBtn.disabled = true;
-  autoBuildVideoBtn.textContent = "⏳ Sedang Riset & Bikin Video...";
-  setPipelineState("research");
+  autoBuildVideoBtn.textContent = "⏳ Menjalankan Workflow...";
+
+  const activeMode = getSelectedRenderMode();
+  const autoVisionQc = Boolean(toggleAutoVisionQc?.checked);
+  const autoExportMp4 = Boolean(toggleAutoExportMp4?.checked);
+  const keys = getLocalKeys();
+  const refUrl = tiktokUrlInput.value.trim();
 
   try {
-    const keys = getLocalKeys();
-    const refUrl = tiktokUrlInput.value.trim();
+    await promptWorkflow.execute({
+      prompt: cleanPrompt,
+      referenceUrl: refUrl,
+      renderMode: activeMode,
+      autoVisionQc,
+      autoExportMp4,
+      handlers: {
+        onResearchAndScript: async ({ prompt, referenceUrl }) => {
+          autoBuildVideoBtn.textContent = "🔍 2-3/7 Riset Online & Script...";
+          const resp = await fetch("/api/research-and-script", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              prompt,
+              referenceUrl,
+              geminiApiKey: keys.geminiApiKey
+            })
+          });
+          const data = await resp.json();
+          if (!resp.ok || data.error) throw new Error(data.error || "Gagal membuat video.");
+          return data;
+        },
 
-    // 1 & 2: Backend Autonomous Online Research + Script Generation
-    const resp = await fetch("/api/research-and-script", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: cleanPrompt,
-        referenceUrl: refUrl,
-        geminiApiKey: keys.geminiApiKey
-      })
+        onScriptReady: async (data) => {
+          currentScript = data;
+          activeSceneIndex = 0;
+          activePhraseIndex = 0;
+          sceneAudioBuffers.clear();
+          sceneVideoClips.clear();
+
+          videoTitleDisplay.textContent = currentScript.title;
+          aiEngineBadge.textContent = currentScript.aiEngine || "Auto-Research";
+          renderResearchBox(currentScript.research);
+          if (currentScript.referenceMetadata) showTikTokAnalysis(currentScript.referenceMetadata);
+          renderSceneList();
+          updateActiveSceneUI();
+        },
+
+        onVisualProduction: async (data) => {
+          if (activeMode === "anime_mappa") {
+            autoBuildVideoBtn.textContent = `⚔️ 4/7 Anime 2D MAPPA (${data.scenes.length} Scene)...`;
+            return await renderScenesWithAnimeMappa();
+          }
+          return { ok: true };
+        },
+
+        onVisionQc: async (data) => {
+          // Pick the key dramatic TAPI/CLIMAX scene (or scene 0) for automatic Gemini Vision inspection
+          const peakIdx = Math.max(
+            0,
+            data.scenes.findIndex((s) => s.phase === "TAPI" || s.phase === "CLIMAX")
+          );
+          autoBuildVideoBtn.textContent = `👁️ 5/7 Gemini Vision QC Scene #${peakIdx + 1}...`;
+          return await runGeminiVisualCritic(peakIdx);
+        },
+
+        onVoiceSynthesis: async (data, onVoiceProgress) => {
+          let readyCount = 0;
+          let lastError = "";
+          for (let i = 0; i < data.scenes.length; i++) {
+            autoBuildVideoBtn.textContent = `🎙️ 6/7 ElevenLabs ${i + 1}/${data.scenes.length}...`;
+            const entry = await ensureSceneAudio(i);
+            if (entry?.buffer) {
+              readyCount++;
+            } else {
+              const lbl = document.getElementById(`audioStatus_${i}`)?.textContent || "";
+              if (lbl) lastError = lbl;
+            }
+            onVoiceProgress?.(i + 1, data.scenes.length);
+          }
+          return {
+            readyCount,
+            voiceId: activeElevenlabsVoiceId || keys.elevenlabsVoiceId,
+            lastError
+          };
+        },
+
+        onExportMp4: async () => {
+          autoBuildVideoBtn.textContent = "🎬 7/7 Export Video MP4 HD...";
+          return await exportFullVideo();
+        },
+
+        onFinalizePreview: async () => {
+          if (activeMode === "anime_mappa" && animeMappaEngine && currentScript?.scenes?.length) {
+            await animeMappaEngine.ensureAssetsReady(
+              currentScript.scenes.map((s) => s.animeBlueprint).filter(Boolean)
+            );
+          }
+          if (autoPlayAfter) {
+            playFullVideo();
+          }
+        }
+      }
     });
-    const data = await resp.json();
-    if (!resp.ok || data.error) throw new Error(data.error || "Gagal membuat video.");
 
-    setPipelineState("script");
-    currentScript = data;
-    activeSceneIndex = 0;
-    activePhraseIndex = 0;
-    sceneAudioBuffers.clear();
-    sceneVideoClips.clear();
-
-    videoTitleDisplay.textContent = currentScript.title;
-    aiEngineBadge.textContent = currentScript.aiEngine || "Auto-Research";
-    renderResearchBox(currentScript.research);
-    if (currentScript.referenceMetadata) showTikTokAnalysis(currentScript.referenceMetadata);
-    renderSceneList();
-    updateActiveSceneUI();
-
-    // 3: Compile Active Render Mode (Pure 2D Studio MAPPA Anime OR Instant Classic 3D)
-    const activeMode = getSelectedRenderMode();
-    if (activeMode === "anime_mappa") {
-      setPipelineState("cinema");
-      autoBuildVideoBtn.textContent = `⚔️ Produksi Anime 2D MAPPA (${currentScript.scenes.length} Scene)...`;
-      await renderScenesWithAnimeMappa();
-    } else {
-      setPipelineState("cinema");
-    }
-
-    // 4: Generate voiceovers strictly via ElevenLabs across all scenes (no Google fallback)
-    setPipelineState("voice");
-    for (let i = 0; i < currentScript.scenes.length; i++) {
-      autoBuildVideoBtn.textContent = `🎙️ ElevenLabs Scene ${i + 1}/${currentScript.scenes.length}...`;
-      await ensureSceneAudio(i);
-    }
-
-    setPipelineState("allDone");
     autoBuildVideoBtn.textContent = "✨ Buat Video Otomatis";
     autoBuildVideoBtn.disabled = false;
-
-    if (autoPlayAfter) {
-      playFullVideo();
-    }
   } catch (e) {
-    alert("Terjadi kendala saat membuat video: " + e.message);
+    alert("Terjadi kendala saat menjalankan workflow video: " + e.message);
     autoBuildVideoBtn.textContent = "✨ Buat Video Otomatis";
     autoBuildVideoBtn.disabled = false;
   }
@@ -498,14 +674,26 @@ async function renderScenesWithAnimeMappa(singleIdx = null) {
       `;
     }
 
+    if (activeMode === "anime_mappa" && animeMappaEngine) {
+      const targetBps = singleIdx !== null
+        ? [currentScript.scenes[singleIdx]?.animeBlueprint].filter(Boolean)
+        : currentScript.scenes.map((s) => s.animeBlueprint).filter(Boolean);
+      await animeMappaEngine.ensureAssetsReady(targetBps);
+    }
+
     aiEngineBadge.textContent = `⚔️ Anime 2D MAPPA (${data.directorModel} • ${currentScript.scenes.length} Scene)`;
     sceneEnterTimestamp = performance.now();
     renderSceneList();
     updateActiveSceneUI();
-    return true;
+    return {
+      ok: true,
+      directorModel: data.directorModel,
+      customGengaCount: data.customGengaCount || 0,
+      warning: data.warning || null
+    };
   } catch (err) {
     console.warn("Anime 2D MAPPA render warning:", err);
-    return false;
+    return { ok: false, warning: err.message, customGengaCount: 0 };
   } finally {
     syncRenderModeUI(getSelectedRenderMode());
   }
@@ -513,19 +701,35 @@ async function renderScenesWithAnimeMappa(singleIdx = null) {
 
 async function renderScenesForActiveMode(singleIdx = null) {
   const mode = getSelectedRenderMode();
-  if (mode === "anime_mappa") return renderScenesWithAnimeMappa(singleIdx);
-  return true;
+  if (mode === "anime_mappa") {
+    promptWorkflow.beginStage("production", "Menyutradarai & menggambar Genga 2D...");
+    const res = await renderScenesWithAnimeMappa(singleIdx);
+    if (res?.ok) {
+      promptWorkflow.completeStage(
+        "production",
+        `${res.customGengaCount}/${currentScript?.scenes?.length || 1} Genga SVG • ${res.directorModel}`,
+        `${res.customGengaCount} Genga`
+      );
+    } else {
+      promptWorkflow.failStage("production", res?.warning || "Fallback 2D aktif");
+    }
+    return res;
+  }
+  return { ok: true };
 }
 
 async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
   if (!currentScript?.scenes?.[targetIdx]) {
     alert("Buat video terlebih dahulu agar Gemini Vision bisa melihat dan mengevaluasi frame-nya.");
-    return;
+    return { error: "Belum ada scene" };
   }
   const scene = currentScript.scenes[targetIdx];
   const activeMode = getSelectedRenderMode();
   if (activeMode === "anime_mappa" && !scene.animeBlueprint) {
     await renderScenesWithAnimeMappa(targetIdx);
+  }
+  if (activeMode === "anime_mappa" && animeMappaEngine && scene.animeBlueprint) {
+    await animeMappaEngine.ensureAssetsReady([scene.animeBlueprint]);
   }
   activeSceneIndex = targetIdx;
   updateActiveSceneUI();
@@ -590,11 +794,23 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
     sceneEnterTimestamp = performance.now();
     renderSceneList();
     updateActiveSceneUI();
+    if (!promptWorkflow.isRunning) {
+      promptWorkflow.completeStage(
+        "vision_qc",
+        `Skor ${data.overallScore}/100 (${data.visionModel}) • Satsuei dipoles`,
+        `⭐ ${data.overallScore}`
+      );
+    }
+    return data;
   } catch (err) {
     if (criticResultBox) {
       criticResultBox.classList.remove("hidden");
       criticResultBox.innerHTML = `<div>⚠️ Gemini Vision QC gagal: ${err.message}</div>`;
     }
+    if (!promptWorkflow.isRunning) {
+      promptWorkflow.failStage("vision_qc", err.message);
+    }
+    return { error: err.message };
   } finally {
     if (criticRefineBtn) {
       criticRefineBtn.disabled = false;
@@ -2240,6 +2456,12 @@ async function exportFullVideo() {
       exportProgressText.textContent = "1/3: Studio MAPPA menyusun animasi Anime 2D...";
       await renderScenesWithAnimeMappa();
     }
+    if (activeMode === "anime_mappa" && animeMappaEngine) {
+      exportProgressText.textContent = "1/3: Memastikan semua Haikei, Cel Karakter & Genga SVG terdekode...";
+      await animeMappaEngine.ensureAssetsReady(
+        currentScript.scenes.map((s) => s.animeBlueprint).filter(Boolean)
+      );
+    }
 
     for (let i = 0; i < currentScript.scenes.length; i++) {
       exportProgressFill.style.width = `${10 + Math.round(((i + 1) / currentScript.scenes.length) * 24)}%`;
@@ -2306,7 +2528,19 @@ async function exportFullVideo() {
       a.click();
       exportProgressFill.style.width = "100%";
       exportProgressText.textContent = `✅ Video MP4 HD selesai (${mp4Result.frames} frame • ${mp4Result.width}×${mp4Result.height})!`;
-      return;
+      if (!promptWorkflow.isRunning) {
+        promptWorkflow.completeStage(
+          "export",
+          `MP4 HD didownload (${mp4Result.width}×${mp4Result.height} • ${mp4Result.frames} frame)`,
+          "MP4 Siap"
+        );
+      }
+      return {
+        downloaded: true,
+        width: mp4Result.width,
+        height: mp4Result.height,
+        frames: mp4Result.frames
+      };
     }
 
     // Fallback: Real-Time High-Bitrate MediaRecorder
@@ -2369,8 +2603,10 @@ async function exportFullVideo() {
 
     exportProgressFill.style.width = "100%";
     exportProgressText.textContent = `✅ Video selesai di-download (${a.download})!`;
+    return { downloaded: true, width: canvas.width, height: canvas.height, frames: "MediaRecorder" };
   } catch (e) {
     alert("Gagal render video: " + e.message);
+    return { downloaded: false, error: e.message };
   } finally {
     isOfflineExporting = false;
     exportVideoBtn.disabled = false;
@@ -2439,6 +2675,7 @@ async function initStudio() {
   }
 
   startRenderLoop();
+  renderWorkflowUI(promptWorkflow.getSnapshot());
 
   // Always start with an empty prompt column ready for user input
   simplePromptInput.value = "";
@@ -2565,6 +2802,18 @@ document.getElementById("openCharacterBibleBtn").addEventListener("click", () =>
 });
 document.getElementById("closeCharacterBtn").addEventListener("click", () => {
   characterModal.classList.add("hidden");
+});
+
+openWorkflowBtn?.addEventListener("click", () => openWorkflowModal());
+openWorkflowMapBtn?.addEventListener("click", () => openWorkflowModal());
+document.getElementById("closeWorkflowBtn")?.addEventListener("click", () => {
+  workflowModal?.classList.add("hidden");
+});
+document.getElementById("closeWorkflowFooterBtn")?.addEventListener("click", () => {
+  workflowModal?.classList.add("hidden");
+});
+workflowModal?.addEventListener("click", (e) => {
+  if (e.target === workflowModal) workflowModal.classList.add("hidden");
 });
 
 const voicePresetSelect = document.getElementById("elevenlabsVoicePreset");
