@@ -6,6 +6,7 @@ import {
 } from "/toon-renderer.js";
 import { Maou3DStage } from "/scene3d.js";
 import { MaouGeminiCinema } from "/gemini-cinema.js";
+import { exportDeterministicMp4Video } from "/video-engine/mp4-video-exporter.js";
 
 const canvas = document.getElementById("videoCanvas");
 const ctx = canvas.getContext("2d");
@@ -60,6 +61,9 @@ const tiktokUrlInput = document.getElementById("tiktokUrlInput");
 const analyzeTiktokBtn = document.getElementById("analyzeTiktokBtn");
 const tiktokAnalysisBox = document.getElementById("tiktokAnalysisBox");
 const renderGeminiCinemaBtn = document.getElementById("renderGeminiCinemaBtn");
+const criticRefineBtn = document.getElementById("criticRefineBtn");
+const criticResultBox = document.getElementById("criticResultBox");
+const exportQualitySelect = document.getElementById("exportQualitySelect");
 const exportVideoBtn = document.getElementById("exportVideoBtn");
 const exportProgressBox = document.getElementById("exportProgressBox");
 const exportProgressFill = document.getElementById("exportProgressFill");
@@ -76,6 +80,7 @@ const addSceneBtn = document.getElementById("addSceneBtn");
 
 // Toggles
 const toggleGeminiCinema = document.getElementById("toggleGeminiCinema");
+const toggleCustomRigs = document.getElementById("toggleCustomRigs");
 const toggleNanoBananaKeyframes = document.getElementById("toggleNanoBananaKeyframes");
 const toggle3dMode = document.getElementById("toggle3dMode");
 const toggleMcOverlay = document.getElementById("toggleMcOverlay");
@@ -383,6 +388,33 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
   }
 }
 
+function getCinemaStyleMemory() {
+  try {
+    const arr = JSON.parse(localStorage.getItem("maou_cinema_style_memory") || "[]");
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCinemaStyleLesson(lesson, score) {
+  if (!lesson) return;
+  try {
+    const list = getCinemaStyleMemory();
+    list.unshift({ lesson: String(lesson).slice(0, 180), score: Number(score) || 80, ts: Date.now() });
+    const dedup = [];
+    const seen = new Set();
+    for (const item of list) {
+      if (!seen.has(item.lesson)) {
+        seen.add(item.lesson);
+        dedup.push(item);
+      }
+      if (dedup.length >= 12) break;
+    }
+    localStorage.setItem("maou_cinema_style_memory", JSON.stringify(dedup));
+  } catch {}
+}
+
 async function renderScenesWithGeminiCinema(singleIdx = null) {
   if (!currentScript?.scenes?.length) return false;
   const keys = getLocalKeys();
@@ -400,6 +432,11 @@ async function renderScenesWithGeminiCinema(singleIdx = null) {
   }
 
   try {
+    const styleMemoryHints = getCinemaStyleMemory()
+      .sort((a, b) => (b.score || 0) - (a.score || 0))
+      .slice(0, 4)
+      .map((m) => m.lesson);
+
     const resp = await fetch("/api/gemini-render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -408,7 +445,9 @@ async function renderScenesWithGeminiCinema(singleIdx = null) {
         title: currentScript.title || "",
         scenes: targetScenes,
         geminiApiKey: keys.geminiApiKey,
-        enableKeyframes: Boolean(toggleNanoBananaKeyframes?.checked)
+        enableKeyframes: Boolean(toggleNanoBananaKeyframes?.checked),
+        enableCustomRigs: !toggleCustomRigs || Boolean(toggleCustomRigs.checked),
+        styleMemoryHints
       })
     });
     const data = await resp.json();
@@ -428,10 +467,11 @@ async function renderScenesWithGeminiCinema(singleIdx = null) {
       });
     }
 
+    const rigSuffix = data.customRigCount > 0 ? ` • ${data.customRigCount} Custom Rig` : "";
     const modeTag =
       data.keyframeCount > 0
         ? `🍌 Nano Banana + Cinema (${data.imageModel})`
-        : `🎬 Gemini Cinema (${data.directorModel})`;
+        : `🎬 Gemini Cinema (${data.directorModel}${rigSuffix})`;
     aiEngineBadge.textContent = modeTag;
     sceneEnterTimestamp = performance.now();
     renderSceneList();
@@ -444,6 +484,88 @@ async function renderScenesWithGeminiCinema(singleIdx = null) {
     if (renderGeminiCinemaBtn) {
       renderGeminiCinemaBtn.disabled = false;
       renderGeminiCinemaBtn.textContent = "🎬 Render Animasi Sinematik Gemini AI";
+    }
+  }
+}
+
+async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
+  if (!currentScript?.scenes?.[targetIdx]) {
+    alert("Buat video terlebih dahulu agar Gemini Vision bisa melihat dan mengevaluasi frame-nya.");
+    return;
+  }
+  const scene = currentScript.scenes[targetIdx];
+  if (!scene.cinemaBlueprint) {
+    await renderScenesWithGeminiCinema(targetIdx);
+  }
+  activeSceneIndex = targetIdx;
+  updateActiveSceneUI();
+
+  if (criticRefineBtn) {
+    criticRefineBtn.disabled = true;
+    criticRefineBtn.textContent = `👁️ Gemini Vision Menilai Scene #${targetIdx + 1}...`;
+  }
+  if (criticResultBox) {
+    criticResultBox.classList.remove("hidden");
+    criticResultBox.innerHTML = `<div>👁️ Mengirim tangkapan layar WebGL 3D Scene #${targetIdx + 1} ke <strong>Gemini Multimodal Vision</strong>...</div>`;
+  }
+
+  try {
+    // Render crisp frame right before snapshotting
+    renderCompositeFrame({
+      sceneIndex: targetIdx,
+      tSec: performance.now() / 1000,
+      sceneElapsedSec: 1.4,
+      sceneDurationSec: sceneAudioBuffers.get(targetIdx)?.buffer?.duration || 4.6
+    });
+    const frameDataUrl = canvas.toDataURL("image/jpeg", 0.78);
+    const keys = getLocalKeys();
+
+    const resp = await fetch("/api/video-critic", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        frameDataUrl,
+        blueprint: scene.cinemaBlueprint,
+        scene,
+        topic: currentScript.topic || currentScript.title || "",
+        geminiApiKey: keys.geminiApiKey
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || "Gagal mengevaluasi frame.");
+
+    if (data.refinedBlueprint) {
+      currentScript.scenes[targetIdx].cinemaBlueprint = data.refinedBlueprint;
+      currentScript.scenes[targetIdx].cinemaRenderVersion = Date.now();
+      currentScript.scenes[targetIdx].criticScore = data.overallScore;
+    }
+    if (data.styleLesson) {
+      saveCinemaStyleLesson(data.styleLesson, data.overallScore);
+    }
+
+    const memCount = getCinemaStyleMemory().length;
+    if (criticResultBox) {
+      const bd = data.breakdown || {};
+      criticResultBox.classList.remove("hidden");
+      criticResultBox.innerHTML = `
+        <div><strong>👁️ Skor Gemini Vision (${data.visionModel}): ${data.overallScore}/100</strong></div>
+        <div style="font-size:0.72rem;opacity:0.9;margin-top:2px;">Framing ${bd.framing || "-"} • Lighting ${bd.lighting || "-"} • Bokeh ${bd.depthAndBokeh || "-"} • Kling Vibe ${bd.cinematicVibe || "-"}</div>
+        <div style="margin-top:4px;">${data.critique}</div>
+        <div style="margin-top:4px;color:#fde68a;">✅ Patch otomatis diterapkan • Memori Gaya Tersimpan: <strong>${memCount} pelajaran</strong></div>
+      `;
+    }
+    sceneEnterTimestamp = performance.now();
+    renderSceneList();
+    updateActiveSceneUI();
+  } catch (err) {
+    if (criticResultBox) {
+      criticResultBox.classList.remove("hidden");
+      criticResultBox.innerHTML = `<div>⚠️ Gemini Vision QC gagal: ${err.message}</div>`;
+    }
+  } finally {
+    if (criticRefineBtn) {
+      criticRefineBtn.disabled = false;
+      criticRefineBtn.textContent = "👁️ Evaluasi & Upgrade Visual (Gemini Vision)";
     }
   }
 }
@@ -496,10 +618,12 @@ function renderSceneList() {
     card.className = `scene-card ${index === activeSceneIndex ? "active" : ""}`;
     const hasAudio = sceneAudioBuffers.has(index);
     const clipInfo = sceneVideoClips.get(index);
+    const hasCustomRig = Boolean(scene.cinemaBlueprint?.actors?.some((a) => a.prefab === "custom_rig"));
+    const qcScore = scene.criticScore ? ` • ⭐${scene.criticScore}` : "";
     const animBadge = scene.cinemaBlueprint
       ? scene.cinemaBlueprint.aiKeyframe
-        ? `🍌 Gemini AI Keyframe`
-        : `🎬 Gemini Cinema (${scene.cinemaBlueprint.actors?.length || 0} aktor • ${scene.cinemaBlueprint.lightingMood || "hd"})`
+        ? `🍌 Gemini AI Keyframe${qcScore}`
+        : `🎬 Cinema (${scene.cinemaBlueprint.actors?.length || 0} aktor${hasCustomRig ? " • 🧬Rig" : ""}${qcScore})`
       : scene.visual?.stage3d?.objects?.length
       ? `🎬 3D AI (${scene.visual.stage3d.objects.length} objek)`
       : scene.visual?.heroObject
@@ -534,6 +658,7 @@ function renderSceneList() {
         </span>
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm rerender-cinema-btn" data-idx="${index}" title="Render ulang animasi scene ini via Gemini Cinema">🎬 Gemini</button>
+          <button class="btn btn-secondary btn-sm critic-scene-btn" data-idx="${index}" title="Evaluasi & upgrade visual scene ini via Gemini Vision">👁️ QC</button>
           <label class="btn btn-secondary btn-sm" style="cursor:pointer;" title="Upload klip MP4 sendiri">
             📁 MP4
             <input type="file" accept="video/mp4,video/webm" class="upload-scene-mp4 hidden" data-idx="${index}" />
@@ -594,6 +719,16 @@ function renderSceneList() {
       btn.disabled = true;
       btn.textContent = "⏳...";
       await renderScenesWithGeminiCinema(idx);
+    });
+  });
+
+  document.querySelectorAll(".critic-scene-btn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.idx);
+      btn.disabled = true;
+      btn.textContent = "⏳...";
+      await runGeminiVisualCritic(idx);
     });
   });
 
@@ -1878,89 +2013,126 @@ function drawIdleStandbyCanvas(ctx, tSec) {
   ctx.restore();
 }
 
+function computeSubtitlePhraseAtTime(scene, sceneElapsedSec, sceneDurationSec) {
+  const phrases = scene.subtitlePhrases || parseSubtitlePhrasesClient(scene.narration || "");
+  if (!phrases.length) return 0;
+  const weights = phrases.map((ph) => Math.max(5, ph.map((t) => t.text).join(" ").length));
+  const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
+  const targetRatio = Math.max(0, Math.min(0.999, sceneElapsedSec / Math.max(0.5, sceneDurationSec)));
+  let accum = 0;
+  for (let i = 0; i < phrases.length; i++) {
+    accum += weights[i] / totalWeight;
+    if (targetRatio <= accum) return i;
+  }
+  return phrases.length - 1;
+}
+
+function renderCompositeFrame({
+  sceneIndex = activeSceneIndex,
+  tSec = performance.now() / 1000,
+  sceneElapsedSec = 0,
+  sceneDurationSec = 4.6,
+  deterministicPhrase = false
+} = {}) {
+  if (!currentScript?.scenes?.length) {
+    drawIdleStandbyCanvas(ctx, tSec);
+    return;
+  }
+  const scene = currentScript.scenes[sceneIndex] || currentScript.scenes[0];
+  if (deterministicPhrase) {
+    activePhraseIndex = computeSubtitlePhraseAtTime(scene, sceneElapsedSec, sceneDurationSec);
+  }
+
+  // 1. Play uploaded MP4 clip if attached -> else Gemini Cinema Kling-Class PBR/DOF/Shader Renderer -> else 3D Classic -> else 2.5D
+  const clip = sceneVideoClips.get(sceneIndex);
+  const liveVoice = deterministicPhrase ? 0.45 + Math.abs(Math.sin(tSec * 11)) * 0.45 : getLiveVoiceEnergy();
+  let rendered3d = false;
+  if (clip?.videoEl && clip.videoEl.readyState >= 2) {
+    drawCoverVideo(ctx, clip.videoEl, 0, 0, canvas.width, canvas.height);
+  } else {
+    if (
+      geminiCinemaReady &&
+      geminiCinema &&
+      (!toggleGeminiCinema || toggleGeminiCinema.checked) &&
+      scene.cinemaBlueprint
+    ) {
+      try {
+        const cKey = `${currentScript.topic || ""}::${sceneIndex}::${scene.cinemaRenderVersion || 1}`;
+        geminiCinema.renderFrame(
+          scene.cinemaBlueprint,
+          cKey,
+          tSec,
+          sceneElapsedSec,
+          sceneDurationSec,
+          liveVoice
+        );
+        ctx.drawImage(geminiCinema.domElement, 0, 0, canvas.width, canvas.height);
+        drawScienceMeter(ctx, scene.visual?.meter, scene.phase, tSec);
+        if (scene.phase === "CLIMAX" || scene.visual?.fx?.includes("confetti")) {
+          drawCelebrationConfetti(ctx, canvas.width, tSec);
+        }
+        rendered3d = true;
+      } catch (cinErr) {
+        console.warn("Gemini Cinema fallback to classic 3D:", cinErr);
+        geminiCinemaReady = false;
+      }
+    }
+    if (!rendered3d && stage3dReady && stage3d && (!toggle3dMode || toggle3dMode.checked)) {
+      try {
+        stage3d.renderFrame(scene, currentScript.topic || "", tSec, sceneElapsedSec);
+        ctx.drawImage(stage3d.domElement, 0, 0, canvas.width, canvas.height);
+        drawScienceMeter(ctx, scene.visual?.meter, scene.phase, tSec);
+        if (scene.phase === "CLIMAX" || scene.visual?.fx?.includes("confetti")) {
+          drawCelebrationConfetti(ctx, canvas.width, tSec);
+        }
+        rendered3d = true;
+      } catch (glErr) {
+        console.warn("3D frame fallback to 2.5D:", glErr);
+        stage3dReady = false;
+      }
+    }
+    if (!rendered3d) {
+      renderToonVideoFrame(ctx, canvas.width, canvas.height, scene, tSec, sceneElapsedSec);
+    }
+  }
+
+  // Light bottom gradient only near subtitle zone so 3D diorama stays bright @untabiru5 style!
+  const subGrad = ctx.createLinearGradient(0, canvas.height - 175, 0, canvas.height);
+  subGrad.addColorStop(0, "rgba(9, 10, 15, 0)");
+  subGrad.addColorStop(1, "rgba(9, 10, 15, 0.58)");
+  ctx.fillStyle = subGrad;
+  ctx.fillRect(0, canvas.height - 175, canvas.width, 175);
+
+  drawTopVideoHeader(ctx, scene);
+  draw3dCalloutBadge(ctx, scene);
+  drawDekodaHookCard(ctx, scene.visual, tSec, sceneElapsedSec);
+  drawBelajarInfoPills(ctx, scene.visual, scene.phase, tSec);
+  drawMilestoneStampBanner(ctx, scene.visual, scene, tSec, sceneElapsedSec);
+  drawMaouVersusCard(ctx, scene.visual, tSec);
+  drawSelamatStamp(ctx, scene, tSec);
+
+  // 2. Consistent 2D Anime MC Raja Iblis Host reacting & pointing outside the video!
+  drawMcRajaIblisPresenter(ctx, scene, tSec);
+  drawUntabiruSubtitles(ctx, scene);
+}
+
+let isOfflineExporting = false;
+
 function startRenderLoop() {
   function frame(now) {
     try {
-      const tSec = now / 1000;
-      const sceneElapsedSec = Math.max(0, (now - sceneEnterTimestamp) / 1000);
-      if (currentScript?.scenes?.length) {
-        const scene = currentScript.scenes[activeSceneIndex] || currentScript.scenes[0];
-
-        // 1. Play uploaded MP4 clip if attached -> else Gemini Cinema Kling-Class PBR/Shader Renderer -> else 3D Classic -> else 2.5D
-        const clip = sceneVideoClips.get(activeSceneIndex);
+      if (!isOfflineExporting) {
+        const tSec = now / 1000;
+        const sceneElapsedSec = Math.max(0, (now - sceneEnterTimestamp) / 1000);
         const audioBufEntry = sceneAudioBuffers.get(activeSceneIndex);
         const sceneDurationSec = audioBufEntry?.buffer?.duration || 4.6;
-        const liveVoice = getLiveVoiceEnergy();
-        let rendered3d = false;
-        if (clip?.videoEl && clip.videoEl.readyState >= 2) {
-          drawCoverVideo(ctx, clip.videoEl, 0, 0, canvas.width, canvas.height);
-        } else {
-          if (
-            geminiCinemaReady &&
-            geminiCinema &&
-            (!toggleGeminiCinema || toggleGeminiCinema.checked) &&
-            scene.cinemaBlueprint
-          ) {
-            try {
-              const cKey = `${currentScript.topic || ""}::${activeSceneIndex}::${scene.cinemaRenderVersion || 1}`;
-              geminiCinema.renderFrame(
-                scene.cinemaBlueprint,
-                cKey,
-                tSec,
-                sceneElapsedSec,
-                sceneDurationSec,
-                liveVoice
-              );
-              ctx.drawImage(geminiCinema.domElement, 0, 0, canvas.width, canvas.height);
-              drawScienceMeter(ctx, scene.visual?.meter, scene.phase, tSec);
-              if (scene.phase === "CLIMAX" || scene.visual?.fx?.includes("confetti")) {
-                drawCelebrationConfetti(ctx, canvas.width, tSec);
-              }
-              rendered3d = true;
-            } catch (cinErr) {
-              console.warn("Gemini Cinema fallback to classic 3D:", cinErr);
-              geminiCinemaReady = false;
-            }
-          }
-          if (!rendered3d && stage3dReady && stage3d && (!toggle3dMode || toggle3dMode.checked)) {
-            try {
-              stage3d.renderFrame(scene, currentScript.topic || "", tSec, sceneElapsedSec);
-              ctx.drawImage(stage3d.domElement, 0, 0, canvas.width, canvas.height);
-              drawScienceMeter(ctx, scene.visual?.meter, scene.phase, tSec);
-              if (scene.phase === "CLIMAX" || scene.visual?.fx?.includes("confetti")) {
-                drawCelebrationConfetti(ctx, canvas.width, tSec);
-              }
-              rendered3d = true;
-            } catch (glErr) {
-              console.warn("3D frame fallback to 2.5D:", glErr);
-              stage3dReady = false;
-            }
-          }
-          if (!rendered3d) {
-            renderToonVideoFrame(ctx, canvas.width, canvas.height, scene, tSec, sceneElapsedSec);
-          }
-        }
-
-        // Light bottom gradient only near subtitle zone so 3D diorama stays bright @untabiru5 style!
-        const subGrad = ctx.createLinearGradient(0, canvas.height - 175, 0, canvas.height);
-        subGrad.addColorStop(0, "rgba(9, 10, 15, 0)");
-        subGrad.addColorStop(1, "rgba(9, 10, 15, 0.58)");
-        ctx.fillStyle = subGrad;
-        ctx.fillRect(0, canvas.height - 175, canvas.width, 175);
-
-        drawTopVideoHeader(ctx, scene);
-        draw3dCalloutBadge(ctx, scene);
-        drawDekodaHookCard(ctx, scene.visual, tSec, sceneElapsedSec);
-        drawBelajarInfoPills(ctx, scene.visual, scene.phase, tSec);
-        drawMilestoneStampBanner(ctx, scene.visual, scene, tSec, sceneElapsedSec);
-        drawMaouVersusCard(ctx, scene.visual, tSec);
-        drawSelamatStamp(ctx, scene, tSec);
-
-        // 2. Consistent 2D Anime MC Raja Iblis Host reacting & pointing outside the video!
-        drawMcRajaIblisPresenter(ctx, scene, tSec);
-        drawUntabiruSubtitles(ctx, scene);
-      } else {
-        drawIdleStandbyCanvas(ctx, tSec);
+        renderCompositeFrame({
+          sceneIndex: activeSceneIndex,
+          tSec,
+          sceneElapsedSec,
+          sceneDurationSec,
+          deterministicPhrase: false
+        });
       }
     } catch (err) {
       console.error("Render frame error:", err);
@@ -1971,30 +2143,97 @@ function startRenderLoop() {
 }
 
 // ============================================================================
-// EXPORT / DOWNLOAD 9:16 VIDEO
+// EXPORT / DOWNLOAD 9:16 VIDEO (Deterministic H.264/AAC MP4 + MediaRecorder Fallback)
 // ============================================================================
 async function exportFullVideo() {
   if (!currentScript?.scenes?.length) return;
   unlockAudioContextSync();
+  stopPlayback();
   exportVideoBtn.disabled = true;
   exportProgressBox.classList.remove("hidden");
-  exportProgressFill.style.width = "10%";
-  exportProgressText.textContent = "1/2: Memastikan suara semua scene siap...";
+  exportProgressFill.style.width = "8%";
+  exportProgressText.textContent = "1/3: Memastikan animasi Gemini Cinema & audio siap...";
+
+  const [targetW, targetH] = (exportQualitySelect?.value || "720x1280").split("x").map(Number);
+  const safeName = (currentScript.topic || "maou_edu")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_");
 
   try {
     if (
       (!toggleGeminiCinema || toggleGeminiCinema.checked) &&
       currentScript.scenes.some((s) => !s.cinemaBlueprint)
     ) {
-      exportProgressText.textContent = "0/2: Gemini Cinema merender blueprint animasi HD...";
+      exportProgressText.textContent = "1/3: Gemini Cinema mengompilasi animasi 3D HD...";
       await renderScenesWithGeminiCinema();
     }
 
     for (let i = 0; i < currentScript.scenes.length; i++) {
-      exportProgressFill.style.width = `${Math.round(((i + 1) / currentScript.scenes.length) * 40)}%`;
+      exportProgressFill.style.width = `${10 + Math.round(((i + 1) / currentScript.scenes.length) * 24)}%`;
+      exportProgressText.textContent = `1/3: Menyiapkan audio ElevenLabs Scene ${i + 1}/${currentScript.scenes.length}...`;
       await ensureSceneAudio(i);
     }
 
+    const sceneTimings = currentScript.scenes.map((sc, i) => {
+      const entry = sceneAudioBuffers.get(i);
+      const phrases = sc.subtitlePhrases || parseSubtitlePhrasesClient(sc.narration || "");
+      const fallbackDur = Math.max(3.2, phrases.length * 1.05);
+      return {
+        sceneIndex: i,
+        audioBuffer: entry?.buffer || null,
+        durationSec: entry?.buffer?.duration ? entry.buffer.duration + 0.15 : fallbackDur
+      };
+    });
+
+    // Try Deterministic Frame-by-Frame H.264/AAC MP4 Encoder first (ZERO dropped frames!)
+    isOfflineExporting = true;
+    const prevCinemaW = geminiCinema?.width || 720;
+    const prevCinemaH = geminiCinema?.height || 1280;
+    let mp4Result = { ok: false, fallbackRequired: true };
+    try {
+      if (geminiCinema && targetW && targetH) geminiCinema.resize(targetW, targetH);
+      mp4Result = await exportDeterministicMp4Video({
+        canvas,
+        sceneTimings,
+        fps: 30,
+        width: targetW || 720,
+        height: targetH || 1280,
+        includeBgm: Boolean(toggleBgm?.checked),
+        renderAtTime: ({ sceneIndex, tSec, sceneElapsedSec, sceneDurationSec }) => {
+          activeSceneIndex = sceneIndex;
+          renderCompositeFrame({
+            sceneIndex,
+            tSec,
+            sceneElapsedSec,
+            sceneDurationSec,
+            deterministicPhrase: true
+          });
+        },
+        onProgress: (pct, msg) => {
+          exportProgressFill.style.width = `${pct}%`;
+          exportProgressText.textContent = msg;
+        }
+      });
+    } catch (encErr) {
+      console.warn("WebCodecs MP4 encoder fallback to MediaRecorder:", encErr);
+      mp4Result = { ok: false, fallbackRequired: true };
+    } finally {
+      if (geminiCinema) geminiCinema.resize(prevCinemaW, prevCinemaH);
+      isOfflineExporting = false;
+    }
+
+    if (mp4Result.ok && mp4Result.blob) {
+      const url = URL.createObjectURL(mp4Result.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safeName}_gemini_cinema_${mp4Result.width}x${mp4Result.height}.mp4`;
+      a.click();
+      exportProgressFill.style.width = "100%";
+      exportProgressText.textContent = `✅ Video MP4 HD selesai (${mp4Result.frames} frame • ${mp4Result.width}×${mp4Result.height})!`;
+      return;
+    }
+
+    // Fallback: Real-Time High-Bitrate MediaRecorder
     const actx = getAudioContext();
     const audioDest = actx.createMediaStreamDestination();
     const canvasStream = canvas.captureStream(30);
@@ -2048,9 +2287,6 @@ async function exportFullVideo() {
     const blob = new Blob(chunks, { type: selectedMime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    const safeName = (currentScript.topic || "maou_edu")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_");
     a.href = url;
     a.download = `${safeName}_raja_iblis.${ext}`;
     a.click();
@@ -2060,6 +2296,7 @@ async function exportFullVideo() {
   } catch (e) {
     alert("Gagal render video: " + e.message);
   } finally {
+    isOfflineExporting = false;
     exportVideoBtn.disabled = false;
   }
 }
@@ -2206,6 +2443,12 @@ if (renderGeminiCinemaBtn) {
       return;
     }
     await renderScenesWithGeminiCinema();
+  });
+}
+
+if (criticRefineBtn) {
+  criticRefineBtn.addEventListener("click", async () => {
+    await runGeminiVisualCritic(activeSceneIndex);
   });
 }
 

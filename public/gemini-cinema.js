@@ -4,6 +4,16 @@
 // Anamorphic Lens Flare, GPU Scene Transitions, and 47+ Multi-Part Articulated 3D Hero Prefabs.
 
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js";
+import {
+  buildProceduralCustomRig,
+  animateProceduralCustomRig
+} from "/video-engine/procedural-rig-builder.js";
+import {
+  evaluateKeyframeTrack,
+  computeSpringPhysicsDeform,
+  computeMotionBrushOffset
+} from "/video-engine/physics-motion-brush.js";
+import { PostCinemaPipeline } from "/video-engine/post-cinema-pipeline.js";
 
 // ============================================================================
 // 1. EASING & PROCEDURAL PBR TEXTURES (ALBEDO + BUMP/ROUGHNESS)
@@ -361,150 +371,6 @@ const WATER_FRAGMENT_SHADER = `
   }
 `;
 
-const POST_VERTEX_SHADER = `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = vec4(position.xy, 0.0, 1.0);
-  }
-`;
-
-const POST_FRAGMENT_SHADER = `
-  uniform sampler2D uSceneTex;
-  uniform sampler2D uPrevTex;
-  uniform sampler2D uKeyframeTex;
-  uniform float uUseKeyframe;
-  uniform float uTime;
-  uniform float uSceneProgress;
-  uniform float uTransProgress;
-  uniform int uTransType; // 0=none, 1=zoom_through, 2=whip_pan, 3=flash_impact, 4=cross_dissolve
-  uniform vec2 uResolution;
-  uniform float uBloomStrength;
-  uniform float uContrast;
-  uniform float uSaturation;
-  uniform float uVignette;
-  uniform vec3 uTint;
-  uniform float uLensFlare;
-  uniform float uSpeedLines;
-  uniform float uChromatic;
-  varying vec2 vUv;
-
-  vec3 sampleMain(vec2 uv) {
-    if (uUseKeyframe > 0.5) {
-      // 2.5D Depth-Parallax Kling Motion on Nano Banana AI Keyframe
-      vec2 centered = uv - 0.5;
-      float zoom = 1.04 + uSceneProgress * 0.11;
-      vec2 drift = vec2(sin(uTime * 0.7) * 0.018, cos(uTime * 0.55) * 0.012);
-      vec2 baseUv = centered / zoom + 0.5 + drift;
-      vec3 baseCol = texture2D(uKeyframeTex, clamp(baseUv, 0.002, 0.998)).rgb;
-      float luma = dot(baseCol, vec3(0.299, 0.587, 0.114));
-      vec2 parallaxUv = clamp(baseUv - drift * (luma * 0.65), 0.002, 0.998);
-      return texture2D(uKeyframeTex, parallaxUv).rgb;
-    }
-    return texture2D(uSceneTex, clamp(uv, 0.001, 0.999)).rgb;
-  }
-
-  void main() {
-    vec2 uv = vUv;
-    vec2 px = 1.0 / max(uResolution, vec2(1.0));
-
-    // Chromatic aberration on dramatic TAPI shockwaves
-    vec3 col;
-    if (uChromatic > 0.001) {
-      vec2 dir = (uv - 0.5) * uChromatic;
-      col.r = sampleMain(uv + dir).r;
-      col.g = sampleMain(uv).g;
-      col.b = sampleMain(uv - dir).b;
-    } else {
-      col = sampleMain(uv);
-    }
-
-    // Multi-tap soft radiance Bloom around bright specular / emissive pixels
-    vec3 bloom = vec3(0.0);
-    float r1 = 3.5;
-    float r2 = 8.5;
-    vec2 offsets[8];
-    offsets[0] = vec2( 1.0,  0.0);
-    offsets[1] = vec2(-1.0,  0.0);
-    offsets[2] = vec2( 0.0,  1.0);
-    offsets[3] = vec2( 0.0, -1.0);
-    offsets[4] = vec2( 0.7,  0.7);
-    offsets[5] = vec2(-0.7,  0.7);
-    offsets[6] = vec2( 0.7, -0.7);
-    offsets[7] = vec2(-0.7, -0.7);
-
-    for (int i = 0; i < 8; i++) {
-      vec3 s1 = sampleMain(uv + offsets[i] * px * r1);
-      vec3 s2 = sampleMain(uv + offsets[i] * px * r2);
-      float b1 = max(0.0, dot(s1, vec3(0.299, 0.587, 0.114)) - 0.62);
-      float b2 = max(0.0, dot(s2, vec3(0.299, 0.587, 0.114)) - 0.68);
-      bloom += s1 * b1 * 0.14 + s2 * b2 * 0.11;
-    }
-    col += bloom * uBloomStrength;
-
-    // Anamorphic horizontal cinema flare on bright highlights
-    if (uLensFlare > 0.5) {
-      vec3 streak = vec3(0.0);
-      for (int k = -3; k <= 3; k++) {
-        vec3 sp = sampleMain(uv + vec2(float(k) * px.x * 16.0, 0.0));
-        float hi = max(0.0, dot(sp, vec3(0.299, 0.587, 0.114)) - 0.78);
-        streak += sp * hi * 0.09;
-      }
-      col += streak * mix(vec3(1.0), uTint, 0.45) * 0.65;
-    }
-
-    // Filmic Contrast, Vibrance & Subtle Mood Color Grade
-    col = (col - 0.5) * uContrast + 0.5;
-    float lum = dot(col, vec3(0.299, 0.587, 0.114));
-    col = mix(vec3(lum), col, uSaturation);
-    col = mix(col, col * (0.92 + uTint * 0.14), 0.22);
-
-    // Anime/Kling dynamic radial speed lines on TAPI impact
-    if (uSpeedLines > 0.5) {
-      vec2 p = uv - 0.5;
-      float ang = atan(p.y, p.x);
-      float dist = length(p);
-      float rays = pow(max(abs(sin(ang * 28.0 + floor(uTime * 18.0) * 1.7)), 0.0001), 14.0);
-      float mask = smoothstep(0.28, 0.55, dist);
-      col += mix(vec3(1.0, 0.9, 0.8), uTint, 0.4) * rays * mask * 0.28;
-    }
-
-    // Cinematic Vignette + Subtle Film Grain
-    float d = distance(uv, vec2(0.5));
-    col *= 1.0 - smoothstep(0.42, 0.96, d) * uVignette;
-    float grain = (fract(sin(dot(uv * uTime, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.022;
-    col += grain;
-
-    // GPU Scene Transitions (Kling-style Whip Pan / Zoom Through / Flash Cut / Dissolve)
-    if (uTransProgress < 0.999 && uTransType > 0) {
-      float tp = clamp(uTransProgress, 0.0, 1.0);
-      if (uTransType == 1) {
-        // zoom_through
-        vec2 zUv = (uv - 0.5) * mix(0.68, 1.0, tp) + 0.5;
-        vec3 prev = texture2D(uPrevTex, clamp((uv - 0.5) * (1.0 - tp * 0.35) + 0.5, 0.0, 1.0)).rgb;
-        col = mix(prev, sampleMain(zUv) + bloom * uBloomStrength * 0.7, smoothstep(0.15, 0.85, tp));
-      } else if (uTransType == 2) {
-        // whip_pan
-        float shift = (1.0 - tp) * 0.42;
-        vec3 prev = texture2D(uPrevTex, vec2(fract(uv.x - tp * 0.5), uv.y)).rgb;
-        vec3 blurred = (sampleMain(uv + vec2(shift * 0.08, 0.0)) + col + sampleMain(uv - vec2(shift * 0.08, 0.0))) / 3.0;
-        col = mix(prev, blurred, smoothstep(0.1, 0.75, tp));
-      } else if (uTransType == 3) {
-        // flash_impact
-        float flash = max(sin(tp * 3.14159), 0.0001);
-        vec3 prev = texture2D(uPrevTex, uv).rgb;
-        col = mix(prev, col, step(0.38, tp)) + mix(vec3(1.0), uTint, 0.35) * pow(flash, 2.2) * 0.75;
-      } else {
-        // cross_dissolve
-        vec3 prev = texture2D(uPrevTex, uv).rgb;
-        col = mix(prev, col, smoothstep(0.0, 1.0, tp));
-      }
-    }
-
-    gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
-  }
-`;
-
 // ============================================================================
 // 3. PBR MATERIAL FACTORY + UPGRADED PIXAR-STYLE PROTAGONIST + 47 HERO PREFABS
 // ============================================================================
@@ -766,6 +632,11 @@ function buildSpinBladeFan(radius = 0.35, blades = 4, colorHex = "#38bdf8") {
 
 function buildCinemaActorPrefab(actor, tex) {
   const p = actor.prefab;
+  if (p === "custom_rig" && actor.customRig) {
+    return buildProceduralCustomRig(actor.customRig, (mType, col, em) =>
+      createPbrMaterial(mType, col, tex, em)
+    );
+  }
   const mat = createPbrMaterial(actor.materialType, actor.color, tex, actor.emissiveIntensity);
   const secMat = createPbrMaterial("metal_chrome", actor.secondaryColor || "#fbbf24", tex, actor.emissiveIntensity * 0.5);
   const neonMat = createPbrMaterial("emissive_neon", actor.secondaryColor || "#38bdf8", tex, 1.3);
@@ -1355,51 +1226,9 @@ export class MaouGeminiCinema {
     this.stageGroup = new THREE.Group();
     this.scene.add(this.stageGroup);
 
-    // Post-processing Render Targets & Fullscreen Filmic Shader
-    this.hasPostFx =
-      typeof THREE.WebGLRenderTarget === "function" &&
-      typeof THREE.ShaderMaterial === "function" &&
-      typeof THREE.OrthographicCamera === "function";
-
-    if (this.hasPostFx) {
-      this.sceneRT = new THREE.WebGLRenderTarget(width, height, {
-        minFilter: THREE.LinearFilter,
-        magFilter: THREE.LinearFilter
-      });
-      this.prevRT = new THREE.WebGLRenderTarget(width, height, {
-        minFilter: THREE.LinearFilter,
-        magFilter: THREE.LinearFilter
-      });
-      this.postScene = new THREE.Scene();
-      this.postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-      this.postMat = new THREE.ShaderMaterial({
-        uniforms: {
-          uSceneTex: { value: this.sceneRT.texture },
-          uPrevTex: { value: this.prevRT.texture },
-          uKeyframeTex: { value: this.sceneRT.texture },
-          uUseKeyframe: { value: 0.0 },
-          uTime: { value: 0.0 },
-          uSceneProgress: { value: 0.0 },
-          uTransProgress: { value: 1.0 },
-          uTransType: { value: 0 },
-          uResolution: { value: new THREE.Vector2(width, height) },
-          uBloomStrength: { value: 0.65 },
-          uContrast: { value: 1.08 },
-          uSaturation: { value: 1.15 },
-          uVignette: { value: 0.28 },
-          uTint: { value: new THREE.Color(0x38bdf8) },
-          uLensFlare: { value: 0.0 },
-          uSpeedLines: { value: 0.0 },
-          uChromatic: { value: 0.0 }
-        },
-        vertexShader: POST_VERTEX_SHADER,
-        fragmentShader: POST_FRAGMENT_SHADER,
-        depthTest: false,
-        depthWrite: false
-      });
-      this.postQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.postMat);
-      this.postScene.add(this.postQuad);
-    }
+    // Multi-Pass Kling Cinema Post-Processing Pipeline (HDR Bloom + DepthTexture Bokeh DOF + Motion Blur + Transitions)
+    this.postPipeline = new PostCinemaPipeline(this.renderer, width, height);
+    this.prevCamPos = new THREE.Vector3(0.4, 1.35, 3.6);
 
     this.activeSceneKey = "";
     this.actors = [];
@@ -1415,6 +1244,14 @@ export class MaouGeminiCinema {
     return this.renderer.domElement;
   }
 
+  captureSnapshotDataUrl(quality = 0.78) {
+    try {
+      return this.renderer.domElement.toDataURL("image/jpeg", quality);
+    } catch {
+      return null;
+    }
+  }
+
   resize(width, height) {
     if (this.width === width && this.height === height) return;
     this.width = width;
@@ -1422,11 +1259,7 @@ export class MaouGeminiCinema {
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    if (this.hasPostFx) {
-      this.sceneRT.setSize(width, height);
-      this.prevRT.setSize(width, height);
-      this.postMat.uniforms.uResolution.value.set(width, height);
-    }
+    this.postPipeline?.resize(width, height);
   }
 
   createStudioEnvMap() {
@@ -1719,10 +1552,8 @@ export class MaouGeminiCinema {
     if (this.activeSceneKey === sceneKey) return;
 
     // Capture outgoing frame for smooth Kling GPU transition!
-    if (this.hasPostFx && this.activeSceneKey) {
-      this.renderer.setRenderTarget(this.prevRT);
-      this.renderer.render(this.scene, this.camera);
-      this.renderer.setRenderTarget(null);
+    if (this.postPipeline?.supported && this.activeSceneKey) {
+      this.postPipeline.capturePreviousFrame(this.scene, this.camera);
       const tMap = { none: 0, zoom_through: 1, whip_pan: 2, flash_impact: 3, cross_dissolve: 4 };
       this.transType = tMap[blueprint?.cameraTrack?.transitionIn] ?? 4;
       this.transStartSec = tSec;
@@ -1795,23 +1626,54 @@ export class MaouGeminiCinema {
     const bx = Math.sin(tSec * (amp > 0.03 ? 28 : 1.7)) * amp;
     const by = Math.cos(tSec * (amp > 0.03 ? 23 : 1.3)) * amp * 0.8;
 
-    this.camera.position.set(cPos[0] + bx, cPos[1] + by, cPos[2]);
-    this.camera.fov = (cam.fovStart || 46) + ((cam.fovEnd || 42) - (cam.fovStart || 46)) * easedP;
+    const prevX = this.prevCamPos.x;
+    const prevY = this.prevCamPos.y;
+    const nextCamX = cPos[0] + bx;
+    const nextCamY = cPos[1] + by;
+    const nextCamZ = cPos[2];
+    const camVelX = nextCamX - prevX;
+    const camVelY = nextCamY - prevY;
+    this.prevCamPos.set(nextCamX, nextCamY, nextCamZ);
+
+    const optics = blueprint.optics || {};
+    const lensFov = optics.lensMm ? Math.max(30, Math.min(62, Math.round(1800 / optics.lensMm))) : null;
+    const fovStart = cam.fovStart || lensFov || 46;
+    const fovEnd = cam.fovEnd || (lensFov ? Math.max(30, lensFov - 4) : 42);
+
+    this.camera.position.set(nextCamX, nextCamY, nextCamZ);
+    this.camera.fov = fovStart + (fovEnd - fovStart) * easedP;
     this.camera.updateProjectionMatrix?.();
     this.lookAtVec.set(lx, ly, lz);
     this.camera.lookAt(this.lookAtVec);
     if (cam.rollTilt) this.camera.rotation.z += cam.rollTilt;
 
-    // 3. Animate All Actors Along 0% -> 100% Keyframe Tracks + Sub-Part Mechanics
-    for (const { spec, mesh } of this.actors) {
+    // 3. Animate All Actors Along Multi-Keyframe Catmull-Rom Splines + Spring Physics + Custom Bone Rigs!
+    const useSpring = optics.springPhysics !== false;
+    for (let aIdx = 0; aIdx < this.actors.length; aIdx++) {
+      const { spec, mesh } = this.actors[aIdx];
       if (spec.prefab !== "pipe_curved" && spec.prefab !== "wire_arc") {
-        const sp = spec.startPos || [0, 0.5, 0];
-        const ep = spec.endPos || sp;
-        let x = sp[0] + (ep[0] - sp[0]) * easedP;
-        let y = sp[1] + (ep[1] - sp[1]) * easedP;
-        let z = sp[2] + (ep[2] - sp[2]) * easedP;
+        let x, y, z, rx, ry, rz, sc, vel;
+        if (Array.isArray(spec.keyframes) && spec.keyframes.length >= 2) {
+          const kf = evaluateKeyframeTrack(spec.keyframes, progress);
+          [x, y, z] = kf.pos;
+          [rx, ry, rz] = kf.rot;
+          sc = kf.scale;
+          vel = kf.vel;
+        } else {
+          const sp = spec.startPos || [0, 0.5, 0];
+          const ep = spec.endPos || sp;
+          x = sp[0] + (ep[0] - sp[0]) * easedP;
+          y = sp[1] + (ep[1] - sp[1]) * easedP;
+          z = sp[2] + (ep[2] - sp[2]) * easedP;
+          const sr = spec.startRot || [0, 0, 0];
+          const er = spec.endRot || sr;
+          rx = sr[0] + (er[0] - sr[0]) * easedP;
+          ry = sr[1] + (er[1] - sr[1]) * easedP;
+          rz = sr[2] + (er[2] - sr[2]) * easedP;
+          sc = spec.scale || 1.0;
+          vel = [ep[0] - sp[0], ep[1] - sp[1], ep[2] - sp[2]];
+        }
 
-        let sc = spec.scale || 1.0;
         if (sceneElapsedSec < 0.65 && spec.enterStyle !== "none") {
           const epEnter = sceneElapsedSec / 0.65;
           if (spec.enterStyle === "pop_bounce") sc *= Math.max(0.05, easeOutBack(epEnter));
@@ -1834,17 +1696,18 @@ export class MaouGeminiCinema {
         }
         if (spec.loopMotion === "piston") y += Math.abs(Math.sin(tSec * spd * 2)) * 0.16;
 
+        const deform = computeSpringPhysicsDeform(vel, tSec, aIdx * 1.1, useSpring);
         mesh.position.set(x, y, z);
-        mesh.scale.setScalar(sc);
+        mesh.scale.set(sc * deform.scaleMul[0], sc * deform.scaleMul[1], sc * deform.scaleMul[2]);
 
-        const sr = spec.startRot || [0, 0, 0];
-        const er = spec.endRot || sr;
-        let rx = sr[0] + (er[0] - sr[0]) * easedP;
-        let ry = sr[1] + (er[1] - sr[1]) * easedP;
-        let rz = sr[2] + (er[2] - sr[2]) * easedP;
         if (spec.loopMotion === "spin_y") ry += tSec * spd;
         if (spec.loopMotion === "spin_z") rz += tSec * spd;
-        mesh.rotation.set(rx, ry, rz);
+        mesh.rotation.set(rx + deform.tiltX, ry, rz + deform.tiltZ);
+      }
+
+      // Animate Gemini-Synthesized Custom Skeletal Bone Rigs!
+      if (mesh.userData?.customAnimatedBones) {
+        animateProceduralCustomRig(mesh, tSec, voiceEnergy);
       }
 
       // Animate Articulated Sub-Parts!
@@ -1947,23 +1810,37 @@ export class MaouGeminiCinema {
           it.mesh.rotation.z = Math.PI / 2 + jitter * 3.0;
         });
       } else {
+        const mField = blueprint.motionField;
         items.forEach((it, idx) => {
           const u = (tSec * (spec.type === "rain_storm" ? 2.2 : 0.75) + it.seed) % 1;
           const ang = idx * 1.3 + tSec * 1.2;
+          const fOff = computeMotionBrushOffset(mField, o, u, tSec, it.seed);
           if (spec.type === "rain_storm") {
-            it.mesh.position.set(o[0] + Math.cos(idx * 3.7) * 2.4, 3.2 - u * 3.4, o[2] + Math.sin(idx * 2.1) * 1.6);
+            it.mesh.position.set(
+              o[0] + Math.cos(idx * 3.7) * 2.4 + fOff[0] * 0.5,
+              3.2 - u * 3.4,
+              o[2] + Math.sin(idx * 2.1) * 1.6 + fOff[2] * 0.4
+            );
           } else if (spec.type === "water_splash") {
             const r = u * 0.85;
-            it.mesh.position.set(o[0] + Math.cos(ang) * r, o[1] + u * 0.9 - u * u * 1.1, o[2] + Math.sin(ang) * r);
+            it.mesh.position.set(
+              o[0] + Math.cos(ang) * r + fOff[0] * 0.4,
+              o[1] + u * 0.9 - u * u * 1.1 + fOff[1] * 0.3,
+              o[2] + Math.sin(ang) * r + fOff[2] * 0.4
+            );
           } else if (spec.type === "frost_crystals") {
-            it.mesh.position.set(o[0] + Math.cos(ang) * 0.75, o[1] + 0.85 - u * 1.1, o[2] + Math.sin(ang) * 0.75);
+            it.mesh.position.set(
+              o[0] + Math.cos(ang) * 0.75 + fOff[0] * 0.5,
+              o[1] + 0.85 - u * 1.1 + fOff[1] * 0.3,
+              o[2] + Math.sin(ang) * 0.75 + fOff[2] * 0.5
+            );
             it.mesh.rotation.set(tSec * 2 + idx, tSec * 1.5, 0);
           } else {
             const spread = spec.type === "gold_sparkles" ? 1.35 : 0.42;
             it.mesh.position.set(
-              o[0] + Math.cos(ang) * spread * (0.35 + u * 0.65),
-              o[1] + u * 1.25,
-              o[2] + Math.sin(ang) * spread * (0.35 + u * 0.65)
+              o[0] + Math.cos(ang) * spread * (0.35 + u * 0.65) + fOff[0] * 0.55,
+              o[1] + u * 1.25 + fOff[1] * 0.45,
+              o[2] + Math.sin(ang) * spread * (0.35 + u * 0.65) + fOff[2] * 0.55
             );
             if (spec.type === "steam_smoke") it.mesh.scale.setScalar(0.7 + u * 1.4);
           }
@@ -1971,37 +1848,33 @@ export class MaouGeminiCinema {
       }
     }
 
-    // 5. Render Scene + Fullscreen Filmic Bloom / Lens Flare / Transition Post-Pass!
-    if (this.hasPostFx) {
-      const grade = blueprint.colorGrade || {};
-      const transElapsed = Math.max(0, tSec - this.transStartSec);
-      const transProgress = this.transType > 0 ? Math.min(1, transElapsed / 0.42) : 1.0;
+    // 5. Render Scene + Multi-Pass HDR Bloom / Depth-of-Field Bokeh / Motion Blur / Kling Transitions!
+    const grade = blueprint.colorGrade || {};
+    const transElapsed = Math.max(0, tSec - this.transStartSec);
+    const transProgress = this.transType > 0 ? Math.min(1, transElapsed / 0.42) : 1.0;
+    const focusDist =
+      optics.dofFocusDist ||
+      Math.max(1.8, Math.hypot(nextCamX - lx, nextCamY - ly, nextCamZ - lz));
+    const mbScale = (optics.motionBlur ?? 0.2) * 0.045;
 
-      if (!this.activeKeyframeTex) {
-        this.renderer.setRenderTarget(this.sceneRT);
-        this.renderer.render(this.scene, this.camera);
-        this.renderer.setRenderTarget(null);
-      }
-
-      const u = this.postMat.uniforms;
-      u.uTime.value = tSec;
-      u.uSceneProgress.value = progress;
-      u.uTransProgress.value = transProgress;
-      u.uTransType.value = this.transType;
-      u.uUseKeyframe.value = this.activeKeyframeTex ? 1.0 : 0.0;
-      if (this.activeKeyframeTex) u.uKeyframeTex.value = this.activeKeyframeTex;
-      u.uBloomStrength.value = grade.bloomStrength ?? 0.68;
-      u.uContrast.value = grade.contrast ?? 1.08;
-      u.uSaturation.value = grade.saturation ?? 1.16;
-      u.uVignette.value = grade.vignette ?? 0.28;
-      u.uTint.value.set(grade.tintHex || "#38bdf8");
-      u.uLensFlare.value = grade.lensFlare ? 1.0 : 0.0;
-      u.uSpeedLines.value = grade.speedLines ? 1.0 : 0.0;
-      u.uChromatic.value = (cam.handheldAmp || 0) > 0.03 ? 0.0085 : 0.0;
-
-      this.renderer.render(this.postScene, this.postCamera);
-    } else {
-      this.renderer.render(this.scene, this.camera);
-    }
+    this.postPipeline.render(this.scene, this.camera, {
+      tSec,
+      progress,
+      transProgress,
+      transType: this.transType,
+      keyframeTex: this.activeKeyframeTex,
+      focusDist,
+      dofAperture: optics.dofAperture ?? 0.45,
+      motionVecX: Math.max(-0.015, Math.min(0.015, camVelX * mbScale)),
+      motionVecY: Math.max(-0.015, Math.min(0.015, camVelY * mbScale)),
+      bloomStrength: grade.bloomStrength ?? 0.72,
+      contrast: grade.contrast ?? 1.08,
+      saturation: grade.saturation ?? 1.16,
+      vignette: grade.vignette ?? 0.28,
+      tintHex: grade.tintHex || "#38bdf8",
+      lensFlare: Boolean(grade.lensFlare),
+      speedLines: Boolean(grade.speedLines),
+      chromatic: (cam.handheldAmp || 0) > 0.03 ? 0.0085 : 0.0
+    });
   }
 }

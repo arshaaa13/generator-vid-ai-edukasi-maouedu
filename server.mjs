@@ -10,6 +10,7 @@ import {
   synthesizeSpeechStateless
 } from "./lib/maou-engine.js";
 import { compileGeminiCinemaVideo } from "./lib/gemini-video-renderer.js";
+import { critiqueAndRefineRenderedFrame } from "./lib/video-ai/visual-critic.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -113,7 +114,24 @@ const server = http.createServer(async (req, res) => {
         title: body?.title || "",
         scenes,
         geminiApiKey: body?.geminiApiKey || "",
-        enableKeyframes: Boolean(body?.enableKeyframes)
+        enableKeyframes: Boolean(body?.enableKeyframes),
+        enableCustomRigs: body?.enableCustomRigs !== false,
+        styleMemoryHints: Array.isArray(body?.styleMemoryHints) ? body.styleMemoryHints : []
+      });
+      return sendJson(res, 200, result);
+    }
+
+    if (pathname === "/api/video-critic" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      if (!body?.frameDataUrl) {
+        return sendJson(res, 400, { error: "frameDataUrl wajib dikirim." });
+      }
+      const result = await critiqueAndRefineRenderedFrame({
+        frameDataUrl: body.frameDataUrl,
+        blueprint: body.blueprint || null,
+        scene: body.scene || {},
+        topic: body.topic || "",
+        geminiApiKey: body.geminiApiKey || ""
       });
       return sendJson(res, 200, result);
     }

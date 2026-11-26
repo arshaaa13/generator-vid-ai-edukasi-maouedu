@@ -107,7 +107,11 @@
         <div class="toggle-list">
           <label class="toggle-item">
             <input type="checkbox" id="toggleGeminiCinema" checked />
-            <span>🎬 <strong>Gemini Cinema AI Render</strong> (PBR + Shader + Bloom Gaya Kling)</span>
+            <span>🎬 <strong>Gemini Cinema AI Render</strong> (PBR + Bokeh DOF + Bloom Kling)</span>
+          </label>
+          <label class="toggle-item">
+            <input type="checkbox" id="toggleCustomRigs" checked />
+            <span>🧬 <strong>Gemini 3D Sculptor</strong> (Rakit Makhluk/Objek Bebas + Bone Rig)</span>
           </label>
           <label class="toggle-item">
             <input type="checkbox" id="toggleNanoBananaKeyframes" />
@@ -139,10 +143,18 @@
           <button class="btn btn-crimson btn-full" id="renderGeminiCinemaBtn">
             🎬 Render Animasi Sinematik Gemini AI
           </button>
+          <button class="btn btn-secondary btn-full" id="criticRefineBtn" title="Gemini Vision melihat frame 3D saat ini, memberi skor 0-100, dan meng-upgrade visual otomatis">
+            👁️ Evaluasi &amp; Upgrade Visual (Gemini Vision)
+          </button>
+          <select id="exportQualitySelect" style="width:100%;padding:7px 10px;border-radius:8px;background:#0f172a;color:#f8fafc;border:1px solid rgba(255,255,255,0.16);font-size:0.78rem;">
+            <option value="720x1280">🎯 Ekspor MP4 HD 720×1280 • 30fps (H.264/AAC Cepat)</option>
+            <option value="1080x1920">💎 Ekspor MP4 Full HD 1080×1920 • 30fps (Kualitas Maksimal)</option>
+          </select>
           <button class="btn btn-gold btn-full" id="exportVideoBtn">
-            ⬇️ Render & Download Video HD (9:16)
+            ⬇️ Render &amp; Download Video MP4 (9:16)
           </button>
         </div>
+        <div id="criticResultBox" class="analysis-box hidden" style="margin-top:4px;"></div>
         <div id="exportProgressBox" class="progress-box hidden">
           <div class="progress-bar-track">
             <div class="progress-bar-fill" id="exportProgressFill"></div>

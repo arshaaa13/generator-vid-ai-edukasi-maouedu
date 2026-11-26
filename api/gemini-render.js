@@ -16,7 +16,9 @@ export async function POST(request) {
       title: body?.title || "",
       scenes,
       geminiApiKey: body?.geminiApiKey || "",
-      enableKeyframes: Boolean(body?.enableKeyframes)
+      enableKeyframes: Boolean(body?.enableKeyframes),
+      enableCustomRigs: body?.enableCustomRigs !== false,
+      styleMemoryHints: Array.isArray(body?.styleMemoryHints) ? body.styleMemoryHints : []
     });
 
     return Response.json(result);
