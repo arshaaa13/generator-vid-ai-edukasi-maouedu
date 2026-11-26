@@ -122,6 +122,14 @@ revoke all on table public.learned_mistakes from anon, authenticated;
 revoke all on table public.generation_runs from anon, authenticated;
 revoke all on table public.scene_evaluations from anon, authenticated;
 
+-- Explicitly grant DML to service_role so server-side sb_secret_... keys can query via PostgREST
+grant usage on schema public to service_role;
+grant select, insert, update, delete on table public.vt_references to service_role;
+grant select, insert, update, delete on table public.director_playbook to service_role;
+grant select, insert, update, delete on table public.learned_mistakes to service_role;
+grant select, insert, update, delete on table public.generation_runs to service_role;
+grant select, insert, update, delete on table public.scene_evaluations to service_role;
+
 -- ============================================================================
 -- SEED PLAYBOOK V1 BASELINE (Dark 2D Broadcast Anime + mc_default.jpg Lock)
 -- ============================================================================
