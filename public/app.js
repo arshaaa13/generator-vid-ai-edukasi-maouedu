@@ -5,17 +5,33 @@ import {
   drawCelebrationConfetti
 } from "/toon-renderer.js";
 import { Maou3DStage } from "/scene3d.js";
-import { MaouAnimeMappaEngine } from "/anime-mappa-engine.js";
+import {
+  MaouAnimeMappaEngine,
+  CHAR_POSE_URLS,
+  chromaKeyAnimeCel,
+  drawLiving2DAnimeHostCel
+} from "/anime-mappa-engine.js";
 import { exportDeterministicMp4Video } from "/video-engine/mp4-video-exporter.js";
 import { MaouPromptToVideoWorkflow } from "/video-engine/prompt-to-video-workflow.js";
 
 const canvas = document.getElementById("videoCanvas");
 const ctx = canvas.getContext("2d");
 
-// Load Locked MC Raja Iblis Character Asset (used in Standby & 3D Classic Host overlay)
+// Load Locked MC Raja Iblis Character Asset (used in Standby & 3D Classic Host fallback)
 const mcImage = new Image();
 mcImage.crossOrigin = "anonymous";
 mcImage.src = "/assets/mc_default.jpg";
+
+// Preload & Chroma-Key the 4 mc_default.jpg-locked 2D Anime Poses for Living 3D Presenter Mode!
+const mc3dPoseCache = new Map();
+for (const [poseKey, url] of Object.entries(CHAR_POSE_URLS)) {
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = () => {
+    mc3dPoseCache.set(poseKey, chromaKeyAnimeCel(img));
+  };
+  img.src = url;
+}
 
 // Studio State
 let currentScript = null;
@@ -91,7 +107,6 @@ const toggleMcOverlay = document.getElementById("toggleMcOverlay");
 const toggleYellowSubtitles = document.getElementById("toggleYellowSubtitles");
 const toggleSfx = document.getElementById("toggleSfx");
 const toggleBgm = document.getElementById("toggleBgm");
-const toggleDualDnaAssets = document.getElementById("toggleDualDnaAssets");
 const veoHeroToggleWrap = document.getElementById("veoHeroToggleWrap");
 const toggleVeoHeroShots = document.getElementById("toggleVeoHeroShots");
 
@@ -643,8 +658,7 @@ async function renderScenesWithAnimeMappa(singleIdx = null) {
         title: currentScript.title || "",
         scenes: targetScenes,
         geminiApiKey: keys.geminiApiKey,
-        styleMemoryHints,
-        enableDualDnaAssets: Boolean(toggleDualDnaAssets?.checked)
+        styleMemoryHints
       })
     });
     const data = await resp.json();
@@ -787,19 +801,6 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
       saveCinemaStyleLesson(data.styleLesson, data.overallScore);
     }
 
-    // Optional Dual-DNA Auto-Regeneration if Vision QC explicitly flagged haikei/kyara AND Dual-DNA is enabled
-    let regenNote = "";
-    if (
-      activeMode === "anime_mappa" &&
-      (data.regenerate_asset === "haikei" || data.regenerate_asset === "kyara") &&
-      toggleDualDnaAssets?.checked
-    ) {
-      const regenRes = await regenerateDualDnaAsset(targetIdx, data.regenerate_asset);
-      regenNote = regenRes?.ok
-        ? ` • 🎨 Aset ${data.regenerate_asset} diregenerasi via Style Anchor`
-        : ` • ⚠️ Regen ${data.regenerate_asset} dilewati (fallback lokal aktif)`;
-    }
-
     const memCount = getCinemaStyleMemory().length;
     if (criticResultBox) {
       const cr = data.criteria || null;
@@ -816,10 +817,6 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
       const adjSummary = adj
         ? `Bloom ${adj.bloom_intensity ?? "-"} • LightWrap ${adj.light_wrap_strength ?? "-"} • Crush ${adj.shadow_crush ?? "-"} • Ambient ${adj.ambient_harmonization ?? "-"}`
         : "Patch otomatis diterapkan";
-      const regenBtnHtml =
-        activeMode === "anime_mappa" && (data.regenerate_asset === "haikei" || data.regenerate_asset === "kyara")
-          ? `<button type="button" class="btn btn-secondary btn-sm" id="qcRegenAssetBtn" style="margin-top:5px;">🎨 Regenerasi ${data.regenerate_asset.toUpperCase()} (Dual-DNA)</button>`
-          : "";
 
       criticResultBox.classList.remove("hidden");
       criticResultBox.innerHTML = `
@@ -827,18 +824,8 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
         <div style="font-size:0.72rem;opacity:0.92;margin-top:2px;">${metricsHtml}</div>
         <div style="margin-top:4px;">${data.critique}</div>
         ${issuesHtml}
-        <div style="margin-top:4px;color:#fde68a;font-size:0.74rem;">✅ ${adjSummary}${regenNote} • Memori: <strong>${memCount}</strong></div>
-        ${regenBtnHtml}
+        <div style="margin-top:4px;color:#fde68a;font-size:0.74rem;">✅ ${adjSummary} • Memori: <strong>${memCount}</strong></div>
       `;
-      const qcRegenBtn = document.getElementById("qcRegenAssetBtn");
-      if (qcRegenBtn) {
-        qcRegenBtn.addEventListener("click", async () => {
-          qcRegenBtn.disabled = true;
-          qcRegenBtn.textContent = "⏳ Meregenerasi...";
-          const r = await regenerateDualDnaAsset(targetIdx, data.regenerate_asset);
-          qcRegenBtn.textContent = r?.ok ? `✅ ${data.regenerate_asset.toUpperCase()} Diperbarui!` : `⚠️ ${r?.reason || "Fallback lokal"}`;
-        });
-      }
     }
     sceneEnterTimestamp = performance.now();
     renderSceneList();
@@ -865,43 +852,6 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
       criticRefineBtn.disabled = false;
       criticRefineBtn.textContent = "👁️ Evaluasi & Upgrade Visual (Gemini Vision)";
     }
-  }
-}
-
-async function regenerateDualDnaAsset(targetIdx, assetType = "haikei") {
-  const scene = currentScript?.scenes?.[targetIdx];
-  if (!scene?.animeBlueprint) return { ok: false, reason: "Blueprint belum tersedia" };
-  const keys = getLocalKeys();
-  try {
-    const resp = await fetch("/api/anime-asset-regen", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        assetType,
-        phase: scene.phase || "HOOK",
-        poseHint: scene.animeBlueprint.kyaraExpression || "",
-        sceneDescription: scene.animeBlueprint.haikeiPrompt || scene.narration || "",
-        mood: scene.animeBlueprint.satsueiMood || "dramatic moody lighting",
-        topic: currentScript.topic || currentScript.title || "",
-        geminiApiKey: keys.geminiApiKey
-      })
-    });
-    const data = await resp.json();
-    if (data.ok && data.dataUrl) {
-      if (assetType === "kyara") {
-        scene.animeBlueprint.customKyaraUrl = data.dataUrl;
-      } else {
-        scene.animeBlueprint.customHaikeiUrl = data.dataUrl;
-      }
-      scene.animeRenderVersion = Date.now();
-      if (animeMappaEngine) await animeMappaEngine.ensureAssetsReady([scene.animeBlueprint]);
-      renderSceneList();
-      updateActiveSceneUI();
-      return { ok: true, model: data.model };
-    }
-    return { ok: false, reason: data.reason || data.error || "Quota gambar tidak aktif" };
-  } catch (err) {
-    return { ok: false, reason: err.message };
   }
 }
 
@@ -1844,27 +1794,128 @@ function drawProceduralEdutainmentScene(ctx, scene, t) {
 }
 
 function drawMcRajaIblisPresenter(ctx, scene, tSec) {
-  if (!toggleMcOverlay.checked || !mcImage.complete || !mcImage.naturalWidth) return;
+  if (!toggleMcOverlay?.checked) return;
 
   const W = canvas.width;
+  const H = canvas.height;
   const voice = getLiveVoiceEnergy();
+  const hasAnimatedMcVideo = Boolean(mcAnimatedVideo && mcAnimatedVideo.readyState >= 2);
+
+  // Map 3D scene pose/phase to canonical mc_default.jpg-locked 2D anime poses,
+  // biased toward his Presenter / Explainer role in Mode 3D!
+  const resolve3DPresenterPoseKey = () => {
+    if (scene.mcPose === "sarcastic" || scene.phase === "TAPI") return "pose_shock_panic";
+    if (scene.mcPose === "eureka" || scene.phase === "CLIMAX") return "pose_climax_domain";
+    if (scene.mcPose === "explaining" || scene.phase === "JADI") return "pose_explaining";
+    // When speaking/explaining the 3D diorama in default/HOOK, switch smoothly to pointing/explaining!
+    if (voice > 0.08 || isPlaying) return "pose_explaining";
+    return "pose_default_smirk";
+  };
+
+  const poseKey = resolve3DPresenterPoseKey();
+  const keyedPose =
+    mc3dPoseCache.get(poseKey) ||
+    mc3dPoseCache.get("pose_explaining") ||
+    mc3dPoseCache.get("pose_default_smirk");
+
+  // Primary Path: Living 2D Anime Host (zero boxy card, chroma-keyed cut-out, 12fps On-Twos + lip-flap + eye-blink!)
+  if (!hasAnimatedMcVideo && keyedPose) {
+    const sw = keyedPose.width || keyedPose.naturalWidth || 720;
+    const sh = keyedPose.height || keyedPose.naturalHeight || 960;
+    const step12 = Math.floor(tSec * 12) / 12;
+    const elapsedScene = Math.min(1, (performance.now() - sceneEnterTimestamp) / 380);
+    const slideEase = 1 - Math.pow(1 - elapsedScene, 3);
+
+    // Stand on bottom-left foreground by default so pose_explaining points directly toward center 3D diorama
+    // without ever mirroring his asymmetrical horns!
+    const isRight = scene.mcPlacement === "presenter-right";
+    const drawW = Math.round(W * 0.44);
+    const drawH = Math.round(drawW * (sh / sw));
+    const targetX = isRight ? Math.round(W - drawW * 0.44) : Math.round(drawW * 0.45);
+    const entryOffset = (1 - slideEase) * (isRight ? 46 : -46);
+    const presenterSway = Math.sin(step12 * 1.4) * 3.5;
+    const hostX = targetX + entryOffset + presenterSway;
+    const bottomY = Math.round(H * 0.855);
+
+    ctx.save();
+
+    // 1. Subtle Stage Contact Shadow + Rim Glow behind presenter silhouette (zero box!)
+    const auraGrad = ctx.createRadialGradient(
+      hostX,
+      bottomY - drawH * 0.48,
+      drawW * 0.08,
+      hostX,
+      bottomY - drawH * 0.48,
+      drawW * 0.62
+    );
+    const rimTint =
+      poseKey === "pose_shock_panic"
+        ? "rgba(225, 29, 72, 0.28)"
+        : poseKey === "pose_climax_domain"
+          ? "rgba(16, 185, 129, 0.28)"
+          : "rgba(245, 158, 11, 0.26)";
+    auraGrad.addColorStop(0, rimTint);
+    auraGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = auraGrad;
+    ctx.beginPath();
+    ctx.ellipse(hostX, bottomY - drawH * 0.48, drawW * 0.56, drawH * 0.48, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Clean Presenter Pointer Beam toward the 3D Diorama Subject when explaining
+    if (poseKey === "pose_explaining") {
+      const handX = isRight ? hostX - drawW * 0.24 : hostX + drawW * 0.30;
+      const handY = bottomY - drawH * 0.43;
+      const focusX = W * 0.55;
+      const focusY = H * 0.43;
+
+      ctx.save();
+      ctx.strokeStyle = `rgba(251, 191, 36, ${0.42 + voice * 0.45})`;
+      ctx.lineWidth = 2.2 + voice * 1.5;
+      ctx.setLineDash([7, 5]);
+      ctx.lineDashOffset = -tSec * 48;
+      ctx.beginPath();
+      ctx.moveTo(handX, handY);
+      ctx.lineTo(focusX, focusY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Target reticle pulse on 3D object
+      const pulseR = 6 + Math.sin(tSec * 7) * 2 + voice * 4;
+      ctx.strokeStyle = "rgba(253, 224, 71, 0.85)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(focusX, focusY, pulseR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "#fde047";
+      ctx.beginPath();
+      ctx.arc(focusX, focusY, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 3. Softly clip bottom coat edge above subtitle zone so captions stay 100% crisp
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W, Math.round(H * 0.845));
+    ctx.clip();
+
+    drawLiving2DAnimeHostCel(ctx, keyedPose, poseKey, hostX, bottomY, drawW, drawH, step12, voice, false);
+    ctx.restore();
+
+    ctx.restore();
+    return;
+  }
+
+  // Fallback / Custom Uploaded Animated MC Video Path
+  if (!hasAnimatedMcVideo && (!mcImage.complete || !mcImage.naturalWidth)) return;
+
   const isHero = scene.mcPlacement === "hero" || scene.phase === "HOOK" || scene.phase === "CLIMAX";
   const isRight = scene.mcPlacement !== "presenter-left";
   const elapsedScene = Math.min(1, (performance.now() - sceneEnterTimestamp) / 450);
   const slideEase = 1 - Math.pow(1 - elapsedScene, 3);
-
-  // Dynamic Live2D-style motion: breathing + sway + voice-reactive bounce + phase tilt
   const breathY = Math.sin(tSec * 2.8) * 5.5;
   const swayX = Math.sin(tSec * 1.9) * 5.0;
   const voiceBounceY = -voice * 11;
-  const phaseTilt =
-    scene.mcPose === "sarcastic"
-      ? -0.045 + Math.sin(tSec * 4.5) * 0.018
-      : scene.mcPose === "explaining"
-        ? 0.035 + Math.sin(tSec * 3.5) * 0.016
-        : scene.mcPose === "eureka"
-          ? Math.sin(tSec * 5.0) * 0.028
-          : Math.sin(tSec * 2.2) * 0.022;
 
   ctx.save();
   const cardW = isHero ? 148 : 132;
@@ -1873,190 +1924,13 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
   const entryOffset = (1 - slideEase) * (isRight || isHero ? 50 : -50);
   const cardX = targetX + swayX + entryOffset;
   const cardY = (isHero ? 548 : 566) + breathY + voiceBounceY;
-  const centerX = cardX + cardW / 2;
-  const centerY = cardY + cardH / 2;
 
-  // 1. Rotating Arcane Overlord Magic Circle behind MC during JADI / CLIMAX
-  if (scene.mcPose === "explaining" || scene.mcPose === "eureka" || scene.phase === "CLIMAX") {
-    ctx.save();
-    ctx.translate(centerX, centerY - 12);
-    ctx.rotate(tSec * 0.75);
-    const circleRadius = (isHero ? 128 : 106) + voice * 12;
-    ctx.strokeStyle =
-      scene.phase === "CLIMAX" ? "rgba(16, 185, 129, 0.48)" : "rgba(251, 191, 36, 0.45)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(0, 0, circleRadius, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.setLineDash([10, 8]);
-    ctx.beginPath();
-    ctx.arc(0, 0, circleRadius - 14, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    for (let p = 0; p < 6; p++) {
-      const ang = (p * Math.PI) / 3;
-      ctx.beginPath();
-      ctx.arc(Math.cos(ang) * circleRadius, Math.sin(ang) * circleRadius, 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = "#fde047";
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  // 2. Dark Shadow Aura Wisps billowing continuously around shoulders
-  for (let w = 0; w < 7; w++) {
-    const wx = centerX + Math.sin(tSec * 2.4 + w * 1.15) * (cardW * 0.54);
-    const wy = cardY + cardH * 0.48 - ((tSec * 36 + w * 28) % 95) + 40;
-    const rad = 24 + Math.sin(tSec * 3.6 + w) * 9 + voice * 14;
-    const auraGrad = ctx.createRadialGradient(wx, wy, 2, wx, wy, rad);
-    const auraColor =
-      scene.mcPose === "sarcastic"
-        ? "rgba(225, 29, 72, 0.46)"
-        : scene.mcPose === "eureka"
-          ? "rgba(245, 158, 11, 0.48)"
-          : "rgba(139, 92, 246, 0.42)";
-    auraGrad.addColorStop(0, auraColor);
-    auraGrad.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = auraGrad;
-    ctx.beginPath();
-    ctx.arc(wx, wy, rad, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // 3. Pointing Energy Laser Beam to Educational Stage when explaining ("JADI...")
-  if (scene.mcPose === "explaining" || scene.phase === "JADI") {
-    ctx.save();
-    ctx.strokeStyle = `rgba(251, 191, 36, ${0.55 + voice * 0.45})`;
-    ctx.lineWidth = 3 + voice * 2.5;
-    ctx.setLineDash([8, 5]);
-    ctx.lineDashOffset = -tSec * 55;
-    ctx.beginPath();
-    ctx.moveTo(centerX, cardY + 18);
-    ctx.lineTo(W / 2, 385);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(W / 2, 385, 6 + Math.sin(tSec * 8) * 2.5, 0, Math.PI * 2);
-    ctx.fillStyle = "#fde047";
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // 4. Tilted & Animated Character Card Transform
-  ctx.translate(centerX, centerY);
-  ctx.rotate(phaseTilt);
-  const punchScale = 1 + voice * 0.055;
-  ctx.scale(punchScale, punchScale);
-  ctx.translate(-centerX, -centerY);
-
-  ctx.save();
   drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 18);
   ctx.clip();
-
-  // Draw animated MC video if uploaded, else Live2D-animated portrait
-  const hasAnimatedMcVideo = Boolean(mcAnimatedVideo && mcAnimatedVideo.readyState >= 2);
-  const panX = hasAnimatedMcVideo ? 0 : Math.sin(tSec * 1.4) * 5;
-  const panY = hasAnimatedMcVideo ? 0 : Math.cos(tSec * 1.8) * 4 - voice * 5;
   if (hasAnimatedMcVideo) {
     drawCoverVideo(ctx, mcAnimatedVideo, cardX, cardY, cardW, cardH);
   } else {
-    const innerZoom = 1.08 + Math.sin(tSec * 1.1) * 0.03 + voice * 0.05;
-    ctx.drawImage(
-      mcImage,
-      cardX - (cardW * (innerZoom - 1)) / 2 + panX,
-      cardY - 8 + panY,
-      cardW * innerZoom,
-      cardH * 1.15 * innerZoom
-    );
-  }
-
-  // Subtle crimson eye glint shimmer & broken-left-horn energy flicker
-  const glintAlpha = 0.28 + voice * 0.55 + Math.abs(Math.sin(tSec * 4)) * 0.22;
-  const hornX = cardX + cardW * 0.67 + panX;
-  const hornY = cardY + cardH * 0.16 + panY;
-  const hornGrad = ctx.createRadialGradient(hornX, hornY, 1, hornX, hornY, 18 + voice * 12);
-  hornGrad.addColorStop(0, `rgba(255, 60, 90, ${glintAlpha})`);
-  hornGrad.addColorStop(1, "rgba(255, 0, 40, 0)");
-  ctx.fillStyle = hornGrad;
-  ctx.beginPath();
-  ctx.arc(hornX, hornY, 26, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Natural eye-blink micro-shadow every ~3.4 seconds
-  const blinkCycle = tSec % 3.4;
-  if (blinkCycle > 3.24) {
-    ctx.fillStyle = "rgba(12, 10, 20, 0.55)";
-    ctx.fillRect(cardX + cardW * 0.28, cardY + cardH * 0.31, cardW * 0.44, 5);
-  }
-
-  // Sarcastic Glitch Scanlines on "TAPI..."
-  if (scene.mcPose === "sarcastic" && Math.sin(tSec * 18) > 0.75) {
-    ctx.fillStyle = "rgba(225, 29, 72, 0.22)";
-    ctx.fillRect(cardX, cardY + ((tSec * 160) % cardH), cardW, 6);
-  }
-
-  const innerGrad = ctx.createLinearGradient(0, cardY + cardH - 72, 0, cardY + cardH);
-  innerGrad.addColorStop(0, "rgba(9, 10, 15, 0)");
-  innerGrad.addColorStop(1, "rgba(9, 10, 15, 0.94)");
-  ctx.fillStyle = innerGrad;
-  ctx.fillRect(cardX, cardY + cardH - 72, cardW, 72);
-
-  // Live Voice Waveform Equalizer Bars inside bottom of MC frame
-  if (isPlaying || voice > 0.02) {
-    const bars = 13;
-    const barW = 4;
-    const startBx = centerX - (bars * 7) / 2;
-    for (let b = 0; b < bars; b++) {
-      const bh = 4 + Math.abs(Math.sin(tSec * 16 + b * 0.9)) * (6 + voice * 22);
-      ctx.fillStyle = scene.mcPose === "sarcastic" ? "#fb7185" : "#fbbf24";
-      drawRoundedRect(ctx, startBx + b * 7, cardY + cardH - 42 - bh, barW, bh, 2);
-      ctx.fill();
-    }
-  }
-  ctx.restore();
-
-  drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 18);
-  ctx.lineWidth = 3 + voice * 3.5;
-  ctx.strokeStyle =
-    scene.mcPose === "sarcastic"
-      ? "#e11d48"
-      : scene.mcPose === "explaining"
-        ? "#fbbf24"
-        : scene.mcPose === "eureka"
-          ? "#10b981"
-          : "#a855f7";
-  ctx.stroke();
-
-  const reactionMap = {
-    default: "👑 MC RAJA IBLIS",
-    sarcastic: "😒 TAPI... (SARKAS)",
-    explaining: "☝️ JADI BEGINI...",
-    eureka: "👑 BERHASIL TOTAL!"
-  };
-  const badgeLabel = reactionMap[scene.mcPose] || "👑 MC RAJA IBLIS";
-  drawRoundedRect(ctx, cardX + 10, cardY + cardH - 34, cardW - 20, 24, 7);
-  ctx.fillStyle = "rgba(15, 18, 28, 0.92)";
-  ctx.fill();
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  ctx.fillStyle = "#fff";
-  ctx.font = "800 10.5px 'Plus Jakarta Sans', sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(badgeLabel, centerX, cardY + cardH - 22);
-
-  // Expressive 2D Anime Emotion Pop-Up Icon floating beside MC's head
-  const fxY = cardY - 6 + Math.sin(tSec * 6.5) * 5;
-  ctx.font = "900 26px sans-serif";
-  if (scene.mcPose === "sarcastic" || scene.phase === "TAPI") {
-    ctx.fillText("💢", cardX + 18, fxY + 22);
-  } else if (scene.mcPose === "explaining" || scene.phase === "JADI") {
-    ctx.fillText("✨", cardX + cardW - 16, fxY + 18);
-  } else if (scene.mcPose === "eureka" || scene.phase === "CLIMAX") {
-    ctx.fillText("👑", centerX, fxY);
+    ctx.drawImage(mcImage, cardX, cardY, cardW, cardH * 1.15);
   }
   ctx.restore();
 }

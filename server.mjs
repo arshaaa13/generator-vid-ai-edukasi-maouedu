@@ -11,13 +11,7 @@ import {
 } from "./lib/maou-engine.js";
 import { compileGeminiCinemaVideo } from "./lib/gemini-video-renderer.js";
 import { compileAnimeMappaVideo } from "./lib/video-ai/anime-director.js";
-import {
-  generateDualDnaHaikei,
-  generateDualDnaKyara,
-  generateFullScreenAnimeCutaway,
-  generateFullScreenHostInScene,
-  getStyleAnchorsStatus
-} from "./lib/video-ai/mappa-asset-generator.js";
+import { getStyleAnchorsStatus } from "./lib/video-ai/mappa-asset-generator.js";
 import {
   isVeoHeroEnabled,
   startVeoHeroShotJob,
@@ -146,49 +140,9 @@ const server = http.createServer(async (req, res) => {
         title: body?.title || "",
         scenes,
         geminiApiKey: body?.geminiApiKey || "",
-        styleMemoryHints: Array.isArray(body?.styleMemoryHints) ? body.styleMemoryHints : [],
-        enableDualDnaAssets: Boolean(body?.enableDualDnaAssets)
+        styleMemoryHints: Array.isArray(body?.styleMemoryHints) ? body.styleMemoryHints : []
       });
       return sendJson(res, 200, result);
-    }
-
-    if (pathname === "/api/anime-asset-regen" && req.method === "POST") {
-      const body = await readJsonBody(req);
-      const assetType = String(body?.assetType || "haikei").toLowerCase();
-      let result;
-      if (assetType === "kyara") {
-        result = await generateDualDnaKyara({
-          phase: body?.phase || "HOOK",
-          poseKey: body?.poseKey || "",
-          poseHint: body?.poseHint || "",
-          topic: body?.topic || "",
-          geminiApiKey: body?.geminiApiKey || ""
-        });
-      } else if (assetType === "cutaway") {
-        result = await generateFullScreenAnimeCutaway({
-          subjectDescription: body?.subjectDescription || body?.sceneDescription || body?.topic || "",
-          topic: body?.topic || "",
-          phase: body?.phase || "JADI",
-          mood: body?.mood || "dark dramatic tungsten",
-          geminiApiKey: body?.geminiApiKey || ""
-        });
-      } else if (assetType === "fullscreen_host") {
-        result = await generateFullScreenHostInScene({
-          sceneDescription: body?.sceneDescription || body?.topic || "",
-          phase: body?.phase || "HOOK",
-          poseHint: body?.poseHint || "",
-          topic: body?.topic || "",
-          geminiApiKey: body?.geminiApiKey || ""
-        });
-      } else {
-        result = await generateDualDnaHaikei({
-          sceneDescription: body?.sceneDescription || body?.narration || body?.topic || "",
-          topic: body?.topic || "",
-          mood: body?.mood || "dramatic moody lighting",
-          geminiApiKey: body?.geminiApiKey || ""
-        });
-      }
-      return sendJson(res, 200, { ...result, styleAnchors: getStyleAnchorsStatus() });
     }
 
     if (pathname === "/api/veo-hero" && req.method === "POST") {

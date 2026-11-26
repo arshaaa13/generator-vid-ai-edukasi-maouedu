@@ -16,8 +16,7 @@ export async function POST(request) {
       title: body?.title || "",
       scenes,
       geminiApiKey: body?.geminiApiKey || "",
-      styleMemoryHints: Array.isArray(body?.styleMemoryHints) ? body.styleMemoryHints : [],
-      enableDualDnaAssets: Boolean(body?.enableDualDnaAssets)
+      styleMemoryHints: Array.isArray(body?.styleMemoryHints) ? body.styleMemoryHints : []
     });
 
     return Response.json(result);

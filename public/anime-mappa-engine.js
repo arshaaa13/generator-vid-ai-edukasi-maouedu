@@ -21,7 +21,7 @@ const HAIKEI_URLS = {
 };
 
 // Strictly mc_default.jpg-locked chroma-key-ready Host pose pack (old mirrored-horn sprites retired!)
-const CHAR_POSE_URLS = {
+export const CHAR_POSE_URLS = {
   pose_default_smirk: "/assets/mappa/poses_mc_locked/pose_default_smirk.png",
   pose_explaining: "/assets/mappa/poses_mc_locked/pose_explaining.png",
   pose_shock_panic: "/assets/mappa/poses_mc_locked/pose_shock_panic.png",
@@ -332,6 +332,148 @@ function drawRoundedRectPath(ctx, x, y, w, h, r) {
   ctx.lineTo(x, y + r);
   ctx.quadraticCurveTo(x, y, x + r, y);
   ctx.closePath();
+}
+
+// ============================================================================
+// LIVING 2D ANIME HOST CEL RENDERER (Shared by 2D Satsuei & 3D Presenter Mode)
+// SINGLE SOLID UNBROKEN 2D KYARA CEL + 12FPS ON-TWOS LIP-FLAP / EYE-BLINK / GLINT
+// ============================================================================
+export function drawLiving2DAnimeHostCel(ctx, charImg, poseKey, x, y, drawW, drawH, step12, voiceEnergy, flipX = false) {
+  if (!charImg) return;
+  const sw = charImg.width || charImg.naturalWidth;
+  const sh = charImg.height || charImg.naturalHeight;
+  if (!sw || !sh) return;
+
+  // 12fps On-Twos organic living breathing + subtle upper-body posture sway (ZERO horizontal strip slicing!)
+  const steppedVoice = Math.round(clamp01(voiceEnergy) * 5) / 5;
+  const breatheY = Math.sin(step12 * 2.5) * 3.8 - steppedVoice * 4.5;
+  const breatheScaleY = 1.0 + Math.sin(step12 * 2.5) * 0.011 + steppedVoice * 0.012;
+  const subtlePivot = Math.sin(step12 * 1.65) * 0.011;
+
+  ctx.save();
+  ctx.translate(x, y + breatheY);
+  ctx.rotate(subtlePivot);
+  ctx.scale(flipX ? -1 : 1, breatheScaleY);
+
+  // SINGLE SOLID UNBROKEN DRAW CALL — 100% eliminates horizontal scanline / stripe seam artifacts!
+  ctx.drawImage(charImg, -drawW / 2, -drawH, drawW, drawH);
+
+  // Living Anime Facial Micro-Animation (strictly aligned to mc_default.jpg pose landmarks!)
+  const lm = POSE_FACE_LANDMARKS[poseKey] || POSE_FACE_LANDMARKS.pose_default_smirk;
+  const ox = -drawW / 2;
+  const oy = -drawH;
+
+  // 1. Shock/Panic Dramatic Forehead Tension Vignette (soft feathered oval — ZERO sharp rectangle!) & Clean Cel Sweat-Drop
+  if (poseKey === "pose_shock_panic") {
+    ctx.save();
+    const browY = oy + (lm.browTopY + 0.045) * drawH;
+    const faceCx = ox + ((lm.leftEye[0] + lm.rightEye[0]) * 0.5) * drawW;
+    const rGrad = ctx.createRadialGradient(faceCx, browY, drawW * 0.02, faceCx, browY, drawW * 0.14);
+    rGrad.addColorStop(0, "rgba(10, 8, 22, 0.42)");
+    rGrad.addColorStop(0.6, "rgba(10, 8, 22, 0.20)");
+    rGrad.addColorStop(1, "rgba(10, 8, 22, 0)");
+    ctx.fillStyle = rGrad;
+    ctx.beginPath();
+    ctx.ellipse(faceCx, browY, drawW * 0.14, drawH * 0.055, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Clean 2D cel anime sweat-drop on cheek (12fps bob)
+    const dx = ox + lm.cheekDrop[0] * drawW;
+    const dy = oy + lm.cheekDrop[1] * drawH + Math.sin(step12 * 8) * 2.5;
+    const dr = drawW * 0.022;
+    ctx.fillStyle = "#bae6fd";
+    ctx.strokeStyle = "#07080d";
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(dx, dy - dr * 1.7);
+    ctx.quadraticCurveTo(dx + dr, dy + dr * 0.3, dx, dy + dr);
+    ctx.quadraticCurveTo(dx - dr, dy + dr * 0.3, dx, dy - dr * 1.7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(dx - dr * 0.22, dy + dr * 0.15, dr * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 2. Speech-Reactive 2-3 Frame Cel Mouth / Lip-Flap synced to ElevenLabs voice amplitude!
+  if (steppedVoice >= 0.18) {
+    const mx = ox + lm.mouth[0] * drawW;
+    const my = oy + lm.mouth[1] * drawH;
+    const mw = lm.mouthW * drawW;
+    const openLevel = steppedVoice >= 0.55 ? 2 : 1; // 2 discrete anime cel mouth shapes (half-open / wide-open)
+    const mh = openLevel === 2 ? mw * 0.42 : mw * 0.22;
+
+    ctx.save();
+    ctx.fillStyle = "#3b0a18";
+    ctx.strokeStyle = "#090a0f";
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(mx - mw * 0.46, my - mh * 0.25);
+    ctx.quadraticCurveTo(mx, my - mh * 0.55, mx + mw * 0.46, my - mh * 0.25);
+    ctx.quadraticCurveTo(mx, my + mh * 1.05, mx - mw * 0.46, my - mh * 0.25);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Subtle upper cel teeth flash on wide vowel peak
+    if (openLevel === 2) {
+      ctx.fillStyle = "#f8fafc";
+      ctx.beginPath();
+      ctx.ellipse(mx, my - mh * 0.12, mw * 0.28, mh * 0.2, 0, 0, Math.PI);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 3. Natural Periodic 2-Frame Eye Blink (~every 3.3s) OR Golden-Amber Eye Glint on dramatic voice peaks!
+  const blinkCycle = step12 % 3.35;
+  const isBlinking = blinkCycle > 3.18 && poseKey !== "pose_shock_panic";
+  if (isBlinking) {
+    ctx.save();
+    for (const [exN, eyN] of [lm.leftEye, lm.rightEye]) {
+      const ex = ox + exN * drawW;
+      const ey = oy + eyN * drawH;
+      const ew = lm.eyeW * drawW;
+      // Skin-matched eyelid cover + sharp curved anime lash line
+      ctx.fillStyle = "#d9c2b6";
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, ew * 0.54, ew * 0.22, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#090a0f";
+      ctx.lineWidth = 3.2;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(ex - ew * 0.52, ey);
+      ctx.quadraticCurveTo(ex, ey + ew * 0.16, ex + ew * 0.52, ey);
+      ctx.stroke();
+    }
+    ctx.restore();
+  } else if (steppedVoice >= 0.45 || poseKey === "pose_climax_domain" || poseKey === "pose_shock_panic") {
+    // Dramatic golden-amber anime eye glint shimmer!
+    const glintAlpha = poseKey === "pose_climax_domain" ? 0.72 : 0.45 + steppedVoice * 0.35;
+    ctx.save();
+    ctx.globalAlpha = clamp01(glintAlpha);
+    for (const [exN, eyN] of [lm.leftEye, lm.rightEye]) {
+      const ex = ox + exN * drawW;
+      const ey = oy + eyN * drawH;
+      const gr = lm.eyeW * drawW * 0.42;
+      const gGrad = ctx.createRadialGradient(ex, ey, 0, ex, ey, gr);
+      gGrad.addColorStop(0, "#fef08a");
+      gGrad.addColorStop(0.45, "rgba(245, 158, 11, 0.55)");
+      gGrad.addColorStop(1, "rgba(245, 158, 11, 0)");
+      ctx.fillStyle = gGrad;
+      ctx.beginPath();
+      ctx.arc(ex, ey, gr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  ctx.restore();
 }
 
 export class MaouAnimeMappaEngine {
@@ -1100,141 +1242,7 @@ export class MaouAnimeMappaEngine {
   // FIX 1 + FIX 5: SINGLE SOLID UNBROKEN 2D KYARA CEL (ZERO SCANLINES!) + LIVING LIP-FLAP / EYE-BLINK / GLINT
   // ============================================================================
   draw2DAnimeCharacterCel(ctx, charImg, poseKey, x, y, drawW, drawH, step12, voiceEnergy, flipX = false) {
-    if (!charImg) return;
-    const sw = charImg.width || charImg.naturalWidth;
-    const sh = charImg.height || charImg.naturalHeight;
-    if (!sw || !sh) return;
-
-    // 12fps On-Twos organic living breathing + subtle upper-body posture sway (ZERO horizontal strip slicing!)
-    const steppedVoice = Math.round(clamp01(voiceEnergy) * 5) / 5;
-    const breatheY = Math.sin(step12 * 2.5) * 3.8 - steppedVoice * 4.5;
-    const breatheScaleY = 1.0 + Math.sin(step12 * 2.5) * 0.011 + steppedVoice * 0.012;
-    const subtlePivot = Math.sin(step12 * 1.65) * 0.011;
-
-    ctx.save();
-    ctx.translate(x, y + breatheY);
-    ctx.rotate(subtlePivot);
-    ctx.scale(flipX ? -1 : 1, breatheScaleY);
-
-    // SINGLE SOLID UNBROKEN DRAW CALL — 100% eliminates horizontal scanline / stripe seam artifacts!
-    ctx.drawImage(charImg, -drawW / 2, -drawH, drawW, drawH);
-
-    // Living Anime Facial Micro-Animation (strictly aligned to mc_default.jpg pose landmarks!)
-    const lm = POSE_FACE_LANDMARKS[poseKey] || POSE_FACE_LANDMARKS.pose_default_smirk;
-    const ox = -drawW / 2;
-    const oy = -drawH;
-
-    // 1. Shock/Panic Dramatic Forehead Tension Vignette (soft feathered oval — ZERO sharp rectangle!) & Clean Cel Sweat-Drop
-    if (poseKey === "pose_shock_panic") {
-      ctx.save();
-      const browY = oy + (lm.browTopY + 0.045) * drawH;
-      const faceCx = ox + ((lm.leftEye[0] + lm.rightEye[0]) * 0.5) * drawW;
-      const rGrad = ctx.createRadialGradient(faceCx, browY, drawW * 0.02, faceCx, browY, drawW * 0.14);
-      rGrad.addColorStop(0, "rgba(10, 8, 22, 0.42)");
-      rGrad.addColorStop(0.6, "rgba(10, 8, 22, 0.20)");
-      rGrad.addColorStop(1, "rgba(10, 8, 22, 0)");
-      ctx.fillStyle = rGrad;
-      ctx.beginPath();
-      ctx.ellipse(faceCx, browY, drawW * 0.14, drawH * 0.055, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Clean 2D cel anime sweat-drop on cheek (12fps bob)
-      const dx = ox + lm.cheekDrop[0] * drawW;
-      const dy = oy + lm.cheekDrop[1] * drawH + Math.sin(step12 * 8) * 2.5;
-      const dr = drawW * 0.022;
-      ctx.fillStyle = "#bae6fd";
-      ctx.strokeStyle = "#07080d";
-      ctx.lineWidth = 2.4;
-      ctx.beginPath();
-      ctx.moveTo(dx, dy - dr * 1.7);
-      ctx.quadraticCurveTo(dx + dr, dy + dr * 0.3, dx, dy + dr);
-      ctx.quadraticCurveTo(dx - dr, dy + dr * 0.3, dx, dy - dr * 1.7);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.arc(dx - dr * 0.22, dy + dr * 0.15, dr * 0.22, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // 2. Speech-Reactive 2-3 Frame Cel Mouth / Lip-Flap synced to ElevenLabs voice amplitude!
-    if (steppedVoice >= 0.18) {
-      const mx = ox + lm.mouth[0] * drawW;
-      const my = oy + lm.mouth[1] * drawH;
-      const mw = lm.mouthW * drawW;
-      const openLevel = steppedVoice >= 0.55 ? 2 : 1; // 2 discrete anime cel mouth shapes (half-open / wide-open)
-      const mh = openLevel === 2 ? mw * 0.42 : mw * 0.22;
-
-      ctx.save();
-      ctx.fillStyle = "#3b0a18";
-      ctx.strokeStyle = "#090a0f";
-      ctx.lineWidth = 2.4;
-      ctx.beginPath();
-      ctx.moveTo(mx - mw * 0.46, my - mh * 0.25);
-      ctx.quadraticCurveTo(mx, my - mh * 0.55, mx + mw * 0.46, my - mh * 0.25);
-      ctx.quadraticCurveTo(mx, my + mh * 1.05, mx - mw * 0.46, my - mh * 0.25);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Subtle upper cel teeth flash on wide vowel peak
-      if (openLevel === 2) {
-        ctx.fillStyle = "#f8fafc";
-        ctx.beginPath();
-        ctx.ellipse(mx, my - mh * 0.12, mw * 0.28, mh * 0.2, 0, 0, Math.PI);
-        ctx.fill();
-      }
-      ctx.restore();
-    }
-
-    // 3. Natural Periodic 2-Frame Eye Blink (~every 3.3s) OR Golden-Amber Eye Glint on dramatic voice peaks!
-    const blinkCycle = step12 % 3.35;
-    const isBlinking = blinkCycle > 3.18 && poseKey !== "pose_shock_panic";
-    if (isBlinking) {
-      ctx.save();
-      for (const [exN, eyN] of [lm.leftEye, lm.rightEye]) {
-        const ex = ox + exN * drawW;
-        const ey = oy + eyN * drawH;
-        const ew = lm.eyeW * drawW;
-        // Skin-matched eyelid cover + sharp curved anime lash line
-        ctx.fillStyle = "#d9c2b6";
-        ctx.beginPath();
-        ctx.ellipse(ex, ey, ew * 0.54, ew * 0.22, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = "#090a0f";
-        ctx.lineWidth = 3.2;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(ex - ew * 0.52, ey);
-        ctx.quadraticCurveTo(ex, ey + ew * 0.16, ex + ew * 0.52, ey);
-        ctx.stroke();
-      }
-      ctx.restore();
-    } else if (steppedVoice >= 0.45 || poseKey === "pose_climax_domain" || poseKey === "pose_shock_panic") {
-      // Dramatic golden-amber anime eye glint shimmer!
-      const glintAlpha = poseKey === "pose_climax_domain" ? 0.72 : 0.45 + steppedVoice * 0.35;
-      ctx.save();
-      ctx.globalAlpha = clamp01(glintAlpha);
-      for (const [exN, eyN] of [lm.leftEye, lm.rightEye]) {
-        const ex = ox + exN * drawW;
-        const ey = oy + eyN * drawH;
-        const gr = lm.eyeW * drawW * 0.42;
-        const gGrad = ctx.createRadialGradient(ex, ey, 0, ex, ey, gr);
-        gGrad.addColorStop(0, "#fef08a");
-        gGrad.addColorStop(0.45, "rgba(245, 158, 11, 0.55)");
-        gGrad.addColorStop(1, "rgba(245, 158, 11, 0)");
-        ctx.fillStyle = gGrad;
-        ctx.beginPath();
-        ctx.arc(ex, ey, gr, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-    }
-
-    ctx.restore();
+    drawLiving2DAnimeHostCel(ctx, charImg, poseKey, x, y, drawW, drawH, step12, voiceEnergy, flipX);
   }
 
   // ============================================================================
