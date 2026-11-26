@@ -13,6 +13,7 @@ export async function POST(request) {
       voiceId: body?.voiceId,
       elevenlabsApiKey: body?.elevenlabsApiKey || "",
       geminiApiKey: body?.geminiApiKey || "",
+      minimaxApiKey: body?.minimaxApiKey || "",
       forceFallback: Boolean(body?.forceFallback)
     });
 
