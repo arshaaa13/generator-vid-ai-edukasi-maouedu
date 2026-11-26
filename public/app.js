@@ -142,8 +142,108 @@ function getLocalKeys() {
     elevenlabsVoiceId:
       localStorage.getItem("maou_el_voice") || serverConfig.elevenlabsVoiceId || "nPczCjzI2devNBz1zQrb",
     elevenlabsApiKey: localStorage.getItem("maou_el_key") || "",
-    geminiApiKey: localStorage.getItem("maou_gemini_key") || ""
+    geminiApiKey: localStorage.getItem("maou_gemini_key") || "",
+    accessPin: localStorage.getItem("maou_access_pin") || ""
   };
+}
+
+function buildDirectorHeaders() {
+  const keys = getLocalKeys();
+  const h = { "Content-Type": "application/json" };
+  if (keys.accessPin) h["X-Access-Pin"] = keys.accessPin;
+  return h;
+}
+
+let directorBrainState = null;
+let vtThumbDataUrl = "";
+
+async function fetchDirectorBrain() {
+  try {
+    const resp = await fetch("/api/director/playbook");
+    const data = await resp.json();
+    if (resp.ok && data) {
+      directorBrainState = data;
+      renderAiBrainUI(data);
+    }
+    return data;
+  } catch (err) {
+    console.warn("Fetch AI Brain warning:", err);
+    return null;
+  }
+}
+
+function renderAiBrainUI(state) {
+  if (!state) return;
+  const pb = state.playbook || { version: 1 };
+  const verLabel = document.getElementById("aiBrainVersionLabel");
+  if (verLabel) verLabel.textContent = `v${pb.version || 1}`;
+
+  const activeBadge = document.getElementById("aiBrainActiveBadge");
+  if (activeBadge) activeBadge.textContent = `Playbook v${pb.version || 1}`;
+
+  const statusLine = document.getElementById("aiBrainStatusLine");
+  if (statusLine) {
+    const icon = state.configured && state.schemaReady ? "🟢" : state.configured ? "🟠" : "🟡";
+    statusLine.textContent = `${icon} ${state.statusMessage || "Playbook Lokal Aktif"}`;
+  }
+
+  const pbSummary = document.getElementById("aiBrainPlaybookSummary");
+  if (pbSummary) {
+    const pacing = pb.pacing_rules || {};
+    const negs = Array.isArray(pb.negative_constraints) ? pb.negative_constraints : [];
+    pbSummary.classList.remove("hidden");
+    pbSummary.innerHTML = `
+      <div><strong>Changelog:</strong> ${escapeHtml(pb.changelog || "-")}</div>
+      <div style="font-size:0.74rem;margin-top:4px;">
+        <strong>Pacing:</strong> Cut <code>${pacing.avg_cut_duration_sec ?? 2.4}s</code> • Hook <code>${pacing.hook_duration_sec ?? 2.5}s</code> • Rasio Host/Cutaway <code>${pacing.host_vs_cutaway_ratio || "45:55"}</code>
+      </div>
+      <div style="font-size:0.73rem;margin-top:4px;opacity:0.9;"><strong>Guidelines:</strong> ${escapeHtml(pb.prompt_guidelines || "")}</div>
+      <div style="font-size:0.72rem;margin-top:4px;color:#fda4af;"><strong>Larangan Ketat:</strong> ${negs.slice(0, 6).map((x) => escapeHtml(x)).join(" • ") || "-"}</div>
+    `;
+  }
+
+  const rollSel = document.getElementById("rollbackVersionSelect");
+  if (rollSel && Array.isArray(state.history)) {
+    rollSel.innerHTML = state.history
+      .map((h) => {
+        const selected = h.version === pb.version ? "selected" : "";
+        return `<option value="${h.version}" ${selected}>v${h.version}${h.is_active ? " (AKTIF)" : ""} — ${escapeHtml(String(h.changelog || "").slice(0, 38))}</option>`;
+      })
+      .join("");
+  }
+
+  const misBox = document.getElementById("learnedMistakesListBox");
+  if (misBox) {
+    const list = Array.isArray(state.mistakes) ? state.mistakes : [];
+    misBox.innerHTML = list.length
+      ? list
+          .map(
+            (m) => `
+            <div class="brain-item">
+              <div><strong>[${escapeHtml(m.category)} • Sev ${m.severity}/5 • x${m.occurrences}]</strong> ${escapeHtml(m.symptom)}</div>
+              <div style="color:#fda4af;font-size:0.71rem;">❌ Hindari: ${escapeHtml(m.bad_pattern)}</div>
+              <div style="color:#6ee7b7;font-size:0.71rem;">✅ Aturan: ${escapeHtml(m.corrective_rule)}</div>
+            </div>`
+          )
+          .join("")
+      : `<div class="field-hint">Belum ada catatan cacat/aneh tersimpan. Tandai scene 👎 Aneh atau jalankan Auto-Critic agar AI belajar otomatis.</div>`;
+  }
+
+  const vtBox = document.getElementById("vtRefListBox");
+  if (vtBox) {
+    const vts = Array.isArray(state.vtReferences) ? state.vtReferences : [];
+    vtBox.innerHTML = vts.length
+      ? vts
+          .map(
+            (v) => `
+            <div class="brain-item">
+              <div><strong>🎬 ${escapeHtml(v.title)}</strong> • Avg Cut <code>${v.avg_cut_duration_sec}s</code> • Rasio <code>${escapeHtml(v.camera_patterns?.host_vs_cutaway_ratio || "-")}</code></div>
+              <div style="font-size:0.71rem;opacity:0.86;">Hook: ${escapeHtml(v.hook_structure?.hook_formula || v.source_notes || "-")}</div>
+            </div>`
+          )
+          .join("")
+      : `<div class="field-hint">Belum ada referensi VT yang di-ingest.</div>`;
+  }
 }
 
 function getAudioContext() {
@@ -666,6 +766,7 @@ async function renderScenesWithAnimeMappa(singleIdx = null) {
       throw new Error(data.error || "Gagal merender animasi Anime 2D Studio MAPPA.");
     }
 
+    if (data.runId) currentScript.runId = data.runId;
     if (singleIdx !== null && data.scenes?.[0]) {
       currentScript.scenes[singleIdx].animeBlueprint = data.scenes[0];
       currentScript.scenes[singleIdx].animeRenderVersion = Date.now();
@@ -676,6 +777,9 @@ async function renderScenesWithAnimeMappa(singleIdx = null) {
           currentScript.scenes[idx].animeRenderVersion = Date.now();
         }
       });
+    }
+    if (data.playbookVersion && document.getElementById("aiBrainVersionLabel")) {
+      document.getElementById("aiBrainVersionLabel").textContent = `v${data.playbookVersion}`;
     }
 
     if (visualFoundationBox) {
@@ -738,6 +842,75 @@ async function renderScenesForActiveMode(singleIdx = null) {
   return { ok: true };
 }
 
+async function submitSceneFeedback(idx, rating, btnEl) {
+  const sc = currentScript?.scenes?.[idx];
+  if (!sc) return;
+  const note = String(sc.userFeedbackNote || "").trim();
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.textContent = rating === "weird" ? "🧬..." : "⏳";
+  }
+
+  let previewDataUrl = "";
+  try {
+    renderCompositeFrame({
+      sceneIndex: idx,
+      tSec: performance.now() / 1000,
+      sceneElapsedSec: 1.4,
+      sceneDurationSec: sceneAudioBuffers.get(idx)?.buffer?.duration || 4.6
+    });
+    previewDataUrl = canvas.toDataURL("image/jpeg", 0.65);
+  } catch {}
+
+  try {
+    const keys = getLocalKeys();
+    const abp = sc.animeBlueprint || {};
+    const resp = await fetch("/api/director/feedback", {
+      method: "POST",
+      headers: buildDirectorHeaders(),
+      body: JSON.stringify({
+        runId: currentScript.runId || null,
+        topic: currentScript.topic || currentScript.title || "",
+        sceneIndex: idx,
+        sceneType: abp.enableAlternatingCutaway && idx % 2 === 1 ? "cutaway" : "host",
+        promptUsed: abp.haikeiPrompt || abp.cutawayPrompt || sc.plainNarration || sc.narration || "",
+        motionConfig: {
+          cameraMotion2d: abp.cameraMotion2d,
+          characterPose: abp.characterPose,
+          satsueiGrade: abp.satsueiGrade
+        },
+        criticScore: sc.criticScore10 ?? null,
+        criticDefects: sc.criticDefects || [],
+        retryCount: sc.criticRetries || 0,
+        userRating: rating,
+        userNote: note,
+        previewDataUrl,
+        geminiApiKey: keys.geminiApiKey
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || "Gagal menyimpan feedback.");
+
+    if (data.runId) currentScript.runId = data.runId;
+    sc.userRating = rating;
+    renderSceneList();
+
+    if (data.evolved && data.playbook) {
+      await fetchDirectorBrain();
+      if (criticResultBox) {
+        criticResultBox.classList.remove("hidden");
+        criticResultBox.innerHTML = `<div>🧬 <strong>AI Brain Self-Upgraded → Playbook v${data.playbook.version}!</strong> (${escapeHtml(data.playbook.changelog || "")})</div>`;
+      }
+    } else if (data.localOnly && rating === "weird" && note) {
+      saveCinemaStyleLesson(`Hindari pola aneh: ${note}`, 65);
+    }
+  } catch (err) {
+    alert(`Feedback gagal: ${err.message}`);
+  } finally {
+    if (btnEl) btnEl.disabled = false;
+  }
+}
+
 async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
   if (!currentScript?.scenes?.[targetIdx]) {
     alert("Buat video terlebih dahulu agar Gemini Vision bisa melihat dan mengevaluasi frame-nya.");
@@ -764,67 +937,123 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
   }
 
   try {
-    // Render crisp frame right before snapshotting
-    renderCompositeFrame({
-      sceneIndex: targetIdx,
-      tSec: performance.now() / 1000,
-      sceneElapsedSec: 1.4,
-      sceneDurationSec: sceneAudioBuffers.get(targetIdx)?.buffer?.duration || 4.6
-    });
-    const frameDataUrl = canvas.toDataURL("image/jpeg", 0.78);
     const keys = getLocalKeys();
-    const targetBlueprint = activeMode === "anime_mappa" ? scene.animeBlueprint : null;
+    let retryCount = 0;
+    let data = null;
+    let usedFallbackRoute = false;
 
-    const resp = await fetch("/api/video-critic", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        frameDataUrl,
-        blueprint: targetBlueprint,
-        scene,
-        topic: currentScript.topic || currentScript.title || "",
-        geminiApiKey: keys.geminiApiKey
-      })
-    });
-    const data = await resp.json();
-    if (!resp.ok || data.error) throw new Error(data.error || "Gagal mengevaluasi frame.");
+    while (retryCount <= 2) {
+      if (retryCount > 0 && criticResultBox) {
+        criticResultBox.innerHTML = `<div>🛠️ <strong>Auto-Heal Retry ${retryCount}/2</strong> Scene #${targetIdx + 1}: menerapkan perbaikan bedah Playbook &amp; memeriksa ulang...</div>`;
+      }
 
-    if (data.refinedBlueprint && activeMode === "anime_mappa") {
-      currentScript.scenes[targetIdx].animeBlueprint = data.refinedBlueprint;
-      currentScript.scenes[targetIdx].animeRenderVersion = Date.now();
+      renderCompositeFrame({
+        sceneIndex: targetIdx,
+        tSec: performance.now() / 1000,
+        sceneElapsedSec: 1.4,
+        sceneDurationSec: sceneAudioBuffers.get(targetIdx)?.buffer?.duration || 4.6
+      });
+      const frameDataUrl = canvas.toDataURL("image/jpeg", 0.78);
+      const targetBlueprint = activeMode === "anime_mappa" ? scene.animeBlueprint : null;
+
+      let resp = await fetch("/api/director/critic", {
+        method: "POST",
+        headers: buildDirectorHeaders(),
+        body: JSON.stringify({
+          frameDataUrl,
+          blueprint: targetBlueprint,
+          scene,
+          topic: currentScript.topic || currentScript.title || "",
+          runId: currentScript.runId || null,
+          sceneIndex: targetIdx,
+          retryCount,
+          geminiApiKey: keys.geminiApiKey
+        })
+      });
+
+      if (resp.status === 401 || resp.status === 403) {
+        // Fallback smoothly to stateless local Vision Critic if Access PIN is not yet set in browser
+        usedFallbackRoute = true;
+        resp = await fetch("/api/video-critic", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            frameDataUrl,
+            blueprint: targetBlueprint,
+            scene,
+            topic: currentScript.topic || currentScript.title || "",
+            geminiApiKey: keys.geminiApiKey
+          })
+        });
+      }
+
+      data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || "Gagal mengevaluasi frame.");
+
+      if (data.runId) currentScript.runId = data.runId;
+      if (data.refinedBlueprint && activeMode === "anime_mappa") {
+        currentScript.scenes[targetIdx].animeBlueprint = data.refinedBlueprint;
+        currentScript.scenes[targetIdx].animeRenderVersion = Date.now();
+        scene = currentScript.scenes[targetIdx];
+        if (animeMappaEngine) await animeMappaEngine.ensureAssetsReady([scene.animeBlueprint]);
+      }
+
+      if (data.needsRetry && retryCount < 2 && !usedFallbackRoute) {
+        retryCount++;
+        continue;
+      }
+      break;
     }
-    if (data.overallScore) {
-      currentScript.scenes[targetIdx].criticScore = data.overallScore;
+
+    if (data.overallScore || data.overallScore10) {
+      currentScript.scenes[targetIdx].criticScore = data.overallScore || Math.round((data.overallScore10 || 8) * 10);
+      currentScript.scenes[targetIdx].criticScore10 = data.overallScore10 ?? Number(((data.overallScore || 80) / 10).toFixed(1));
       currentScript.scenes[targetIdx].criticPass = data.pass !== false;
+      currentScript.scenes[targetIdx].criticDefects = Array.isArray(data.defects) ? data.defects : [];
+      currentScript.scenes[targetIdx].criticRetries = retryCount;
     }
     if (data.styleLesson) {
       saveCinemaStyleLesson(data.styleLesson, data.overallScore);
     }
+    if (data.evolvedPlaybook) {
+      fetchDirectorBrain();
+    }
 
     const memCount = getCinemaStyleMemory().length;
     if (criticResultBox) {
+      const s10 = data.scores10 || null;
       const cr = data.criteria || null;
       const bd = data.breakdown || {};
       const passBadge = data.pass === false ? "⚠️ PERLU POLES" : "✅ PASS";
-      const metricsHtml = cr
-        ? `Cel 2D <strong>${cr.celAuthenticity}</strong> • Key/Light <strong>${cr.chromaLightIntegration}</strong> • Readability <strong>${cr.satsueiReadability}</strong> • Balance <strong>${cr.compositionBalance}</strong>`
-        : `Framing ${bd.framing || "-"} • Lighting ${bd.lighting || "-"} • Depth ${bd.depthAndBokeh || "-"} • Vibe ${bd.cinematicVibe || "-"}`;
+      const metricsHtml = s10
+        ? `Anatomi <strong>${s10.anatomy_coherence}/10</strong> • Karakter <strong>${s10.character_consistency}/10</strong> • Gaya 2D <strong>${s10.anime_style_fidelity}/10</strong> • Layout <strong>${s10.layout_safety}/10</strong>`
+        : cr
+          ? `Cel 2D <strong>${cr.celAuthenticity}</strong> • Key/Light <strong>${cr.chromaLightIntegration}</strong> • Readability <strong>${cr.satsueiReadability}</strong> • Balance <strong>${cr.compositionBalance}</strong>`
+          : `Framing ${bd.framing || "-"} • Lighting ${bd.lighting || "-"} • Depth ${bd.depthAndBokeh || "-"} • Vibe ${bd.cinematicVibe || "-"}`;
       const issuesHtml =
         Array.isArray(data.issues) && data.issues.length
-          ? `<div style="margin-top:3px;font-size:0.72rem;color:#fca5a5;">Isu: ${data.issues.join(" • ")}</div>`
+          ? `<div style="margin-top:3px;font-size:0.72rem;color:#fca5a5;">Isu: ${data.issues.map((x) => escapeHtml(x)).join(" • ")}</div>`
           : "";
       const adj = data.shader_adjustments || null;
       const adjSummary = adj
         ? `Bloom ${adj.bloom_intensity ?? "-"} • LightWrap ${adj.light_wrap_strength ?? "-"} • Crush ${adj.shadow_crush ?? "-"} • Ambient ${adj.ambient_harmonization ?? "-"}`
         : "Patch otomatis diterapkan";
+      const pinHint = usedFallbackRoute
+        ? `<div style="margin-top:3px;font-size:0.71rem;color:#fde68a;">🔒 Isi App Access PIN di 🧠 AI Brain agar hasil QC &amp; auto-learn tersimpan ke Supabase.</div>`
+        : "";
+      const retryBadge = retryCount > 0 ? ` • 🛠️ Auto-Heal ${retryCount}/2` : "";
+      const scoreTitle = data.overallScore10 !== undefined
+        ? `${data.overallScore10}/10 (${data.overallScore}/100)`
+        : `${data.overallScore}/100`;
 
       criticResultBox.classList.remove("hidden");
       criticResultBox.innerHTML = `
-        <div><strong>👁️ Art-Director QC (${data.visionModel}): ${data.overallScore}/100 • ${passBadge}</strong></div>
+        <div><strong>👁️ Director QC Gate (${escapeHtml(data.visionModel)}): ${scoreTitle} • ${passBadge}${retryBadge}</strong></div>
         <div style="font-size:0.72rem;opacity:0.92;margin-top:2px;">${metricsHtml}</div>
-        <div style="margin-top:4px;">${data.critique}</div>
+        <div style="margin-top:4px;">${escapeHtml(data.critique)}</div>
         ${issuesHtml}
         <div style="margin-top:4px;color:#fde68a;font-size:0.74rem;">✅ ${adjSummary} • Memori: <strong>${memCount}</strong></div>
+        ${pinHint}
       `;
     }
     sceneEnterTimestamp = performance.now();
@@ -1044,6 +1273,11 @@ function renderSceneList() {
           <button class="btn btn-secondary btn-sm play-single-btn" data-idx="${index}">🔊 Tes</button>
         </div>
       </div>
+      <div class="scene-feedback-bar">
+        <button type="button" class="btn btn-secondary btn-sm btn-rate-good ${scene.userRating === "good" ? "rated" : ""}" data-idx="${index}" title="Bagus / Keren">👍</button>
+        <button type="button" class="btn btn-secondary btn-sm btn-rate-weird ${scene.userRating === "weird" ? "rated" : ""}" data-idx="${index}" title="Tandai aneh agar AI otomatis belajar & upgrade Playbook">👎 Aneh</button>
+        <input type="text" class="scene-feedback-note" data-idx="${index}" value="${escapeHtml(scene.userFeedbackNote || "")}" placeholder="Catatan kalau aneh (opsional)..." />
+      </div>
     `;
 
     card.addEventListener("click", (e) => {
@@ -1110,6 +1344,24 @@ function renderSceneList() {
       btn.disabled = true;
       btn.textContent = "⏳...";
       await runGeminiVisualCritic(idx);
+    });
+  });
+
+  document.querySelectorAll(".scene-feedback-note").forEach((inp) => {
+    inp.addEventListener("input", (e) => {
+      const idx = Number(e.target.dataset.idx);
+      if (currentScript?.scenes?.[idx]) {
+        currentScript.scenes[idx].userFeedbackNote = e.target.value;
+      }
+    });
+  });
+
+  document.querySelectorAll(".btn-rate-good, .btn-rate-weird").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.idx);
+      const rating = btn.classList.contains("btn-rate-weird") ? "weird" : "good";
+      await submitSceneFeedback(idx, rating, btn);
     });
   });
 
@@ -2805,6 +3057,10 @@ async function initStudio() {
     }
     document.getElementById("elevenlabsApiKeyInput").value = keys.elevenlabsApiKey;
     document.getElementById("geminiApiKeyInput").value = keys.geminiApiKey;
+    const pinInp = document.getElementById("appAccessPinInput");
+    if (pinInp) pinInp.value = keys.accessPin;
+    const brainPinInp = document.getElementById("brainAccessPinInput");
+    if (brainPinInp) brainPinInp.value = keys.accessPin;
 
     const hasEl = serverConfig.hasElevenlabsEnvKey || Boolean(keys.elevenlabsApiKey);
     document.getElementById("voiceStatusDot").classList.toggle("active-el", hasEl);
@@ -2848,6 +3104,7 @@ async function initStudio() {
 
   startRenderLoop();
   renderWorkflowUI(promptWorkflow.getSnapshot());
+  fetchDirectorBrain();
 
   // Always start with an empty prompt column ready for user input
   simplePromptInput.value = "";
@@ -3006,10 +3263,15 @@ document.getElementById("saveSettingsBtn").addEventListener("click", () => {
   const voiceId = document.getElementById("elevenlabsVoiceIdInput").value.trim() || "nPczCjzI2devNBz1zQrb";
   const elKey = document.getElementById("elevenlabsApiKeyInput").value.trim();
   const gemKey = document.getElementById("geminiApiKeyInput").value.trim();
+  const pinVal = document.getElementById("appAccessPinInput")?.value.trim() || "";
 
   localStorage.setItem("maou_el_voice", voiceId);
   localStorage.setItem("maou_el_key", elKey);
   localStorage.setItem("maou_gemini_key", gemKey);
+  if (pinVal) localStorage.setItem("maou_access_pin", pinVal);
+  else localStorage.removeItem("maou_access_pin");
+  const brainPinInp = document.getElementById("brainAccessPinInput");
+  if (brainPinInp) brainPinInp.value = pinVal;
 
   const hasEl = serverConfig.hasElevenlabsEnvKey || Boolean(elKey);
   document.getElementById("voiceStatusDot").classList.toggle("active-el", hasEl);
@@ -3020,6 +3282,147 @@ document.getElementById("saveSettingsBtn").addEventListener("click", () => {
   activeElevenlabsVoiceId = "";
   sceneAudioBuffers.clear();
   settingsModal.classList.add("hidden");
+});
+
+// ============================================================================
+// AI BRAIN MODAL EVENTS (Playbook vX, VT Reference Ingestor, Upgrade & Rollback)
+// ============================================================================
+const aiBrainModal = document.getElementById("aiBrainModal");
+document.getElementById("openAiBrainBtn")?.addEventListener("click", async () => {
+  aiBrainModal?.classList.remove("hidden");
+  await fetchDirectorBrain();
+});
+document.getElementById("closeAiBrainBtn")?.addEventListener("click", () => {
+  aiBrainModal?.classList.add("hidden");
+});
+document.getElementById("closeAiBrainFooterBtn")?.addEventListener("click", () => {
+  aiBrainModal?.classList.add("hidden");
+});
+aiBrainModal?.addEventListener("click", (e) => {
+  if (e.target === aiBrainModal) aiBrainModal.classList.add("hidden");
+});
+document.getElementById("refreshAiBrainBtn")?.addEventListener("click", fetchDirectorBrain);
+
+document.getElementById("saveBrainPinBtn")?.addEventListener("click", () => {
+  const val = document.getElementById("brainAccessPinInput")?.value.trim() || "";
+  if (val) localStorage.setItem("maou_access_pin", val);
+  else localStorage.removeItem("maou_access_pin");
+  const setInp = document.getElementById("appAccessPinInput");
+  if (setInp) setInp.value = val;
+  const btn = document.getElementById("saveBrainPinBtn");
+  if (btn) {
+    btn.textContent = "✅ PIN Disimpan";
+    setTimeout(() => {
+      btn.textContent = "🔒 Simpan PIN";
+    }, 1500);
+  }
+});
+
+document.getElementById("vtRefThumbInput")?.addEventListener("change", (e) => {
+  const file = e.target.files?.[0];
+  const lbl = document.getElementById("vtRefThumbName");
+  if (!file) {
+    vtThumbDataUrl = "";
+    if (lbl) lbl.textContent = "Belum ada frame";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    vtThumbDataUrl = String(reader.result || "");
+    if (lbl) lbl.textContent = `✅ ${file.name}`;
+  };
+  reader.readAsDataURL(file);
+});
+
+document.getElementById("ingestVtBtn")?.addEventListener("click", async () => {
+  const btn = document.getElementById("ingestVtBtn");
+  const title = document.getElementById("vtRefTitleInput")?.value.trim() || "";
+  const url = document.getElementById("vtRefUrlInput")?.value.trim() || "";
+  const notes = document.getElementById("vtRefNotesInput")?.value.trim() || "";
+  const cutRaw = document.getElementById("vtRefCutInput")?.value;
+  if (!title && !url && !notes && !vtThumbDataUrl) {
+    alert("Isi minimal judul, link VT, catatan pacing, atau upload frame VT terlebih dahulu.");
+    return;
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "⏳ Mengekstrak DNA VT...";
+  }
+  try {
+    const keys = getLocalKeys();
+    const resp = await fetch("/api/director/ingest-vt", {
+      method: "POST",
+      headers: buildDirectorHeaders(),
+      body: JSON.stringify({
+        title,
+        referenceUrl: url,
+        sourceNotes: notes,
+        avgCutDurationHint: cutRaw ? Number(cutRaw) : null,
+        thumbnailDataUrl: vtThumbDataUrl,
+        geminiApiKey: keys.geminiApiKey
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || "Gagal ingest referensi VT.");
+    await fetchDirectorBrain();
+    alert(`✅ VT berhasil di-ingest! AI Brain naik ke Playbook v${data.playbook?.version || "?"}`);
+  } catch (err) {
+    alert("Ingest VT gagal: " + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "📥 Ingest VT & Upgrade Playbook";
+    }
+  }
+});
+
+document.getElementById("upgradeBrainNowBtn")?.addEventListener("click", async () => {
+  const btn = document.getElementById("upgradeBrainNowBtn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "🧬 Meng-upgrade...";
+  }
+  try {
+    const keys = getLocalKeys();
+    const resp = await fetch("/api/director/evolve", {
+      method: "POST",
+      headers: buildDirectorHeaders(),
+      body: JSON.stringify({
+        triggerReason: "Manual Upgrade Brain Now",
+        geminiApiKey: keys.geminiApiKey
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || "Gagal meng-upgrade Playbook.");
+    await fetchDirectorBrain();
+    alert(`🧬 Brain berhasil di-upgrade ke Playbook v${data.playbook?.version || "?"}!`);
+  } catch (err) {
+    alert("Upgrade Brain gagal: " + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "🧬 Upgrade Brain Now";
+    }
+  }
+});
+
+document.getElementById("rollbackBrainBtn")?.addEventListener("click", async () => {
+  const sel = document.getElementById("rollbackVersionSelect");
+  const ver = Number(sel?.value || 0);
+  if (!ver) return;
+  try {
+    const resp = await fetch("/api/director/rollback", {
+      method: "POST",
+      headers: buildDirectorHeaders(),
+      body: JSON.stringify({ version: ver })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || "Gagal rollback Playbook.");
+    await fetchDirectorBrain();
+    alert(`⏪ Berhasil rollback ke Playbook v${data.playbook?.version || ver}!`);
+  } catch (err) {
+    alert("Rollback gagal: " + err.message);
+  }
 });
 
 initStudio();

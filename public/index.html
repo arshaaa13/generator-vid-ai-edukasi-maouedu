@@ -33,6 +33,7 @@
         <span class="dot" id="voiceStatusDot"></span>
         <span id="voiceStatusLabel">Mode Suara Cowok Siap</span>
       </div>
+      <button class="btn btn-secondary" id="openAiBrainBtn" title="AI Brain (Playbook Berversi, Learned Mistakes Anti-Aneh, VT Ingestor & Rollback)">🧠 AI Brain (<span id="aiBrainVersionLabel">v1</span>)</button>
       <button class="btn btn-secondary" id="openWorkflowBtn" title="Lihat jalan kerjanya dari Prompt sampai jadi Video MP4">🗺️ Alur Kerja</button>
       <button class="btn btn-secondary" id="openCharacterBibleBtn">👑 Character Bible</button>
       <button class="btn btn-primary" id="openSettingsBtn">⚙️ API & Voice</button>
@@ -261,6 +262,14 @@
             Jika tidak diisi (atau limit), sistem otomatis memakai <strong>Riset Wikipedia ID + AI Gratis</strong> agar tetap jalan di Vercel.
           </small>
         </div>
+
+        <div class="field-group">
+          <label class="field-label">🛡️ App Access PIN (Wajib jika <code>APP_ACCESS_PIN</code> aktif)</label>
+          <input type="password" id="appAccessPinInput" placeholder="Masukkan PIN rahasiamu (dikirim via X-Access-Pin)..." />
+          <small class="field-hint">
+            Disimpan hanya di browser kamu (<code>localStorage</code>) untuk mengautentikasi API Supabase Director (ingest VT, critic gate, feedback, evolve, rollback).
+          </small>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" id="cancelSettingsBtn">Batal</button>
@@ -310,6 +319,72 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" id="closeWorkflowFooterBtn">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Brain (Self-Upgrading Director Playbook & Anti-Aneh Memory) Modal -->
+  <div class="modal-backdrop hidden" id="aiBrainModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <div>
+          <h3>🧠 AI Brain — Self-Upgrading Anime Director</h3>
+          <p class="panel-subtitle" id="aiBrainStatusLine">Memuat status Playbook &amp; Supabase...</p>
+        </div>
+        <button class="btn-close" id="closeAiBrainBtn">✕</button>
+      </div>
+      <div class="modal-body brain-modal-body">
+        <div class="brain-top-bar">
+          <div class="brain-pin-row">
+            <input type="password" id="brainAccessPinInput" placeholder="App Access PIN (X-Access-Pin)..." />
+            <button type="button" class="btn btn-secondary btn-sm" id="saveBrainPinBtn">🔒 Simpan PIN</button>
+          </div>
+          <div class="brain-actions-row">
+            <button type="button" class="btn btn-gold btn-sm" id="upgradeBrainNowBtn">🧬 Upgrade Brain Now</button>
+            <select id="rollbackVersionSelect" style="padding:5px 8px;border-radius:7px;background:#0f172a;color:#f8fafc;border:1px solid #334155;font-size:0.75rem;"></select>
+            <button type="button" class="btn btn-secondary btn-sm" id="rollbackBrainBtn">⏪ Rollback</button>
+          </div>
+        </div>
+
+        <div class="brain-section">
+          <div class="brain-section-header">
+            <strong>📘 Active Director Playbook</strong>
+            <span class="badge badge-gold" id="aiBrainActiveBadge">Playbook v1</span>
+          </div>
+          <div id="aiBrainPlaybookSummary" class="analysis-box"></div>
+        </div>
+
+        <div class="brain-section">
+          <div class="brain-section-header">
+            <strong>📥 VT Reference Ingestor (Ekstrak Rumus Pacing &amp; Kamera)</strong>
+          </div>
+          <div class="vt-ingest-grid">
+            <input type="text" id="vtRefTitleInput" placeholder="Judul Referensi VT (cth: JJK Fast Explain Hook)" />
+            <input type="number" id="vtRefCutInput" step="0.1" min="1.0" max="4.0" placeholder="Target cut (detik, cth: 2.2)" />
+          </div>
+          <input type="text" id="vtRefUrlInput" placeholder="Opsional: Link VT / TikTok (https://vt.tiktok.com/...)" />
+          <textarea id="vtRefNotesInput" rows="2" placeholder="Catatan teknis VT (cth: cut tiap 2 detik, zoom punch saat hook, cutaway penuh saat jelaskan komponen)..."></textarea>
+          <div class="brain-actions-row" style="justify-content:space-between;">
+            <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+              🖼️ Upload Frame VT (Opsional)
+              <input type="file" id="vtRefThumbInput" accept="image/jpeg,image/png,image/webp" class="hidden" />
+            </label>
+            <span id="vtRefThumbName" class="field-hint">Belum ada frame</span>
+            <button type="button" class="btn btn-crimson btn-sm" id="ingestVtBtn">📥 Ingest VT &amp; Upgrade Playbook</button>
+          </div>
+          <div id="vtRefListBox" class="brain-list"></div>
+        </div>
+
+        <div class="brain-section">
+          <div class="brain-section-header">
+            <strong>🛡️ Learned Mistakes (Memori Anti-"Aneh" Persisten)</strong>
+          </div>
+          <div id="learnedMistakesListBox" class="brain-list"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="refreshAiBrainBtn">🔄 Refresh</button>
+        <button class="btn btn-secondary" id="closeAiBrainFooterBtn">Tutup</button>
       </div>
     </div>
   </div>

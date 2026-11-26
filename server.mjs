@@ -19,6 +19,15 @@ import {
 } from "./lib/video-ai/veo-hero-adapter.js";
 import { researchAndPlanVisualWorld } from "./lib/video-ai/visual-researcher.js";
 import { critiqueAndRefineRenderedFrame } from "./lib/video-ai/visual-critic.js";
+import { verifyAccessPin } from "./lib/supabase/server.js";
+import {
+  evaluateSceneWithDirectorGate,
+  evolveDirectorPlaybook,
+  fetchActiveDirectorContext,
+  ingestVtReference,
+  recordSceneFeedback,
+  rollbackDirectorPlaybook
+} from "./lib/video-ai/director-brain.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,7 +64,7 @@ function sendJson(res, status, data) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type"
+    "Access-Control-Allow-Headers": "Content-Type, X-Access-Pin"
   });
   res.end(JSON.stringify(data));
 }
@@ -75,7 +84,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type"
+      "Access-Control-Allow-Headers": "Content-Type, X-Access-Pin"
     });
     return res.end();
   }
@@ -202,6 +211,87 @@ const server = http.createServer(async (req, res) => {
         topic: body.topic || "",
         geminiApiKey: body.geminiApiKey || ""
       });
+      return sendJson(res, 200, result);
+    }
+
+    if (pathname === "/api/director/playbook" && req.method === "GET") {
+      return sendJson(res, 200, { ok: true, ...(await fetchActiveDirectorContext()) });
+    }
+
+    if (pathname === "/api/director/ingest-vt" && req.method === "POST") {
+      const auth = verifyAccessPin(req);
+      if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
+      const body = await readJsonBody(req);
+      const result = await ingestVtReference({
+        title: body?.title || "",
+        referenceUrl: body?.referenceUrl || body?.url || "",
+        sourceNotes: body?.sourceNotes || body?.notes || "",
+        avgCutDurationHint: body?.avgCutDurationHint ?? null,
+        thumbnailDataUrl: body?.thumbnailDataUrl || "",
+        geminiApiKey: body?.geminiApiKey || ""
+      });
+      return sendJson(res, 200, result);
+    }
+
+    if (pathname === "/api/director/critic" && req.method === "POST") {
+      const auth = verifyAccessPin(req);
+      if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
+      const body = await readJsonBody(req);
+      if (!body?.frameDataUrl) {
+        return sendJson(res, 400, { error: "frameDataUrl wajib dikirim." });
+      }
+      const result = await evaluateSceneWithDirectorGate({
+        frameDataUrl: body.frameDataUrl,
+        blueprint: body.blueprint || null,
+        scene: body.scene || {},
+        topic: body.topic || "",
+        runId: body.runId || null,
+        sceneIndex: body.sceneIndex ?? 0,
+        retryCount: body.retryCount ?? 0,
+        geminiApiKey: body.geminiApiKey || ""
+      });
+      return sendJson(res, 200, result);
+    }
+
+    if (pathname === "/api/director/feedback" && req.method === "POST") {
+      const auth = verifyAccessPin(req);
+      if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
+      const body = await readJsonBody(req);
+      const result = await recordSceneFeedback({
+        runId: body?.runId || null,
+        topic: body?.topic || "",
+        sceneIndex: body?.sceneIndex ?? 0,
+        sceneType: body?.sceneType || "host",
+        promptUsed: body?.promptUsed || "",
+        motionConfig: body?.motionConfig || {},
+        criticScore: body?.criticScore ?? null,
+        criticDefects: Array.isArray(body?.criticDefects) ? body.criticDefects : [],
+        retryCount: body?.retryCount ?? 0,
+        userRating: body?.userRating || "good",
+        userNote: body?.userNote || "",
+        previewDataUrl: body?.previewDataUrl || "",
+        geminiApiKey: body?.geminiApiKey || ""
+      });
+      return sendJson(res, 200, result);
+    }
+
+    if (pathname === "/api/director/evolve" && req.method === "POST") {
+      const auth = verifyAccessPin(req);
+      if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
+      const body = await readJsonBody(req);
+      const result = await evolveDirectorPlaybook({
+        triggerReason: body?.triggerReason || "Manual Upgrade Brain Now",
+        extraNote: body?.extraNote || "",
+        geminiApiKey: body?.geminiApiKey || ""
+      });
+      return sendJson(res, 200, result);
+    }
+
+    if (pathname === "/api/director/rollback" && req.method === "POST") {
+      const auth = verifyAccessPin(req);
+      if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
+      const body = await readJsonBody(req);
+      const result = await rollbackDirectorPlaybook(body?.version);
       return sendJson(res, 200, result);
     }
 
