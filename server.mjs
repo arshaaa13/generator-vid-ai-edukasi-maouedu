@@ -9,6 +9,7 @@ import {
   generateScriptFromPrompt,
   synthesizeSpeechStateless
 } from "./lib/maou-engine.js";
+import { compileGeminiCinemaVideo } from "./lib/gemini-video-renderer.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -97,6 +98,22 @@ const server = http.createServer(async (req, res) => {
         prompt,
         referenceUrl: body?.referenceUrl || "",
         geminiApiKey: body?.geminiApiKey || ""
+      });
+      return sendJson(res, 200, result);
+    }
+
+    if (pathname === "/api/gemini-render" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      const scenes = Array.isArray(body?.scenes) ? body.scenes : [];
+      if (!scenes.length) {
+        return sendJson(res, 400, { error: "Scenes tidak boleh kosong untuk Gemini Cinema." });
+      }
+      const result = await compileGeminiCinemaVideo({
+        topic: body?.topic || "",
+        title: body?.title || "",
+        scenes,
+        geminiApiKey: body?.geminiApiKey || "",
+        enableKeyframes: Boolean(body?.enableKeyframes)
       });
       return sendJson(res, 200, result);
     }

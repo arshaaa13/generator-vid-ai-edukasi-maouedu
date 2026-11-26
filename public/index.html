@@ -55,15 +55,17 @@
         </button>
       </div>
 
-      <!-- Live 4-Step Autonomous Pipeline Tracker -->
+      <!-- Live 5-Step Autonomous Pipeline Tracker -->
       <div class="pipeline-bar hidden" id="pipelineBar">
-        <div class="pipe-step" id="stepResearch">1. 🔍 AI Research Topik</div>
+        <div class="pipe-step" id="stepResearch">1. 🔍 AI Research</div>
         <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepScript">2. ✍️ Script MC Raja Iblis</div>
+        <div class="pipe-step" id="stepScript">2. ✍️ Script Raja Iblis</div>
         <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepVoice">3. 🎙️ Voiceover Cowok</div>
+        <div class="pipe-step" id="stepCinema">3. 🎬 Gemini Cinema Render</div>
         <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepReady">4. 🎬 Video 9:16 Siap!</div>
+        <div class="pipe-step" id="stepVoice">4. 🎙️ ElevenLabs Voice</div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step" id="stepReady">5. ✨ Video HD Siap!</div>
       </div>
     </div>
   </section>
@@ -101,11 +103,19 @@
       </div>
 
       <div class="card">
-        <label class="field-label">🎛️ Pengaturan Animasi & Audio</label>
+        <label class="field-label">🎛️ Pengaturan Render Video Gemini & Audio</label>
         <div class="toggle-list">
           <label class="toggle-item">
+            <input type="checkbox" id="toggleGeminiCinema" checked />
+            <span>🎬 <strong>Gemini Cinema AI Render</strong> (PBR + Shader + Bloom Gaya Kling)</span>
+          </label>
+          <label class="toggle-item">
+            <input type="checkbox" id="toggleNanoBananaKeyframes" />
+            <span>🍌 <strong>AI Keyframe Nano Banana</strong> (Khusus Gemini API Key Berbayar)</span>
+          </label>
+          <label class="toggle-item">
             <input type="checkbox" id="toggle3dMode" checked />
-            <span>🎬 <strong>Mode Dunia 3D @untabiru5</strong> (Perspektif 3D Nyata)</span>
+            <span>🧱 <strong>Mode Dunia 3D Klasik</strong> (Fallback jika Cinema dimatikan)</span>
           </label>
           <label class="toggle-item">
             <input type="checkbox" id="toggleMcOverlay" checked />
@@ -125,9 +135,12 @@
           </label>
         </div>
 
-        <div class="action-stack">
+        <div class="action-stack" style="display:flex;flex-direction:column;gap:8px;">
+          <button class="btn btn-crimson btn-full" id="renderGeminiCinemaBtn">
+            🎬 Render Animasi Sinematik Gemini AI
+          </button>
           <button class="btn btn-gold btn-full" id="exportVideoBtn">
-            ⬇️ Render & Download Video (9:16)
+            ⬇️ Render & Download Video HD (9:16)
           </button>
         </div>
         <div id="exportProgressBox" class="progress-box hidden">
@@ -188,15 +201,15 @@
       <div class="modal-body">
         <div class="field-group">
           <label class="field-label">🎙️ Pilih Suara Cowok ElevenLabs (Aktif di Paket Free & Berbayar)</label>
-          <select id="elevenlabsVoicePreset" style="width:100%;padding:9px 11px;border-radius:8px;background:#0f172a;color:#f8fafc;border:1px solid rgba(255,255,255,0.16);margin-bottom:8px;">
+          <select id="elevenlabsVoicePreset" style="width:100%;padding:9px 11px;border-radius:8px;background:#0f172a;color:#f8fafc;border:1px solid rgba(255,255,255,0.16);margin-bottom:6px;">
             <option value="nPczCjzI2devNBz1zQrb">Brian — Deep Resonant Narrator (Rekomendasi • Free API OK)</option>
             <option value="pNInz6obpgDQGcFmaJgB">Adam — Dominant Firm Male (Free API OK)</option>
             <option value="IKne3meq5aSn9XLyUdCD">Charlie — Deep Confident Energetic (Free API OK)</option>
             <option value="JBFqnCBsd6RMkjVDRZzb">George — Warm Storyteller (Free API OK)</option>
             <option value="onwK4e9ZLuTAKqWW03F9">Daniel — Steady Broadcaster (Free API OK)</option>
-            <option value="">Custom Voice ID (khusus paket berbayar / voice sendiri)</option>
+            <option value="__custom__">Custom Voice ID (khusus paket berbayar / voice sendiri)</option>
           </select>
-          <input type="text" id="elevenlabsVoiceIdInput" value="nPczCjzI2devNBz1zQrb" />
+          <input type="text" id="elevenlabsVoiceIdInput" class="hidden" value="nPczCjzI2devNBz1zQrb" placeholder="Masukkan Custom Voice ID..." />
           <small class="field-hint">
             Default memakai suara premade <strong>Brian (nPczCjzI2devNBz1zQrb)</strong> agar tidak kena error <em>"Free users cannot use library voices via the API"</em>.
           </small>

@@ -1,10 +1,11 @@
-// MaouEdu AI — 1-Prompt Auto-Research & @untabiru5 3D Diorama + 2D Anime Host Video Studio
+// MaouEdu AI — 1-Prompt Auto-Research & Gemini Cinema (Kling-Class 3D PBR/Shader) + 2D Anime Host Video Studio
 import {
   renderToonVideoFrame,
   drawScienceMeter,
   drawCelebrationConfetti
 } from "/toon-renderer.js";
 import { Maou3DStage } from "/scene3d.js";
+import { MaouGeminiCinema } from "/gemini-cinema.js";
 
 const canvas = document.getElementById("videoCanvas");
 const ctx = canvas.getContext("2d");
@@ -19,8 +20,11 @@ let currentScript = null;
 let activeSceneIndex = 0;
 let activePhraseIndex = 0;
 let isPlaying = false;
+let playbackRunId = 0;
 let stage3d = null;
 let stage3dReady = false;
+let geminiCinema = null;
+let geminiCinemaReady = false;
 let audioCtx = null;
 let analyserNode = null;
 let analyserData = null;
@@ -46,6 +50,7 @@ const autoBuildVideoBtn = document.getElementById("autoBuildVideoBtn");
 const pipelineBar = document.getElementById("pipelineBar");
 const stepResearch = document.getElementById("stepResearch");
 const stepScript = document.getElementById("stepScript");
+const stepCinema = document.getElementById("stepCinema");
 const stepVoice = document.getElementById("stepVoice");
 const stepReady = document.getElementById("stepReady");
 
@@ -54,6 +59,7 @@ const aiEngineBadge = document.getElementById("aiEngineBadge");
 const tiktokUrlInput = document.getElementById("tiktokUrlInput");
 const analyzeTiktokBtn = document.getElementById("analyzeTiktokBtn");
 const tiktokAnalysisBox = document.getElementById("tiktokAnalysisBox");
+const renderGeminiCinemaBtn = document.getElementById("renderGeminiCinemaBtn");
 const exportVideoBtn = document.getElementById("exportVideoBtn");
 const exportProgressBox = document.getElementById("exportProgressBox");
 const exportProgressFill = document.getElementById("exportProgressFill");
@@ -69,6 +75,8 @@ const nextSceneBtn = document.getElementById("nextSceneBtn");
 const addSceneBtn = document.getElementById("addSceneBtn");
 
 // Toggles
+const toggleGeminiCinema = document.getElementById("toggleGeminiCinema");
+const toggleNanoBananaKeyframes = document.getElementById("toggleNanoBananaKeyframes");
 const toggle3dMode = document.getElementById("toggle3dMode");
 const toggleMcOverlay = document.getElementById("toggleMcOverlay");
 const toggleYellowSubtitles = document.getElementById("toggleYellowSubtitles");
@@ -147,8 +155,8 @@ function base64ToArrayBuffer(base64) {
 
 function setPipelineState(stage) {
   pipelineBar.classList.remove("hidden");
-  const stages = [stepResearch, stepScript, stepVoice, stepReady];
-  const order = { research: 0, script: 1, voice: 2, ready: 3, allDone: 4 };
+  const stages = [stepResearch, stepScript, stepCinema, stepVoice, stepReady].filter(Boolean);
+  const order = { research: 0, script: 1, cinema: 2, voice: 3, ready: 4, allDone: 5 };
   const activeIdx = order[stage] ?? 0;
 
   stages.forEach((el, idx) => {
@@ -347,7 +355,14 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
     renderSceneList();
     updateActiveSceneUI();
 
-    // 3: Generate voiceovers strictly via ElevenLabs across all scenes (no Google fallback)
+    // 3: Compile Kling-Class Gemini Cinema Animation Blueprints (PBR + Shaders + Volumetric VFX)
+    if (!toggleGeminiCinema || toggleGeminiCinema.checked) {
+      setPipelineState("cinema");
+      autoBuildVideoBtn.textContent = "🎬 Gemini Cinema Merender Animasi...";
+      await renderScenesWithGeminiCinema();
+    }
+
+    // 4: Generate voiceovers strictly via ElevenLabs across all scenes (no Google fallback)
     setPipelineState("voice");
     for (let i = 0; i < currentScript.scenes.length; i++) {
       autoBuildVideoBtn.textContent = `🎙️ ElevenLabs Scene ${i + 1}/${currentScript.scenes.length}...`;
@@ -365,6 +380,71 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
     alert("Terjadi kendala saat membuat video: " + e.message);
     autoBuildVideoBtn.textContent = "✨ Buat Video Otomatis";
     autoBuildVideoBtn.disabled = false;
+  }
+}
+
+async function renderScenesWithGeminiCinema(singleIdx = null) {
+  if (!currentScript?.scenes?.length) return false;
+  const keys = getLocalKeys();
+  const targetScenes =
+    singleIdx !== null && currentScript.scenes[singleIdx]
+      ? [currentScript.scenes[singleIdx]]
+      : currentScript.scenes;
+
+  if (renderGeminiCinemaBtn) {
+    renderGeminiCinemaBtn.disabled = true;
+    renderGeminiCinemaBtn.textContent =
+      singleIdx !== null
+        ? `⏳ Gemini Merender Scene #${singleIdx + 1}...`
+        : "⏳ Gemini Cinema Mengompilasi Animasi HD...";
+  }
+
+  try {
+    const resp = await fetch("/api/gemini-render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        topic: currentScript.topic || "",
+        title: currentScript.title || "",
+        scenes: targetScenes,
+        geminiApiKey: keys.geminiApiKey,
+        enableKeyframes: Boolean(toggleNanoBananaKeyframes?.checked)
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) {
+      throw new Error(data.error || "Gagal merender animasi Gemini Cinema.");
+    }
+
+    if (singleIdx !== null && data.scenes?.[0]) {
+      currentScript.scenes[singleIdx].cinemaBlueprint = data.scenes[0];
+      currentScript.scenes[singleIdx].cinemaRenderVersion = Date.now();
+    } else if (Array.isArray(data.scenes)) {
+      data.scenes.forEach((bp, idx) => {
+        if (currentScript.scenes[idx]) {
+          currentScript.scenes[idx].cinemaBlueprint = bp;
+          currentScript.scenes[idx].cinemaRenderVersion = Date.now();
+        }
+      });
+    }
+
+    const modeTag =
+      data.keyframeCount > 0
+        ? `🍌 Nano Banana + Cinema (${data.imageModel})`
+        : `🎬 Gemini Cinema (${data.directorModel})`;
+    aiEngineBadge.textContent = modeTag;
+    sceneEnterTimestamp = performance.now();
+    renderSceneList();
+    updateActiveSceneUI();
+    return true;
+  } catch (err) {
+    console.warn("Gemini Cinema render warning:", err);
+    return false;
+  } finally {
+    if (renderGeminiCinemaBtn) {
+      renderGeminiCinemaBtn.disabled = false;
+      renderGeminiCinemaBtn.textContent = "🎬 Render Animasi Sinematik Gemini AI";
+    }
   }
 }
 
@@ -416,12 +496,15 @@ function renderSceneList() {
     card.className = `scene-card ${index === activeSceneIndex ? "active" : ""}`;
     const hasAudio = sceneAudioBuffers.has(index);
     const clipInfo = sceneVideoClips.get(index);
-    const animBadge =
-      scene.visual?.stage3d?.objects?.length
-        ? `🎬 3D AI (${scene.visual.stage3d.objects.length} objek)`
-        : scene.visual?.heroObject
-        ? `🎬 3D @untabiru5`
-        : "";
+    const animBadge = scene.cinemaBlueprint
+      ? scene.cinemaBlueprint.aiKeyframe
+        ? `🍌 Gemini AI Keyframe`
+        : `🎬 Gemini Cinema (${scene.cinemaBlueprint.actors?.length || 0} aktor • ${scene.cinemaBlueprint.lightingMood || "hd"})`
+      : scene.visual?.stage3d?.objects?.length
+      ? `🎬 3D AI (${scene.visual.stage3d.objects.length} objek)`
+      : scene.visual?.heroObject
+      ? `🎬 3D @untabiru5`
+      : "";
     const clipBadge = clipInfo?.videoEl ? "🎥 Klip MP4 Siap" : animBadge;
 
     card.innerHTML = `
@@ -450,6 +533,7 @@ function renderSceneList() {
           ${hasAudio ? "✅ Suara Siap" : "⚪ Belum direkam"}
         </span>
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm rerender-cinema-btn" data-idx="${index}" title="Render ulang animasi scene ini via Gemini Cinema">🎬 Gemini</button>
           <label class="btn btn-secondary btn-sm" style="cursor:pointer;" title="Upload klip MP4 sendiri">
             📁 MP4
             <input type="file" accept="video/mp4,video/webm" class="upload-scene-mp4 hidden" data-idx="${index}" />
@@ -498,6 +582,18 @@ function renderSceneList() {
         st.textContent = "⚪ Teks berubah (klik Tes Scene)";
         st.classList.remove("ready");
       }
+    });
+  });
+
+  document.querySelectorAll(".rerender-cinema-btn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.idx);
+      activeSceneIndex = idx;
+      updateActiveSceneUI();
+      btn.disabled = true;
+      btn.textContent = "⏳...";
+      await renderScenesWithGeminiCinema(idx);
     });
   });
 
@@ -640,7 +736,8 @@ async function ensureSceneAudio(index) {
   return null;
 }
 
-async function playSceneAudioAndWait(index, destNode = null) {
+async function playSceneAudioAndWait(index, destNode = null, runId = playbackRunId) {
+  if (runId !== playbackRunId) return;
   const sc = currentScript.scenes[index];
   if (!sc.subtitlePhrases || !sc.subtitlePhrases.length) {
     sc.subtitlePhrases = parseSubtitlePhrasesClient(sc.narration);
@@ -662,6 +759,8 @@ async function playSceneAudioAndWait(index, destNode = null) {
     audioEntry = await ensureSceneAudio(index);
   } catch {}
 
+  if (runId !== playbackRunId || !isPlaying) return;
+
   return new Promise(async (resolve) => {
     const phrases = sc.subtitlePhrases;
     if (audioEntry && audioEntry.buffer) {
@@ -671,6 +770,8 @@ async function playSceneAudioAndWait(index, destNode = null) {
           await actx.resume();
         } catch {}
       }
+      if (runId !== playbackRunId || !isPlaying) return resolve();
+
       const source = actx.createBufferSource();
       source.buffer = audioEntry.buffer;
       source.playbackRate.value = audioEntry.playbackRate || 1.0;
@@ -699,6 +800,7 @@ async function playSceneAudioAndWait(index, destNode = null) {
 
       if (activeAudioSource) {
         try {
+          activeAudioSource.onended = null;
           activeAudioSource.stop();
         } catch {}
       }
@@ -715,12 +817,13 @@ async function playSceneAudioAndWait(index, destNode = null) {
         const nextIdx = i + 1;
         activePhraseTimers.push(
           setTimeout(() => {
-            if (isPlaying) activePhraseIndex = nextIdx;
+            if (isPlaying && runId === playbackRunId) activePhraseIndex = nextIdx;
           }, accumMs)
         );
       }
 
       source.onended = () => {
+        if (activeAudioSource === source) activeAudioSource = null;
         activePhraseTimers.forEach((t) => clearTimeout(t));
         activePhraseTimers = [];
         resolve();
@@ -730,12 +833,17 @@ async function playSceneAudioAndWait(index, destNode = null) {
       const durationMs = Math.max(3200, phrases.length * 1050);
       const phraseIntervalMs = durationMs / phrases.length;
       const phraseTimer = setInterval(() => {
+        if (runId !== playbackRunId || !isPlaying) {
+          clearInterval(phraseTimer);
+          return;
+        }
         if (activePhraseIndex < phrases.length - 1) activePhraseIndex++;
       }, phraseIntervalMs);
-      setTimeout(() => {
+      const endTimer = setTimeout(() => {
         clearInterval(phraseTimer);
         resolve();
       }, durationMs);
+      activePhraseTimers.push(endTimer);
     }
   });
 }
@@ -743,38 +851,42 @@ async function playSceneAudioAndWait(index, destNode = null) {
 async function playSingleScene(index) {
   unlockAudioContextSync();
   stopPlayback();
+  const runId = playbackRunId;
   isPlaying = true;
   activeSceneIndex = index;
   updateActiveSceneUI();
-  await playSceneAudioAndWait(index);
-  isPlaying = false;
+  await playSceneAudioAndWait(index, null, runId);
+  if (runId === playbackRunId) isPlaying = false;
 }
 
 async function playFullVideo(destNode = null) {
   if (!currentScript?.scenes?.length) return;
   unlockAudioContextSync();
   stopPlayback();
+  const runId = playbackRunId;
   isPlaying = true;
   playFullVideoBtn.textContent = "⏹ Hentikan";
   startBgm(destNode);
 
   for (let i = 0; i < currentScript.scenes.length; i++) {
-    if (!isPlaying) break;
+    if (!isPlaying || runId !== playbackRunId) break;
     activeSceneIndex = i;
     updateActiveSceneUI();
-    await playSceneAudioAndWait(i, destNode);
+    await playSceneAudioAndWait(i, destNode, runId);
   }
 
-  stopPlayback();
+  if (runId === playbackRunId) stopPlayback();
 }
 
 function stopPlayback() {
+  playbackRunId++;
   isPlaying = false;
   stopBgm();
   activePhraseTimers.forEach((t) => clearTimeout(t));
   activePhraseTimers = [];
   if (activeAudioSource) {
     try {
+      activeAudioSource.onended = null;
       activeAudioSource.stop();
     } catch {}
     activeAudioSource = null;
@@ -1774,13 +1886,43 @@ function startRenderLoop() {
       if (currentScript?.scenes?.length) {
         const scene = currentScript.scenes[activeSceneIndex] || currentScript.scenes[0];
 
-        // 1. Play uploaded MP4 clip if attached, else 3D @untabiru5 Diorama Engine, else 2.5D fallback
+        // 1. Play uploaded MP4 clip if attached -> else Gemini Cinema Kling-Class PBR/Shader Renderer -> else 3D Classic -> else 2.5D
         const clip = sceneVideoClips.get(activeSceneIndex);
+        const audioBufEntry = sceneAudioBuffers.get(activeSceneIndex);
+        const sceneDurationSec = audioBufEntry?.buffer?.duration || 4.6;
+        const liveVoice = getLiveVoiceEnergy();
         let rendered3d = false;
         if (clip?.videoEl && clip.videoEl.readyState >= 2) {
           drawCoverVideo(ctx, clip.videoEl, 0, 0, canvas.width, canvas.height);
         } else {
-          if (stage3dReady && stage3d && (!toggle3dMode || toggle3dMode.checked)) {
+          if (
+            geminiCinemaReady &&
+            geminiCinema &&
+            (!toggleGeminiCinema || toggleGeminiCinema.checked) &&
+            scene.cinemaBlueprint
+          ) {
+            try {
+              const cKey = `${currentScript.topic || ""}::${activeSceneIndex}::${scene.cinemaRenderVersion || 1}`;
+              geminiCinema.renderFrame(
+                scene.cinemaBlueprint,
+                cKey,
+                tSec,
+                sceneElapsedSec,
+                sceneDurationSec,
+                liveVoice
+              );
+              ctx.drawImage(geminiCinema.domElement, 0, 0, canvas.width, canvas.height);
+              drawScienceMeter(ctx, scene.visual?.meter, scene.phase, tSec);
+              if (scene.phase === "CLIMAX" || scene.visual?.fx?.includes("confetti")) {
+                drawCelebrationConfetti(ctx, canvas.width, tSec);
+              }
+              rendered3d = true;
+            } catch (cinErr) {
+              console.warn("Gemini Cinema fallback to classic 3D:", cinErr);
+              geminiCinemaReady = false;
+            }
+          }
+          if (!rendered3d && stage3dReady && stage3d && (!toggle3dMode || toggle3dMode.checked)) {
             try {
               stage3d.renderFrame(scene, currentScript.topic || "", tSec, sceneElapsedSec);
               ctx.drawImage(stage3d.domElement, 0, 0, canvas.width, canvas.height);
@@ -1840,6 +1982,14 @@ async function exportFullVideo() {
   exportProgressText.textContent = "1/2: Memastikan suara semua scene siap...";
 
   try {
+    if (
+      (!toggleGeminiCinema || toggleGeminiCinema.checked) &&
+      currentScript.scenes.some((s) => !s.cinemaBlueprint)
+    ) {
+      exportProgressText.textContent = "0/2: Gemini Cinema merender blueprint animasi HD...";
+      await renderScenesWithGeminiCinema();
+    }
+
     for (let i = 0; i < currentScript.scenes.length; i++) {
       exportProgressFill.style.width = `${Math.round(((i + 1) / currentScript.scenes.length) * 40)}%`;
       await ensureSceneAudio(i);
@@ -1864,7 +2014,7 @@ async function exportFullVideo() {
 
     const recorder = new MediaRecorder(combinedStream, {
       mimeType: selectedMime,
-      videoBitsPerSecond: 4500000
+      videoBitsPerSecond: 8000000
     });
 
     const chunks = [];
@@ -1878,16 +2028,17 @@ async function exportFullVideo() {
 
     recorder.start(200);
     stopPlayback();
+    const exportRunId = playbackRunId;
     isPlaying = true;
     startBgm(audioDest);
 
     for (let i = 0; i < currentScript.scenes.length; i++) {
-      if (!isPlaying) break;
+      if (!isPlaying || exportRunId !== playbackRunId) break;
       activeSceneIndex = i;
       updateActiveSceneUI();
       exportProgressFill.style.width = `${40 + Math.round(((i + 1) / currentScript.scenes.length) * 60)}%`;
-      exportProgressText.textContent = `2/2: Merender Scene ${i + 1} / ${currentScript.scenes.length}...`;
-      await playSceneAudioAndWait(i, audioDest);
+      exportProgressText.textContent = `2/2: Merender Video HD Scene ${i + 1} / ${currentScript.scenes.length}...`;
+      await playSceneAudioAndWait(i, audioDest, exportRunId);
     }
 
     stopPlayback();
@@ -1925,8 +2076,11 @@ async function initStudio() {
     const voicePresetEl = document.getElementById("elevenlabsVoicePreset");
     voiceInputEl.value = keys.elevenlabsVoiceId;
     if (voicePresetEl) {
-      const hasPreset = Array.from(voicePresetEl.options).some((o) => o.value === keys.elevenlabsVoiceId);
-      voicePresetEl.value = hasPreset ? keys.elevenlabsVoiceId : "";
+      const hasPreset = Array.from(voicePresetEl.options).some(
+        (o) => o.value && o.value !== "__custom__" && o.value === keys.elevenlabsVoiceId
+      );
+      voicePresetEl.value = hasPreset ? keys.elevenlabsVoiceId : "__custom__";
+      voiceInputEl.classList.toggle("hidden", hasPreset);
     }
     document.getElementById("elevenlabsApiKeyInput").value = keys.elevenlabsApiKey;
     document.getElementById("geminiApiKeyInput").value = keys.geminiApiKey;
@@ -1938,6 +2092,14 @@ async function initStudio() {
       ? `ElevenLabs Only (${keys.elevenlabsVoiceId})`
       : `ElevenLabs Belum Diatur (Isi Key di ⚙️ API & Voice)`;
   } catch {}
+
+  try {
+    geminiCinema = new MaouGeminiCinema(720, 1280);
+    geminiCinemaReady = true;
+  } catch (err) {
+    console.warn("Gemini Cinema WebGL unavailable:", err);
+    geminiCinemaReady = false;
+  }
 
   try {
     stage3d = new Maou3DStage(canvas.width, canvas.height);
@@ -2037,6 +2199,16 @@ addSceneBtn.addEventListener("click", () => {
   updateActiveSceneUI();
 });
 
+if (renderGeminiCinemaBtn) {
+  renderGeminiCinemaBtn.addEventListener("click", async () => {
+    if (!currentScript?.scenes?.length) {
+      alert("Ketik topik dan buat video dulu di kolom atas, lalu klik Render Animasi Sinematik Gemini AI.");
+      return;
+    }
+    await renderScenesWithGeminiCinema();
+  });
+}
+
 exportVideoBtn.addEventListener("click", exportFullVideo);
 
 // Modals
@@ -2063,8 +2235,13 @@ document.getElementById("closeCharacterBtn").addEventListener("click", () => {
 const voicePresetSelect = document.getElementById("elevenlabsVoicePreset");
 if (voicePresetSelect) {
   voicePresetSelect.addEventListener("change", () => {
-    if (voicePresetSelect.value) {
-      document.getElementById("elevenlabsVoiceIdInput").value = voicePresetSelect.value;
+    const inp = document.getElementById("elevenlabsVoiceIdInput");
+    if (voicePresetSelect.value === "__custom__") {
+      inp.classList.remove("hidden");
+      inp.focus();
+    } else if (voicePresetSelect.value) {
+      inp.value = voicePresetSelect.value;
+      inp.classList.add("hidden");
     }
   });
 }
