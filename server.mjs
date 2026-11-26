@@ -10,6 +10,7 @@ import {
   synthesizeSpeechStateless
 } from "./lib/maou-engine.js";
 import { compileGeminiCinemaVideo } from "./lib/gemini-video-renderer.js";
+import { compileAnimeMappaVideo } from "./lib/video-ai/anime-director.js";
 import { researchAndPlanVisualWorld } from "./lib/video-ai/visual-researcher.js";
 import { critiqueAndRefineRenderedFrame } from "./lib/video-ai/visual-critic.js";
 
@@ -116,6 +117,22 @@ const server = http.createServer(async (req, res) => {
         title: body?.title || topic,
         scenes,
         geminiApiKey: body?.geminiApiKey || ""
+      });
+      return sendJson(res, 200, result);
+    }
+
+    if (pathname === "/api/anime-render" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      const scenes = Array.isArray(body?.scenes) ? body.scenes : [];
+      if (!scenes.length) {
+        return sendJson(res, 400, { error: "Scenes tidak boleh kosong untuk Mode Anime MAPPA." });
+      }
+      const result = await compileAnimeMappaVideo({
+        topic: body?.topic || "",
+        title: body?.title || "",
+        scenes,
+        geminiApiKey: body?.geminiApiKey || "",
+        styleMemoryHints: Array.isArray(body?.styleMemoryHints) ? body.styleMemoryHints : []
       });
       return sendJson(res, 200, result);
     }

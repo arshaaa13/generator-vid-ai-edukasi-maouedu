@@ -6,6 +6,7 @@ import {
 } from "/toon-renderer.js";
 import { Maou3DStage } from "/scene3d.js";
 import { MaouGeminiCinema } from "/gemini-cinema.js";
+import { MaouAnimeMappaEngine } from "/anime-mappa-engine.js";
 import { exportDeterministicMp4Video } from "/video-engine/mp4-video-exporter.js";
 
 const canvas = document.getElementById("videoCanvas");
@@ -26,6 +27,8 @@ let stage3d = null;
 let stage3dReady = false;
 let geminiCinema = null;
 let geminiCinemaReady = false;
+let animeMappaEngine = null;
+let animeMappaReady = false;
 let audioCtx = null;
 let analyserNode = null;
 let analyserData = null;
@@ -79,15 +82,40 @@ const prevSceneBtn = document.getElementById("prevSceneBtn");
 const nextSceneBtn = document.getElementById("nextSceneBtn");
 const addSceneBtn = document.getElementById("addSceneBtn");
 
-// Toggles
-const toggleGeminiCinema = document.getElementById("toggleGeminiCinema");
-const toggleCustomRigs = document.getElementById("toggleCustomRigs");
-const toggleNanoBananaKeyframes = document.getElementById("toggleNanoBananaKeyframes");
-const toggle3dMode = document.getElementById("toggle3dMode");
+// Mutually-Exclusive Render Mode Selector + Active Overlay/Audio Toggles
+const renderModeGroup = document.getElementById("renderModeGroup");
 const toggleMcOverlay = document.getElementById("toggleMcOverlay");
 const toggleYellowSubtitles = document.getElementById("toggleYellowSubtitles");
 const toggleSfx = document.getElementById("toggleSfx");
 const toggleBgm = document.getElementById("toggleBgm");
+
+function getSelectedRenderMode() {
+  const checked = document.querySelector('input[name="renderMode"]:checked');
+  return checked?.value || localStorage.getItem("maou_render_mode") || "anime_mappa";
+}
+
+function syncRenderModeUI(mode) {
+  const activeMode = ["anime_mappa", "cinema_3d", "classic_3d"].includes(mode) ? mode : "anime_mappa";
+  localStorage.setItem("maou_render_mode", activeMode);
+  document.querySelectorAll(".render-mode-card").forEach((card) => {
+    const isMatch = card.dataset.mode === activeMode;
+    card.classList.toggle("active", isMatch);
+    const rad = card.querySelector('input[type="radio"]');
+    if (rad) rad.checked = isMatch;
+  });
+  if (renderGeminiCinemaBtn) {
+    if (activeMode === "anime_mappa") {
+      renderGeminiCinemaBtn.textContent = "⚔️ Render Animasi Anime MAPPA (Gemini AI)";
+      renderGeminiCinemaBtn.disabled = false;
+    } else if (activeMode === "cinema_3d") {
+      renderGeminiCinemaBtn.textContent = "🎬 Render Animasi 3D Sinematik (Gemini AI)";
+      renderGeminiCinemaBtn.disabled = false;
+    } else {
+      renderGeminiCinemaBtn.textContent = "🧱 Mode 3D Klasik Aktif (Instant)";
+      renderGeminiCinemaBtn.disabled = true;
+    }
+  }
+}
 
 // Local browser settings (never sent to GitHub)
 function getLocalKeys() {
@@ -352,16 +380,28 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
     renderSceneList();
     updateActiveSceneUI();
 
-    // 3 & 4: Online Visual Reference Research + Grounded Persistent 3D Diorama Compilation
-    if (!toggleGeminiCinema || toggleGeminiCinema.checked) {
+    // 3 & 4: Compile Active Render Mode (Anime MAPPA Sakuga OR 3D Sinematik OR Instant Classic 3D)
+    const activeMode = getSelectedRenderMode();
+    if (activeMode === "anime_mappa") {
       setPipelineState("visualResearch");
-      autoBuildVideoBtn.textContent = "🏛️ Riset Referensi Visual & Fondasi 3D...";
-      await renderScenesWithGeminiCinema(null, (phase) => {
+      autoBuildVideoBtn.textContent = `⚔️ Menyusun Anime MAPPA (${currentScript.scenes.length} Scene)...`;
+      await renderScenesForActiveMode(null, (phase) => {
         if (phase === "cinema") {
           setPipelineState("cinema");
-          autoBuildVideoBtn.textContent = `🎬 Menyusun Koreografi ${currentScript.scenes.length} Scene...`;
+          autoBuildVideoBtn.textContent = `⚔️ Koreografi Sakuga ${currentScript.scenes.length} Scene...`;
         }
       });
+    } else if (activeMode === "cinema_3d") {
+      setPipelineState("visualResearch");
+      autoBuildVideoBtn.textContent = "🏛️ Riset Referensi Visual & Fondasi 3D...";
+      await renderScenesForActiveMode(null, (phase) => {
+        if (phase === "cinema") {
+          setPipelineState("cinema");
+          autoBuildVideoBtn.textContent = `🎬 Menyusun 3D Sinematik ${currentScript.scenes.length} Scene...`;
+        }
+      });
+    } else {
+      setPipelineState("cinema");
     }
 
     // 4: Generate voiceovers strictly via ElevenLabs across all scenes (no Google fallback)
@@ -444,6 +484,88 @@ function renderVisualFoundationBox(visualPlan, sceneCount = 0) {
   `;
 }
 
+async function renderScenesWithAnimeMappa(singleIdx = null, onStageChange = null) {
+  if (!currentScript?.scenes?.length) return false;
+  const keys = getLocalKeys();
+  const targetScenes =
+    singleIdx !== null && currentScript.scenes[singleIdx]
+      ? [currentScript.scenes[singleIdx]]
+      : currentScript.scenes;
+
+  if (renderGeminiCinemaBtn) {
+    renderGeminiCinemaBtn.disabled = true;
+    renderGeminiCinemaBtn.textContent =
+      singleIdx !== null
+        ? `⏳ Menyutradarai Anime Scene #${singleIdx + 1}...`
+        : `⚔️ Studio MAPPA Director (${currentScript.scenes.length} Scene)...`;
+  }
+
+  try {
+    onStageChange?.("cinema");
+    const styleMemoryHints = getCinemaStyleMemory()
+      .sort((a, b) => (b.score || 0) - (a.score || 0))
+      .slice(0, 4)
+      .map((m) => m.lesson);
+
+    const resp = await fetch("/api/anime-render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        topic: currentScript.topic || "",
+        title: currentScript.title || "",
+        scenes: targetScenes,
+        geminiApiKey: keys.geminiApiKey,
+        styleMemoryHints
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) {
+      throw new Error(data.error || "Gagal merender animasi Anime MAPPA.");
+    }
+
+    if (singleIdx !== null && data.scenes?.[0]) {
+      currentScript.scenes[singleIdx].animeBlueprint = data.scenes[0];
+      currentScript.scenes[singleIdx].animeRenderVersion = Date.now();
+    } else if (Array.isArray(data.scenes)) {
+      data.scenes.forEach((bp, idx) => {
+        if (currentScript.scenes[idx]) {
+          currentScript.scenes[idx].animeBlueprint = bp;
+          currentScript.scenes[idx].animeRenderVersion = Date.now();
+        }
+      });
+    }
+
+    if (visualFoundationBox) {
+      const envs = Array.from(new Set((data.scenes || []).map((s) => s.animeEnvironment))).slice(0, 3);
+      const impactCount = (data.scenes || []).filter((s) => s.impactBeat?.enabled).length;
+      visualFoundationBox.classList.remove("hidden");
+      visualFoundationBox.innerHTML = `
+        <div><strong>⚔️ Produksi Anime Sakuga — Studio MAPPA / JJK (${currentScript.scenes.length} Scene)</strong></div>
+        <div style="font-size:0.76rem;margin-top:2px;">Latar: <code>${envs.join(" → ")}</code> • Impact Frames: <code>${impactCount} momen</code></div>
+        <div style="font-size:0.75rem;margin-top:3px;">${data.directorNotes || ""}</div>
+      `;
+    }
+
+    aiEngineBadge.textContent = `⚔️ Anime MAPPA (${data.directorModel} • ${currentScript.scenes.length} Scene)`;
+    sceneEnterTimestamp = performance.now();
+    renderSceneList();
+    updateActiveSceneUI();
+    return true;
+  } catch (err) {
+    console.warn("Anime MAPPA render warning:", err);
+    return false;
+  } finally {
+    syncRenderModeUI(getSelectedRenderMode());
+  }
+}
+
+async function renderScenesForActiveMode(singleIdx = null, onStageChange = null) {
+  const mode = getSelectedRenderMode();
+  if (mode === "anime_mappa") return renderScenesWithAnimeMappa(singleIdx, onStageChange);
+  if (mode === "cinema_3d") return renderScenesWithGeminiCinema(singleIdx, onStageChange);
+  return true;
+}
+
 async function renderScenesWithGeminiCinema(singleIdx = null, onStageChange = null) {
   if (!currentScript?.scenes?.length) return false;
   const keys = getLocalKeys();
@@ -504,8 +626,8 @@ async function renderScenesWithGeminiCinema(singleIdx = null, onStageChange = nu
         scenes: targetScenes,
         visualPlan: currentScript.visualPlan || null,
         geminiApiKey: keys.geminiApiKey,
-        enableKeyframes: Boolean(toggleNanoBananaKeyframes?.checked),
-        enableCustomRigs: !toggleCustomRigs || Boolean(toggleCustomRigs.checked),
+        enableKeyframes: false,
+        enableCustomRigs: true,
         styleMemoryHints
       })
     });
@@ -549,10 +671,7 @@ async function renderScenesWithGeminiCinema(singleIdx = null, onStageChange = nu
     console.warn("Gemini Cinema render warning:", err);
     return false;
   } finally {
-    if (renderGeminiCinemaBtn) {
-      renderGeminiCinemaBtn.disabled = false;
-      renderGeminiCinemaBtn.textContent = "🎬 Render Animasi Sinematik Gemini AI";
-    }
+    syncRenderModeUI(getSelectedRenderMode());
   }
 }
 
@@ -562,7 +681,10 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
     return;
   }
   const scene = currentScript.scenes[targetIdx];
-  if (!scene.cinemaBlueprint) {
+  const activeMode = getSelectedRenderMode();
+  if (activeMode === "anime_mappa" && !scene.animeBlueprint) {
+    await renderScenesWithAnimeMappa(targetIdx);
+  } else if (activeMode === "cinema_3d" && !scene.cinemaBlueprint) {
     await renderScenesWithGeminiCinema(targetIdx);
   }
   activeSceneIndex = targetIdx;
@@ -574,7 +696,7 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
   }
   if (criticResultBox) {
     criticResultBox.classList.remove("hidden");
-    criticResultBox.innerHTML = `<div>👁️ Mengirim tangkapan layar WebGL 3D Scene #${targetIdx + 1} ke <strong>Gemini Multimodal Vision</strong>...</div>`;
+    criticResultBox.innerHTML = `<div>👁️ Mengirim tangkapan layar Scene #${targetIdx + 1} (${activeMode === "anime_mappa" ? "Anime MAPPA" : "3D"}) ke <strong>Gemini Multimodal Vision</strong>...</div>`;
   }
 
   try {
@@ -587,13 +709,14 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
     });
     const frameDataUrl = canvas.toDataURL("image/jpeg", 0.78);
     const keys = getLocalKeys();
+    const targetBlueprint = activeMode === "anime_mappa" ? scene.animeBlueprint : scene.cinemaBlueprint;
 
     const resp = await fetch("/api/video-critic", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         frameDataUrl,
-        blueprint: scene.cinemaBlueprint,
+        blueprint: targetBlueprint,
         scene,
         topic: currentScript.topic || currentScript.title || "",
         geminiApiKey: keys.geminiApiKey
@@ -603,8 +726,13 @@ async function runGeminiVisualCritic(targetIdx = activeSceneIndex) {
     if (!resp.ok || data.error) throw new Error(data.error || "Gagal mengevaluasi frame.");
 
     if (data.refinedBlueprint) {
-      currentScript.scenes[targetIdx].cinemaBlueprint = data.refinedBlueprint;
-      currentScript.scenes[targetIdx].cinemaRenderVersion = Date.now();
+      if (activeMode === "anime_mappa") {
+        currentScript.scenes[targetIdx].animeBlueprint = data.refinedBlueprint;
+        currentScript.scenes[targetIdx].animeRenderVersion = Date.now();
+      } else {
+        currentScript.scenes[targetIdx].cinemaBlueprint = data.refinedBlueprint;
+        currentScript.scenes[targetIdx].cinemaRenderVersion = Date.now();
+      }
       currentScript.scenes[targetIdx].criticScore = data.overallScore;
     }
     if (data.styleLesson) {
@@ -2110,19 +2238,72 @@ function renderCompositeFrame({
     activePhraseIndex = computeSubtitlePhraseAtTime(scene, sceneElapsedSec, sceneDurationSec);
   }
 
-  // 1. Play uploaded MP4 clip if attached -> else Gemini Cinema Kling-Class PBR/DOF/Shader Renderer -> else 3D Classic -> else 2.5D
+  // 1. Play uploaded MP4 clip -> else strictly render the user's SELECTED mutually-exclusive Render Mode!
   const clip = sceneVideoClips.get(sceneIndex);
   const liveVoice = deterministicPhrase ? 0.45 + Math.abs(Math.sin(tSec * 11)) * 0.45 : getLiveVoiceEnergy();
+  const mode = getSelectedRenderMode();
   let rendered3d = false;
+
   if (clip?.videoEl && clip.videoEl.readyState >= 2) {
     drawCoverVideo(ctx, clip.videoEl, 0, 0, canvas.width, canvas.height);
   } else {
-    if (
-      geminiCinemaReady &&
-      geminiCinema &&
-      (!toggleGeminiCinema || toggleGeminiCinema.checked) &&
-      scene.cinemaBlueprint
-    ) {
+    if (mode === "anime_mappa" && animeMappaReady && animeMappaEngine) {
+      try {
+        const bp = scene.animeBlueprint || {
+          animeEnvironment: "shibuya_night",
+          satsueiMood: scene.phase === "TAPI" ? "sukuna_crimson" : scene.phase === "CLIMAX" ? "hollow_purple" : "jjk_cursed_blue",
+          cameraMove: scene.phase === "TAPI" ? "dutch_tension_tilt" : "low_angle_hero_push",
+          impactBeat: { enabled: scene.phase === "TAPI" || scene.phase === "CLIMAX", triggerProgress: 0.48, style: scene.phase === "TAPI" ? "black_flash" : "bw_manga_invert" },
+          characters: [
+            {
+              id: "maou_hero",
+              role: "protagonist",
+              animePose: scene.phase === "TAPI" ? "charge_cursed_energy" : scene.phase === "CLIMAX" ? "floating_overlord" : "point_reveal",
+              hairColor: "#cbd5e1",
+              streakColor: "#e11d48",
+              outfitColor: "#111827",
+              accentColor: "#f59e0b",
+              eyeColor: scene.phase === "TAPI" ? "#ef4444" : "#38bdf8",
+              auraColor: scene.phase === "TAPI" ? "#f43f5e" : "#38bdf8",
+              hasHorns: true,
+              startPos: [-0.42, 0, -0.05],
+              endPos: [-0.36, 0, 0.02],
+              rotY: 0.28,
+              scale: 1.0
+            }
+          ],
+          subjectProps: [
+            { id: "main", prefab: "crystal_core", color: "#38bdf8", secondaryColor: "#fbbf24", pos: [0.44, 0.3, 0.08], rot: [0, -0.25, 0], scale: 0.85, motion: "hover_pulse" }
+          ],
+          animeVfx: [
+            { type: scene.phase === "TAPI" ? "black_flash_lightning" : "cursed_energy_aura", origin: [-0.4, 0.8, 0], color: scene.phase === "TAPI" ? "#ef4444" : "#38bdf8" }
+          ],
+          satsueiGrade: { bloomStrength: 0.42, rimIntensity: 1.2, contrast: 1.12, saturation: 1.18, speedLines: scene.phase === "TAPI" }
+        };
+        const aKey = `anime::${currentScript.topic || ""}::${sceneIndex}::${scene.animeRenderVersion || 1}`;
+        animeMappaEngine.renderFrame(bp, aKey, tSec, sceneElapsedSec, sceneDurationSec, liveVoice);
+        ctx.drawImage(animeMappaEngine.domElement, 0, 0, canvas.width, canvas.height);
+
+        // Draw crisp MAPPA Manga Impact Stamp if defined on this anime cut!
+        if (bp.mangaCaption) {
+          ctx.save();
+          ctx.font = "900 18px 'Plus Jakarta Sans', sans-serif";
+          ctx.translate(canvas.width - 110, 245);
+          ctx.rotate(-0.08);
+          ctx.lineWidth = 5;
+          ctx.strokeStyle = "#07080d";
+          ctx.strokeText(bp.mangaCaption, 0, 0);
+          ctx.fillStyle = scene.phase === "TAPI" ? "#fb7185" : "#fde047";
+          ctx.fillText(bp.mangaCaption, 0, 0);
+          ctx.restore();
+        }
+        drawScienceMeter(ctx, scene.visual?.meter, scene.phase, tSec);
+        rendered3d = true;
+      } catch (animeErr) {
+        console.warn("Anime MAPPA fallback:", animeErr);
+        animeMappaReady = false;
+      }
+    } else if (mode === "cinema_3d" && geminiCinemaReady && geminiCinema && scene.cinemaBlueprint) {
       try {
         const cKey = `${currentScript.topic || ""}::${sceneIndex}::${scene.cinemaRenderVersion || 1}`;
         geminiCinema.renderFrame(
@@ -2144,7 +2325,7 @@ function renderCompositeFrame({
         geminiCinemaReady = false;
       }
     }
-    if (!rendered3d && stage3dReady && stage3d && (!toggle3dMode || toggle3dMode.checked)) {
+    if (!rendered3d && stage3dReady && stage3d) {
       try {
         stage3d.renderFrame(scene, currentScript.topic || "", tSec, sceneElapsedSec);
         ctx.drawImage(stage3d.domElement, 0, 0, canvas.width, canvas.height);
@@ -2227,10 +2408,11 @@ async function exportFullVideo() {
     .replace(/[^a-z0-9]+/g, "_");
 
   try {
-    if (
-      (!toggleGeminiCinema || toggleGeminiCinema.checked) &&
-      currentScript.scenes.some((s) => !s.cinemaBlueprint)
-    ) {
+    const activeMode = getSelectedRenderMode();
+    if (activeMode === "anime_mappa" && currentScript.scenes.some((s) => !s.animeBlueprint)) {
+      exportProgressText.textContent = "1/3: Studio MAPPA menyusun animasi Anime Sakuga...";
+      await renderScenesWithAnimeMappa();
+    } else if (activeMode === "cinema_3d" && currentScript.scenes.some((s) => !s.cinemaBlueprint)) {
       exportProgressText.textContent = "1/3: Gemini Cinema mengompilasi animasi 3D HD...";
       await renderScenesWithGeminiCinema();
     }
@@ -2256,9 +2438,15 @@ async function exportFullVideo() {
     isOfflineExporting = true;
     const prevCinemaW = geminiCinema?.width || 720;
     const prevCinemaH = geminiCinema?.height || 1280;
+    const prevAnimeW = animeMappaEngine?.width || 720;
+    const prevAnimeH = animeMappaEngine?.height || 1280;
     let mp4Result = { ok: false, fallbackRequired: true };
     try {
-      if (geminiCinema && targetW && targetH) geminiCinema.resize(targetW, targetH);
+      if (activeMode === "anime_mappa" && animeMappaEngine && targetW && targetH) {
+        animeMappaEngine.resize(targetW, targetH);
+      } else if (activeMode === "cinema_3d" && geminiCinema && targetW && targetH) {
+        geminiCinema.resize(targetW, targetH);
+      }
       mp4Result = await exportDeterministicMp4Video({
         canvas,
         sceneTimings,
@@ -2285,6 +2473,7 @@ async function exportFullVideo() {
       console.warn("WebCodecs MP4 encoder fallback to MediaRecorder:", encErr);
       mp4Result = { ok: false, fallbackRequired: true };
     } finally {
+      if (animeMappaEngine) animeMappaEngine.resize(prevAnimeW, prevAnimeH);
       if (geminiCinema) geminiCinema.resize(prevCinemaW, prevCinemaH);
       isOfflineExporting = false;
     }
@@ -2397,6 +2586,14 @@ async function initStudio() {
   } catch { }
 
   try {
+    animeMappaEngine = new MaouAnimeMappaEngine(720, 1280);
+    animeMappaReady = true;
+  } catch (err) {
+    console.warn("Anime MAPPA WebGL unavailable:", err);
+    animeMappaReady = false;
+  }
+
+  try {
     geminiCinema = new MaouGeminiCinema(720, 1280);
     geminiCinemaReady = true;
   } catch (err) {
@@ -2410,6 +2607,24 @@ async function initStudio() {
   } catch (err) {
     console.warn("WebGL 3D unavailable, using 2.5D toon fallback:", err);
     stage3dReady = false;
+  }
+
+  syncRenderModeUI(localStorage.getItem("maou_render_mode") || "anime_mappa");
+  if (renderModeGroup) {
+    renderModeGroup.addEventListener("change", async (e) => {
+      if (e.target?.name !== "renderMode") return;
+      const nextMode = e.target.value;
+      syncRenderModeUI(nextMode);
+      sceneEnterTimestamp = performance.now();
+      if (!currentScript?.scenes?.length) return;
+      if (nextMode === "anime_mappa" && currentScript.scenes.some((s) => !s.animeBlueprint)) {
+        await renderScenesWithAnimeMappa();
+      } else if (nextMode === "cinema_3d" && currentScript.scenes.some((s) => !s.cinemaBlueprint)) {
+        await renderScenesWithGeminiCinema();
+      } else if (nextMode === "classic_3d") {
+        aiEngineBadge.textContent = `🧱 3D Edukasi Klasik (${currentScript.scenes.length} Scene)`;
+      }
+    });
   }
 
   startRenderLoop();
@@ -2505,10 +2720,10 @@ addSceneBtn.addEventListener("click", () => {
 if (renderGeminiCinemaBtn) {
   renderGeminiCinemaBtn.addEventListener("click", async () => {
     if (!currentScript?.scenes?.length) {
-      alert("Ketik topik dan buat video dulu di kolom atas, lalu klik Render Animasi Sinematik Gemini AI.");
+      alert("Ketik topik dan buat video dulu di kolom atas, lalu klik Render Animasi.");
       return;
     }
-    await renderScenesWithGeminiCinema();
+    await renderScenesForActiveMode();
   });
 }
 
@@ -2556,7 +2771,7 @@ if (voicePresetSelect) {
 }
 
 document.getElementById("saveSettingsBtn").addEventListener("click", () => {
-  const voiceId = document.getElementById("elevenlabsVoiceIdInput").value.trim() || "cPoqAvGWCPfCfyPMwe4z";
+  const voiceId = document.getElementById("elevenlabsVoiceIdInput").value.trim() || "nPczCjzI2devNBz1zQrb";
   const elKey = document.getElementById("elevenlabsApiKeyInput").value.trim();
   const gemKey = document.getElementById("geminiApiKeyInput").value.trim();
 

@@ -1986,8 +1986,8 @@ export class MaouGeminiCinema {
     roomFloor.receiveShadow = true;
     g.add(roomFloor);
 
-    const w = surf.width || 5.4;
-    const d = surf.depth || 3.1;
+    const w = Math.max(6.4, surf.width || 6.4);
+    const d = Math.max(3.8, surf.depth || 3.8);
 
     if (room === "kitchen_counter" || surf.type === "kitchen_counter") {
       // Genuine Kitchen Countertop (top flush at Y = 0.0!) + lower cabinets with handles!
@@ -2478,40 +2478,63 @@ export class MaouGeminiCinema {
       if (wm?.uniforms?.uTime) wm.uniforms.uTime.value = tSec;
     }
 
-    // 2. Kling-Style Quadratic Bezier Camera Choreography + Dolly Zoom + Organic Breathing
+    // 2. 9:16 Vertical-Safe Quadratic Bezier Camera Choreography (NEVER clips left/right actors or hides behind subtitles!)
     const cam = blueprint.cameraTrack || {};
     const cPos = evalQuadBezier(
-      cam.start || [0.6, 1.4, 3.8],
-      cam.mid || [0.1, 1.25, 3.2],
-      cam.end || [-0.35, 1.15, 2.85],
+      cam.start || [0.45, 1.72, 4.75],
+      cam.mid || [0.18, 1.62, 4.45],
+      cam.end || [-0.12, 1.54, 4.25],
       easedP
     );
-    const lStart = cam.lookStart || [0, 0.58, 0];
-    const lEnd = cam.lookEnd || [0.1, 0.65, 0];
-    const lx = lStart[0] + (lEnd[0] - lStart[0]) * easedP;
-    const ly = lStart[1] + (lEnd[1] - lStart[1]) * easedP + 0.08;
-    const lz = lStart[2] + (lEnd[2] - lStart[2]) * easedP;
+    const lStart = cam.lookStart || [0, 0.34, 0];
+    const lEnd = cam.lookEnd || [0.05, 0.34, 0];
+    let lx = lStart[0] + (lEnd[0] - lStart[0]) * easedP;
+    let ly = lStart[1] + (lEnd[1] - lStart[1]) * easedP;
+    let lz = lStart[2] + (lEnd[2] - lStart[2]) * easedP;
 
-    const amp = cam.handheldAmp || 0.015;
-    const bx = Math.sin(tSec * (amp > 0.03 ? 28 : 1.7)) * amp;
-    const by = Math.cos(tSec * (amp > 0.03 ? 23 : 1.3)) * amp * 0.8;
+    // Auto-measure active actor bounds so narrow 9:16 horizontal FOV ALWAYS fits all props comfortably!
+    let minX = -0.65, maxX = 0.65, maxH = 0.9;
+    if (this.actors.length) {
+      minX = Infinity;
+      maxX = -Infinity;
+      maxH = 0.6;
+      for (const a of this.actors) {
+        const ax = a.resolvedX ?? a.spec.startPos?.[0] ?? 0;
+        const ah = (a.resolvedSurfaceY || 0) + (a.height || 0.6);
+        if (ax - 0.38 < minX) minX = ax - 0.38;
+        if (ax + 0.38 > maxX) maxX = ax + 0.38;
+        if (ah > maxH) maxH = ah;
+      }
+    }
+    const spanW = Math.min(3.4, Math.max(1.4, maxX - minX));
+    const centerX = Math.max(-0.5, Math.min(0.5, (minX + maxX) * 0.5));
+    const aspect = Math.max(0.45, this.width / Math.max(1, this.height));
+
+    const optics = blueprint.optics || {};
+    const fovStart = Math.max(46, cam.fovStart || 48);
+    const fovEnd = Math.max(44, cam.fovEnd || 46);
+    const curFov = fovStart + (fovEnd - fovStart) * easedP;
+    const halfV = Math.tan(((curFov * Math.PI) / 180) * 0.5);
+    const minSafeZ = Math.max(4.15, (spanW * 0.64) / Math.max(0.18, halfV * aspect));
+
+    lx = lx * 0.55 + centerX * 0.45;
+    ly = Math.max(0.22, Math.min(0.68, maxH * 0.34));
+
+    const amp = cam.handheldAmp || 0.006;
+    const bx = Math.sin(tSec * (amp > 0.025 ? 26 : 1.7)) * amp;
+    const by = Math.cos(tSec * (amp > 0.025 ? 21 : 1.3)) * amp * 0.8;
 
     const prevX = this.prevCamPos.x;
     const prevY = this.prevCamPos.y;
     const nextCamX = cPos[0] + bx;
-    const nextCamY = cPos[1] + by;
-    const nextCamZ = cPos[2];
+    const nextCamY = Math.max(1.38, cPos[1] + by);
+    const nextCamZ = Math.max(minSafeZ, cPos[2]);
     const camVelX = nextCamX - prevX;
     const camVelY = nextCamY - prevY;
     this.prevCamPos.set(nextCamX, nextCamY, nextCamZ);
 
-    const optics = blueprint.optics || {};
-    const lensFov = optics.lensMm ? Math.max(30, Math.min(62, Math.round(1800 / optics.lensMm))) : null;
-    const fovStart = cam.fovStart || lensFov || 46;
-    const fovEnd = cam.fovEnd || (lensFov ? Math.max(30, lensFov - 4) : 42);
-
     this.camera.position.set(nextCamX, nextCamY, nextCamZ);
-    this.camera.fov = fovStart + (fovEnd - fovStart) * easedP;
+    this.camera.fov = curFov;
     this.camera.updateProjectionMatrix?.();
     this.lookAtVec.set(lx, ly, lz);
     this.camera.lookAt(this.lookAtVec);

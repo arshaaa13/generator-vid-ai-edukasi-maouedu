@@ -106,47 +106,56 @@
       </div>
 
       <div class="card">
-        <label class="field-label">🎛️ Pengaturan Render Video Gemini & Audio</label>
+        <label class="field-label">🎨 Pilih Gaya Animasi (Pilih Salah Satu)</label>
+        <div class="render-mode-group" id="renderModeGroup">
+          <label class="render-mode-card active" data-mode="anime_mappa">
+            <input type="radio" name="renderMode" value="anime_mappa" checked />
+            <div class="render-mode-body">
+              <div class="render-mode-title">⚔️ Anime Sakuga <span class="mode-pill mode-pill-anime">MAPPA / JJK</span></div>
+              <div class="render-mode-desc">Cel-shading GLSL, ink outline, Impact Frames B&amp;W / Black Flash, aura &amp; kamera sakuga.</div>
+            </div>
+          </label>
+          <label class="render-mode-card" data-mode="cinema_3d">
+            <input type="radio" name="renderMode" value="cinema_3d" />
+            <div class="render-mode-body">
+              <div class="render-mode-title">🎬 3D Sinematik <span class="mode-pill mode-pill-3d">Pixar / VT</span></div>
+              <div class="render-mode-desc">Riset referensi visual 3D, set ruangan konsisten, objek berongga &amp; framing 9:16 presisi.</div>
+            </div>
+          </label>
+          <label class="render-mode-card" data-mode="classic_3d">
+            <input type="radio" name="renderMode" value="classic_3d" />
+            <div class="render-mode-body">
+              <div class="render-mode-title">🧱 3D Edukasi Klasik <span class="mode-pill mode-pill-classic">@untabiru5</span></div>
+              <div class="render-mode-desc">Diorama cutaway 3D klasik cepat dengan karakter Ipul.</div>
+            </div>
+          </label>
+        </div>
+
+        <label class="field-label" style="margin-top:6px;">🎛️ Overlay &amp; Audio (Langsung Terlihat / Terdengar)</label>
         <div class="toggle-list">
           <label class="toggle-item">
-            <input type="checkbox" id="toggleGeminiCinema" checked />
-            <span>🎬 <strong>Gemini 3D Diorama</strong> (Riset Visual + Set Konsisten + Efek Bersih)</span>
-          </label>
-          <label class="toggle-item">
-            <input type="checkbox" id="toggleCustomRigs" checked />
-            <span>🧬 <strong>Gemini 3D Sculptor</strong> (Rakit Makhluk/Objek Bebas + Bone Rig)</span>
-          </label>
-          <label class="toggle-item">
-            <input type="checkbox" id="toggleNanoBananaKeyframes" />
-            <span>🍌 <strong>AI Keyframe Nano Banana</strong> (Khusus Gemini API Key Berbayar)</span>
-          </label>
-          <label class="toggle-item">
-            <input type="checkbox" id="toggle3dMode" checked />
-            <span>🧱 <strong>Mode Dunia 3D Klasik</strong> (Fallback jika Cinema dimatikan)</span>
-          </label>
-          <label class="toggle-item">
             <input type="checkbox" id="toggleMcOverlay" checked />
-            <span>👑 <strong>Host 2D Anime MC Raja Iblis</strong> (Konsisten di setiap video)</span>
+            <span>👑 <strong>Host 2D Anime MC Raja Iblis</strong> (tampil di layar)</span>
           </label>
           <label class="toggle-item">
             <input type="checkbox" id="toggleYellowSubtitles" checked />
-            <span>Subtitle Kotak Kuning Khas <code>@untabiru5</code></span>
+            <span>💬 <strong>Subtitle Highlight</strong> (kotak warna khas VT)</span>
           </label>
           <label class="toggle-item">
             <input type="checkbox" id="toggleSfx" checked />
-            <span>Efek Suara Otomatis (Whoosh, Error, Ding)</span>
+            <span>🔊 <strong>Efek Suara (SFX)</strong> (Whoosh, Error, Ding)</span>
           </label>
           <label class="toggle-item">
             <input type="checkbox" id="toggleBgm" checked />
-            <span>Musik Latar Santai</span>
+            <span>🎵 <strong>Musik Latar (BGM)</strong></span>
           </label>
         </div>
 
         <div class="action-stack" style="display:flex;flex-direction:column;gap:8px;">
           <button class="btn btn-crimson btn-full" id="renderGeminiCinemaBtn">
-            🎬 Render Animasi Sinematik Gemini AI
+            ⚔️ Render Animasi Anime MAPPA (Gemini AI)
           </button>
-          <button class="btn btn-secondary btn-full" id="criticRefineBtn" title="Gemini Vision melihat frame 3D saat ini, memberi skor 0-100, dan meng-upgrade visual otomatis">
+          <button class="btn btn-secondary btn-full" id="criticRefineBtn" title="Gemini Vision melihat frame saat ini, memberi skor 0-100, dan meng-upgrade visual otomatis">
             👁️ Evaluasi &amp; Upgrade Visual (Gemini Vision)
           </button>
           <select id="exportQualitySelect" style="width:100%;padding:7px 10px;border-radius:8px;background:#0f172a;color:#f8fafc;border:1px solid rgba(255,255,255,0.16);font-size:0.78rem;">

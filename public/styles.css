@@ -373,6 +373,90 @@ select:focus {
   gap: 7px;
 }
 
+.render-mode-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.render-mode-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: rgba(13, 15, 23, 0.85);
+  border: 1.5px solid #262b3d;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.render-mode-card:hover {
+  border-color: #475569;
+}
+
+.render-mode-card.active {
+  border-color: var(--crimson);
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.16) 0%, rgba(15, 23, 42, 0.92) 100%);
+  box-shadow: 0 0 0 2px rgba(225, 29, 72, 0.18);
+}
+
+.render-mode-card input[type="radio"] {
+  margin-top: 3px;
+  accent-color: var(--crimson);
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.render-mode-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.render-mode-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.render-mode-desc {
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+.mode-pill {
+  font-size: 0.63rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.mode-pill-anime {
+  background: rgba(225, 29, 72, 0.22);
+  color: #fda4af;
+  border: 1px solid rgba(244, 63, 94, 0.5);
+}
+
+.mode-pill-3d {
+  background: rgba(56, 189, 248, 0.18);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+}
+
+.mode-pill-classic {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fde68a;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+}
+
 .toggle-item {
   display: flex;
   align-items: center;
