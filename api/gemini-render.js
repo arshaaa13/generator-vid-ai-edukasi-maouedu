@@ -15,6 +15,7 @@ export async function POST(request) {
       topic: body?.topic || "",
       title: body?.title || "",
       scenes,
+      visualPlan: body?.visualPlan || null,
       geminiApiKey: body?.geminiApiKey || "",
       enableKeyframes: Boolean(body?.enableKeyframes),
       enableCustomRigs: body?.enableCustomRigs !== false,

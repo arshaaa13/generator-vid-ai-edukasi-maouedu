@@ -10,6 +10,7 @@ import {
   synthesizeSpeechStateless
 } from "./lib/maou-engine.js";
 import { compileGeminiCinemaVideo } from "./lib/gemini-video-renderer.js";
+import { researchAndPlanVisualWorld } from "./lib/video-ai/visual-researcher.js";
 import { critiqueAndRefineRenderedFrame } from "./lib/video-ai/visual-critic.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -103,6 +104,22 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, result);
     }
 
+    if (pathname === "/api/visual-research" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      const topic = String(body?.topic || body?.title || "").trim();
+      const scenes = Array.isArray(body?.scenes) ? body.scenes : [];
+      if (!topic && !scenes.length) {
+        return sendJson(res, 400, { error: "Topik atau scenes wajib diisi untuk riset visual." });
+      }
+      const result = await researchAndPlanVisualWorld({
+        topic,
+        title: body?.title || topic,
+        scenes,
+        geminiApiKey: body?.geminiApiKey || ""
+      });
+      return sendJson(res, 200, result);
+    }
+
     if (pathname === "/api/gemini-render" && req.method === "POST") {
       const body = await readJsonBody(req);
       const scenes = Array.isArray(body?.scenes) ? body.scenes : [];
@@ -113,6 +130,7 @@ const server = http.createServer(async (req, res) => {
         topic: body?.topic || "",
         title: body?.title || "",
         scenes,
+        visualPlan: body?.visualPlan || null,
         geminiApiKey: body?.geminiApiKey || "",
         enableKeyframes: Boolean(body?.enableKeyframes),
         enableCustomRigs: body?.enableCustomRigs !== false,

@@ -22,7 +22,7 @@ const BLOOM_EXTRACT_FRAG = `
   vec3 brightPass(vec2 uv) {
     vec3 c = texture2D(uSceneTex, clamp(uv, 0.001, 0.999)).rgb;
     float luma = dot(c, vec3(0.299, 0.587, 0.114));
-    float soft = smoothstep(0.56, 0.92, luma);
+    float soft = smoothstep(0.82, 1.0, luma);
     return c * soft;
   }
 
@@ -117,7 +117,7 @@ const COMPOSITE_FRAG = `
     vec3 col = sampleScene(uv);
     if (coc > 0.04) {
       vec3 bokehAcc = col;
-      float radius = coc * 5.2;
+      float radius = coc * 3.2;
       vec2 ring[8];
       ring[0] = vec2( 1.0,  0.0);
       ring[1] = vec2(-1.0,  0.0);
@@ -149,24 +149,24 @@ const COMPOSITE_FRAG = `
       col.b = mix(col.b, sampleScene(uv - dir).b, 0.85);
     }
 
-    // 3. Add Creamy Half-Res Multi-Pass Bloom
+    // 3. Add Subtle Clean Multi-Pass Bloom (never washes out bright daylight walls/bowls!)
     vec3 bloom = texture2D(uBloomTex, uv).rgb;
-    col += bloom * uBloomStrength * 1.15;
+    col += bloom * uBloomStrength * 0.72;
 
-    // 4. Anamorphic Horizontal Cinema Lens Streak
+    // 4. Anamorphic Horizontal Cinema Lens Streak (only when explicitly enabled)
     if (uLensFlare > 0.5) {
       vec3 streak = vec3(0.0);
       for (int k = -3; k <= 3; k++) {
         streak += texture2D(uBloomTex, clamp(uv + vec2(float(k) * px.x * 24.0, 0.0), 0.002, 0.998)).rgb * 0.14;
       }
-      col += streak * mix(vec3(1.0), uTint, 0.45) * 0.52;
+      col += streak * mix(vec3(1.0), uTint, 0.45) * 0.35;
     }
 
-    // 5. Filmic ACES S-Curve Contrast, Vibrance & Mood Tint
+    // 5. Clean Filmic Contrast, Natural Color & Gentle Mood Balance
     col = (col - 0.5) * uContrast + 0.5;
     float lum = dot(col, vec3(0.299, 0.587, 0.114));
     col = mix(vec3(lum), col, uSaturation);
-    col = mix(col, col * (0.92 + uTint * 0.14), 0.2);
+    col = mix(col, col * (0.96 + uTint * 0.06), 0.08);
 
     // 6. Dynamic Speed Lines on Dramatic TAPI Moments
     if (uSpeedLines > 0.5) {
@@ -175,13 +175,13 @@ const COMPOSITE_FRAG = `
       float dist = length(p);
       float rays = pow(max(abs(sin(ang * 28.0 + floor(uTime * 18.0) * 1.7)), 0.0001), 14.0);
       float mask = smoothstep(0.28, 0.55, dist);
-      col += mix(vec3(1.0, 0.9, 0.8), uTint, 0.4) * rays * mask * 0.28;
+      col += mix(vec3(1.0, 0.9, 0.8), uTint, 0.4) * rays * mask * 0.22;
     }
 
-    // 7. Soft Cinema Vignette + Fine Film Grain
+    // 7. Subtle Natural Vignette + Micro Film Grain
     float d = distance(uv, vec2(0.5));
-    col *= 1.0 - smoothstep(0.42, 0.96, d) * uVignette;
-    float grain = (fract(sin(dot(uv * (uTime + 1.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.018;
+    col *= 1.0 - smoothstep(0.46, 0.98, d) * uVignette;
+    float grain = (fract(sin(dot(uv * (uTime + 1.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.008;
     col += grain;
 
     // 8. Kling-Style GPU Scene Transitions

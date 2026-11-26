@@ -240,7 +240,116 @@ function createCinemaTextures() {
     2
   );
 
-  return { wood, brushedMetal, cyberGrid, tile, solar, asphalt, lavaRock, grass, brick };
+  const subwayTile = makeCanvasTex(
+    256,
+    (g, s) => {
+      g.fillStyle = "#e5dfd5";
+      g.fillRect(0, 0, s, s);
+      for (let r = 0; r < 8; r++) {
+        const off = (r % 2) * 32;
+        for (let c = -1; c <= 4; c++) {
+          g.fillStyle = (r + c) % 2 === 0 ? "#fdfbf7" : "#f7f3eb";
+          g.fillRect(c * 64 + off + 2, r * 32 + 2, 60, 28);
+        }
+      }
+    },
+    4,
+    3
+  );
+
+  const plaster = makeCanvasTex(
+    256,
+    (g, s) => {
+      g.fillStyle = "#f4ede2";
+      g.fillRect(0, 0, s, s);
+      for (let i = 0; i < 360; i++) {
+        const x = (i * 67) % s;
+        const y = (i * 113) % s;
+        g.fillStyle = i % 2 === 0 ? "rgba(180,160,130,0.06)" : "rgba(255,255,255,0.09)";
+        g.fillRect(x, y, 6, 4);
+      }
+    },
+    2,
+    2
+  );
+
+  const pegboard = makeCanvasTex(
+    256,
+    (g, s) => {
+      g.fillStyle = "#e7dcc8";
+      g.fillRect(0, 0, s, s);
+      g.fillStyle = "#9c8566";
+      for (let y = 16; y < s; y += 24) {
+        for (let x = 16; x < s; x += 24) {
+          g.beginPath();
+          g.arc(x, y, 3.2, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+    },
+    3,
+    2
+  );
+
+  const marbleCounter = makeCanvasTex(
+    256,
+    (g, s) => {
+      g.fillStyle = "#f3efe8";
+      g.fillRect(0, 0, s, s);
+      g.strokeStyle = "rgba(148,163,184,0.18)";
+      g.lineWidth = 2;
+      for (let i = 0; i < 10; i++) {
+        g.beginPath();
+        g.moveTo(0, (i * 29) % s);
+        g.lineTo(s * 0.45, ((i * 53 + 22) % s));
+        g.lineTo(s, ((i * 37 + 40) % s));
+        g.stroke();
+      }
+    },
+    3,
+    2
+  );
+
+  const concrete = makeCanvasTex(
+    256,
+    (g, s) => {
+      g.fillStyle = "#d6dce2";
+      g.fillRect(0, 0, s, s);
+      for (let i = 0; i < 300; i++) {
+        g.fillStyle = i % 2 === 0 ? "rgba(100,116,139,0.08)" : "rgba(255,255,255,0.1)";
+        g.fillRect((i * 71) % s, (i * 97) % s, 5, 5);
+      }
+    },
+    3,
+    3
+  );
+
+  return {
+    wood,
+    brushedMetal,
+    cyberGrid,
+    tile,
+    solar,
+    asphalt,
+    lavaRock,
+    grass,
+    brick,
+    subwayTile,
+    plaster,
+    pegboard,
+    marbleCounter,
+    concrete
+  };
+}
+
+function buildHollowVesselGeo(profilePts, segs = 30) {
+  if (typeof THREE.LatheGeometry !== "function" || !Array.isArray(profilePts) || profilePts.length < 3) {
+    return new THREE.CylinderGeometry(0.45, 0.32, 0.42, 24);
+  }
+  const vecs = profilePts.map(([r, y]) => new THREE.Vector2(Math.max(0.002, r), y));
+  const geo = new THREE.LatheGeometry(vecs, segs);
+  geo.computeVertexNormals?.();
+  return geo;
 }
 
 function buildRoundedBox(w = 1, h = 1, d = 1, r = 0.06) {
@@ -972,22 +1081,390 @@ function buildCinemaActorPrefab(actor, tex) {
     return g;
   }
 
-  if (p === "ice_cream_bowl" || p === "coffee_espresso" || p === "cooking_pot") {
-    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.42, 0.56, 24), secMat);
-    bowl.castShadow = true;
-    g.add(bowl);
-    const fill = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.12, 22), mat);
-    fill.position.y = 0.25;
-    g.add(fill);
-    if (p === "ice_cream_bowl") {
-      [[-0.2, 0.42, 0.05], [0.2, 0.42, 0.05], [0, 0.62, -0.05]].forEach(([sx, sy, sz], i) => {
-        const sc = new THREE.Mesh(
-          new THREE.SphereGeometry(0.24, 18, 16),
-          createPbrMaterial("matte_clay", i === 0 ? "#f472b6" : i === 1 ? "#fef3c7" : "#34d399", tex)
-        );
-        sc.position.set(sx, sy, sz);
-        g.add(sc);
-      });
+  if (p === "hollow_bowl" || p === "ice_cream_bowl") {
+    const ls = actor.liquidState || {};
+    const outerMat = createPbrMaterial(actor.materialType || "brushed_steel", actor.color || "#cbd5e1", tex, 0);
+    outerMat.side = THREE.DoubleSide;
+    // True thick-walled hollow concave mixing bowl profile (base Y = 0.0 -> rim Y = 0.44)
+    const bowlGeo = buildHollowVesselGeo([
+      [0.004, 0.0],
+      [0.31, 0.0],
+      [0.44, 0.08],
+      [0.54, 0.24],
+      [0.57, 0.41],
+      [0.59, 0.44],
+      [0.54, 0.44],
+      [0.51, 0.39],
+      [0.47, 0.23],
+      [0.37, 0.09],
+      [0.25, 0.055],
+      [0.004, 0.055]
+    ]);
+    const bowlMesh = new THREE.Mesh(bowlGeo, outerMat);
+    bowlMesh.castShadow = true;
+    bowlMesh.receiveShadow = true;
+    g.add(bowlMesh);
+
+    const fillLevel = ls.level ?? (p === "ice_cream_bowl" ? 0.65 : 0.55);
+    if (fillLevel > 0.04) {
+      const fillY = 0.08 + fillLevel * 0.28;
+      const fillR = 0.33 + fillLevel * 0.18;
+      const liqColor = ls.frozen ? "#bae6fd" : ls.color || actor.secondaryColor || "#fef3c7";
+      const liqMat = createPbrMaterial(ls.frozen ? "ice_translucent" : "matte_clay", liqColor, tex, 0);
+      const liqDisc = new THREE.Mesh(new THREE.CylinderGeometry(fillR, fillR * 0.78, Math.max(0.06, fillY - 0.06), 24), liqMat);
+      liqDisc.position.y = 0.06 + (fillY - 0.06) * 0.5;
+      g.add(liqDisc);
+
+      if (ls.iceCubes || ls.frozen) {
+        const iceMat = createPbrMaterial("ice_translucent", "#e0f2fe", tex, 0);
+        const cubeCoords = [[-0.14, fillY + 0.03, 0.08], [0.16, fillY + 0.02, -0.06], [0.02, fillY + 0.04, -0.14]];
+        cubeCoords.forEach(([ix, iy, iz], idx) => {
+          const cube = new THREE.Mesh(buildRoundedBox(0.14, 0.12, 0.14, 0.025), iceMat);
+          cube.position.set(ix, iy, iz);
+          cube.rotation.set(0.2 * idx, 0.5 * idx, 0.15);
+          g.add(cube);
+        });
+      }
+      if (ls.scoops || (p === "ice_cream_bowl" && !ls.frozen)) {
+        const scoopColors = [actor.secondaryColor || "#f472b6", "#fef3c7", "#86efac"];
+        [[-0.16, fillY + 0.1, 0.06], [0.17, fillY + 0.09, 0.04], [0.0, fillY + 0.22, -0.06]].forEach(([sx, sy, sz], i) => {
+          const sc = new THREE.Mesh(
+            new THREE.SphereGeometry(0.19, 18, 16),
+            createPbrMaterial("matte_clay", scoopColors[i % scoopColors.length], tex, 0)
+          );
+          sc.position.set(sx, sy, sz);
+          sc.castShadow = true;
+          g.add(sc);
+        });
+      }
+    }
+    return g;
+  }
+
+  if (p === "cooking_pot") {
+    const ls = actor.liquidState || {};
+    const potMat = createPbrMaterial(actor.materialType || "brushed_steel", actor.color || "#cbd5e1", tex, 0);
+    potMat.side = THREE.DoubleSide;
+    const potGeo = buildHollowVesselGeo([
+      [0.004, 0.0],
+      [0.44, 0.0],
+      [0.48, 0.06],
+      [0.48, 0.52],
+      [0.52, 0.55],
+      [0.45, 0.55],
+      [0.43, 0.50],
+      [0.43, 0.06],
+      [0.004, 0.06]
+    ]);
+    const potMesh = new THREE.Mesh(potGeo, potMat);
+    potMesh.castShadow = true;
+    potMesh.receiveShadow = true;
+    g.add(potMesh);
+
+    const handleMat = createPbrMaterial("matte_clay", actor.secondaryColor || "#334155", tex, 0);
+    [-0.52, 0.52].forEach((hx) => {
+      const handle = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.022, 8, 16, Math.PI), handleMat);
+      handle.position.set(hx, 0.42, 0);
+      handle.rotation.z = hx < 0 ? Math.PI / 2 : -Math.PI / 2;
+      g.add(handle);
+    });
+
+    const fillLevel = ls.level ?? 0.6;
+    if (fillLevel > 0.05) {
+      const h = 0.08 + fillLevel * 0.36;
+      const broth = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.42, 0.42, h, 24),
+        createPbrMaterial("water_clear", ls.color || "#f59e0b", tex, 0)
+      );
+      broth.position.y = 0.06 + h * 0.5;
+      g.add(broth);
+    }
+    return g;
+  }
+
+  if (p === "glass_cup" || p === "coffee_espresso") {
+    const ls = actor.liquidState || {};
+    const isMug = p === "coffee_espresso";
+    const cupMat = createPbrMaterial(isMug ? "ceramic" : "glass_crystal", actor.color || (isMug ? "#f8fafc" : "#e0f2fe"), tex, 0);
+    cupMat.side = THREE.DoubleSide;
+    const cupGeo = buildHollowVesselGeo([
+      [0.004, 0.0],
+      [0.24, 0.0],
+      [0.29, 0.58],
+      [0.30, 0.61],
+      [0.26, 0.61],
+      [0.25, 0.56],
+      [0.21, 0.06],
+      [0.004, 0.06]
+    ]);
+    const cupMesh = new THREE.Mesh(cupGeo, cupMat);
+    cupMesh.castShadow = isMug;
+    cupMesh.receiveShadow = true;
+    g.add(cupMesh);
+
+    if (isMug) {
+      const handle = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.032, 10, 18, Math.PI), cupMat);
+      handle.position.set(0.28, 0.33, 0);
+      handle.rotation.z = -Math.PI / 2;
+      g.add(handle);
+    }
+
+    const fillLevel = ls.level ?? 0.68;
+    if (fillLevel > 0.04) {
+      const h = fillLevel * 0.44;
+      const liq = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.21 + fillLevel * 0.04, 0.2, h, 20),
+        createPbrMaterial(isMug ? "matte_clay" : "water_clear", ls.color || (isMug ? "#78350f" : "#7dd3fc"), tex, 0)
+      );
+      liq.position.y = 0.065 + h * 0.5;
+      g.add(liq);
+
+      if (ls.iceCubes || ls.frozen) {
+        const iceMat = createPbrMaterial("ice_translucent", "#f0f9ff", tex, 0);
+        [[-0.07, 0.07 + h, 0.04], [0.08, 0.06 + h, -0.05], [-0.01, 0.09 + h, -0.04]].forEach(([ix, iy, iz], i) => {
+          const ic = new THREE.Mesh(buildRoundedBox(0.11, 0.1, 0.11, 0.02), iceMat);
+          ic.position.set(ix, iy, iz);
+          ic.rotation.set(0.3 * i, 0.6 * i, 0.2);
+          g.add(ic);
+        });
+      }
+    }
+
+    if (ls.condensation) {
+      const dropMat = createPbrMaterial("glass_crystal", "#e0f2fe", tex, 0);
+      for (let i = 0; i < 16; i++) {
+        const ang = (i / 16) * Math.PI * 2 + (i % 3) * 0.25;
+        const dy = 0.12 + ((i * 19) % 40) * 0.01;
+        const rad = 0.255 + (dy / 0.6) * 0.045;
+        const drop = new THREE.Mesh(new THREE.SphereGeometry(0.016 + (i % 3) * 0.005, 8, 8), dropMat);
+        drop.position.set(Math.cos(ang) * rad, dy, Math.sin(ang) * rad);
+        g.add(drop);
+      }
+    }
+    return g;
+  }
+
+  if (p === "jar_bottle" || p === "salt_shaker") {
+    const isShaker = p === "salt_shaker";
+    const bodyMat = createPbrMaterial(actor.materialType || "glass_crystal", actor.color || "#f8fafc", tex, 0);
+    bodyMat.side = THREE.DoubleSide;
+    const prof = isShaker
+      ? [[0.004, 0.0], [0.15, 0.0], [0.16, 0.28], [0.11, 0.34], [0.11, 0.38]]
+      : [[0.004, 0.0], [0.22, 0.0], [0.23, 0.42], [0.11, 0.56], [0.1, 0.72], [0.12, 0.75]];
+    const bottle = new THREE.Mesh(buildHollowVesselGeo(prof, 24), bodyMat);
+    bottle.castShadow = true;
+    g.add(bottle);
+
+    const innerFill = new THREE.Mesh(
+      new THREE.CylinderGeometry(isShaker ? 0.13 : 0.19, isShaker ? 0.13 : 0.19, isShaker ? 0.2 : 0.34, 18),
+      createPbrMaterial("matte_clay", isShaker ? "#f8fafc" : actor.secondaryColor || "#fef3c7", tex, 0)
+    );
+    innerFill.position.y = isShaker ? 0.12 : 0.19;
+    g.add(innerFill);
+
+    const cap = new THREE.Mesh(
+      new THREE.CylinderGeometry(isShaker ? 0.115 : 0.11, isShaker ? 0.115 : 0.11, 0.09, 18),
+      createPbrMaterial(isShaker ? "brushed_steel" : "wood_oak", actor.secondaryColor || "#94a3b8", tex, 0)
+    );
+    cap.position.y = isShaker ? 0.4 : 0.77;
+    g.add(cap);
+    return g;
+  }
+
+  if (p === "plate_dish") {
+    const plateMat = createPbrMaterial("ceramic", actor.color || "#f8fafc", tex, 0);
+    plateMat.side = THREE.DoubleSide;
+    const plateGeo = buildHollowVesselGeo([
+      [0.004, 0.0],
+      [0.36, 0.0],
+      [0.54, 0.07],
+      [0.55, 0.095],
+      [0.51, 0.095],
+      [0.34, 0.035],
+      [0.004, 0.035]
+    ]);
+    const plate = new THREE.Mesh(plateGeo, plateMat);
+    plate.castShadow = true;
+    plate.receiveShadow = true;
+    g.add(plate);
+    return g;
+  }
+
+  if (p === "cutting_board") {
+    const board = new THREE.Mesh(buildRoundedBox(1.15, 0.07, 0.78, 0.025), createPbrMaterial("wood_oak", actor.color || "#c08446", tex, 0));
+    board.position.y = 0.035;
+    board.castShadow = true;
+    board.receiveShadow = true;
+    g.add(board);
+    const grip = new THREE.Mesh(buildRoundedBox(0.24, 0.06, 0.24, 0.02), createPbrMaterial("wood_oak", actor.color || "#c08446", tex, 0));
+    grip.position.set(0.64, 0.035, 0);
+    g.add(grip);
+    return g;
+  }
+
+  if (p === "whisk_spoon") {
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.028, 0.56, 12), createPbrMaterial("wood_oak", actor.color || "#b45309", tex, 0));
+    handle.position.y = 0.42;
+    handle.castShadow = true;
+    g.add(handle);
+    const headMat = createPbrMaterial("brushed_steel", actor.secondaryColor || "#cbd5e1", tex, 0);
+    for (let i = 0; i < 4; i++) {
+      const loop = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.011, 8, 16), headMat);
+      loop.scale.set(0.75, 1.35, 0.75);
+      loop.position.y = 0.11;
+      loop.rotation.y = (i / 4) * Math.PI;
+      g.add(loop);
+    }
+    return g;
+  }
+
+  if (p === "stove_burner") {
+    const body = new THREE.Mesh(buildRoundedBox(1.25, 0.18, 1.15, 0.035), createPbrMaterial("brushed_steel", actor.color || "#334155", tex, 0));
+    body.position.y = 0.09;
+    body.castShadow = true;
+    body.receiveShadow = true;
+    g.add(body);
+    const ringMat = createPbrMaterial("matte_clay", "#1e293b", tex, 0);
+    const grate = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.028, 10, 24), ringMat);
+    grate.rotation.x = Math.PI / 2;
+    grate.position.y = 0.2;
+    g.add(grate);
+    const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.06, 0.04, 14), createPbrMaterial("metal_chrome", "#e2e8f0", tex, 0));
+    knob.rotation.x = Math.PI / 2;
+    knob.position.set(0.42, 0.09, 0.58);
+    g.add(knob);
+    if (actor.scriptAction === "heat_below") {
+      const flameRing = new THREE.Mesh(
+        new THREE.TorusGeometry(0.24, 0.032, 10, 24),
+        createPbrMaterial("emissive_neon", "#38bdf8", tex, 1.2)
+      );
+      flameRing.rotation.x = Math.PI / 2;
+      flameRing.position.y = 0.195;
+      g.add(flameRing);
+      g.userData.pulseChild = flameRing;
+    }
+    return g;
+  }
+
+  if (p === "bucket_tub") {
+    const ls = actor.liquidState || {};
+    const tubMat = createPbrMaterial(actor.materialType || "glossy_plastic", actor.color || "#38bdf8", tex, 0);
+    tubMat.side = THREE.DoubleSide;
+    const tubGeo = buildHollowVesselGeo([
+      [0.004, 0.0],
+      [0.42, 0.0],
+      [0.54, 0.52],
+      [0.57, 0.55],
+      [0.51, 0.55],
+      [0.49, 0.49],
+      [0.38, 0.06],
+      [0.004, 0.06]
+    ]);
+    const tub = new THREE.Mesh(tubGeo, tubMat);
+    tub.castShadow = true;
+    tub.receiveShadow = true;
+    g.add(tub);
+
+    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.54, 0.016, 8, 28, Math.PI), createPbrMaterial("brushed_steel", "#cbd5e1", tex, 0));
+    handle.position.y = 0.52;
+    handle.rotation.x = -0.35;
+    g.add(handle);
+
+    const fillLevel = ls.level ?? 0.5;
+    if (fillLevel > 0.05) {
+      const h = fillLevel * 0.36;
+      const fill = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.46, 0.38, h, 22),
+        createPbrMaterial(ls.iceCubes ? "ice_translucent" : "water_clear", ls.color || "#bae6fd", tex, 0)
+      );
+      fill.position.y = 0.06 + h * 0.5;
+      g.add(fill);
+    }
+    return g;
+  }
+
+  if (p === "wooden_table") {
+    const woodMat = createPbrMaterial("wood_oak", actor.color || "#b87a42", tex, 0);
+    const top = new THREE.Mesh(buildRoundedBox(1.8, 0.1, 1.1, 0.025), woodMat);
+    top.position.y = 0.72;
+    top.castShadow = true;
+    top.receiveShadow = true;
+    g.add(top);
+    [[-0.78, -0.44], [0.78, -0.44], [-0.78, 0.44], [0.78, 0.44]].forEach(([lx, lz]) => {
+      const leg = new THREE.Mesh(buildRoundedBox(0.09, 0.7, 0.09, 0.015), woodMat);
+      leg.position.set(lx, 0.35, lz);
+      leg.castShadow = true;
+      g.add(leg);
+    });
+    return g;
+  }
+
+  if (p === "bookshelf_cabinet") {
+    const woodMat = createPbrMaterial("wood_oak", actor.color || "#a66c38", tex, 0);
+    const frame = new THREE.Mesh(buildRoundedBox(1.15, 1.35, 0.42, 0.03), woodMat);
+    frame.position.y = 0.675;
+    frame.castShadow = true;
+    g.add(frame);
+    const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#6366f1"];
+    for (let i = 0; i < 5; i++) {
+      const bk = new THREE.Mesh(buildRoundedBox(0.11, 0.32, 0.28, 0.015), createPbrMaterial("matte_clay", colors[i], tex, 0));
+      bk.position.set(-0.32 + i * 0.16, 0.92, 0.09);
+      g.add(bk);
+    }
+    return g;
+  }
+
+  if (p === "whiteboard_chart") {
+    const frameMat = createPbrMaterial("brushed_steel", actor.secondaryColor || "#475569", tex, 0);
+    const stand = new THREE.Mesh(buildRoundedBox(0.92, 0.06, 0.28, 0.015), frameMat);
+    stand.position.y = 0.03;
+    g.add(stand);
+    const board = new THREE.Mesh(buildRoundedBox(1.05, 0.76, 0.06, 0.02), createPbrMaterial("ceramic", "#f8fafc", tex, 0));
+    board.position.y = 0.46;
+    board.castShadow = true;
+    g.add(board);
+    const barColors = ["#38bdf8", "#f59e0b", "#10b981"];
+    [0.2, 0.36, 0.5].forEach((bh, idx) => {
+      const bar = new THREE.Mesh(buildRoundedBox(0.16, bh, 0.03, 0.01), createPbrMaterial("matte_clay", barColors[idx], tex, 0));
+      bar.position.set(-0.24 + idx * 0.24, 0.18 + bh * 0.5, 0.038);
+      g.add(bar);
+    });
+    return g;
+  }
+
+  if (p === "potted_plant") {
+    const potMat = createPbrMaterial("matte_clay", "#c26d4a", tex, 0);
+    potMat.side = THREE.DoubleSide;
+    const pot = new THREE.Mesh(
+      buildHollowVesselGeo([[0.004, 0.0], [0.16, 0.0], [0.22, 0.28], [0.24, 0.32], [0.2, 0.32], [0.18, 0.25], [0.004, 0.25]], 20),
+      potMat
+    );
+    pot.castShadow = true;
+    g.add(pot);
+    const leafMat = createPbrMaterial("matte_clay", "#22c55e", tex, 0);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), leafMat);
+      leaf.scale.set(0.65, 1.5, 0.45);
+      leaf.position.set(Math.cos(a) * 0.1, 0.42 + (i % 2) * 0.08, Math.sin(a) * 0.1);
+      leaf.rotation.set(Math.sin(a) * 0.45, a, -Math.cos(a) * 0.45);
+      g.add(leaf);
+    }
+    return g;
+  }
+
+  if (p === "ice_cube_tray") {
+    const tray = new THREE.Mesh(buildRoundedBox(0.74, 0.12, 0.42, 0.025), createPbrMaterial("glossy_plastic", actor.color || "#38bdf8", tex, 0));
+    tray.position.y = 0.06;
+    tray.castShadow = true;
+    g.add(tray);
+    const iceMat = createPbrMaterial("ice_translucent", "#e0f2fe", tex, 0);
+    for (let c = -1; c <= 1; c++) {
+      for (let r = -0.5; r <= 0.5; r += 1) {
+        const ic = new THREE.Mesh(buildRoundedBox(0.16, 0.11, 0.14, 0.02), iceMat);
+        ic.position.set(c * 0.21, 0.12, r * 0.18);
+        g.add(ic);
+      }
     }
     return g;
   }
@@ -1140,15 +1617,26 @@ function buildCinemaActorPrefab(actor, tex) {
 // 4. MAIN GEMINI CINEMA ENGINE CLASS
 // ============================================================================
 const MOOD_PRESETS = {
-  pixar_golden: { top: 0x3b82f6, hor: 0xfdba74, bot: 0x7c2d12, sun: 0xfef08a, sunPos: [4.5, 5.5, 3.2], sunInt: 2.2, hemiInt: 1.05, rim: 0x38bdf8, rimInt: 0.9, fog: 0xfed7aa, stars: 0.0 },
-  unreal_studio: { top: 0x60a5fa, hor: 0xe0f2fe, bot: 0x94a3b8, sun: 0xffffff, sunPos: [3.8, 7.2, 4.2], sunInt: 2.0, hemiInt: 1.25, rim: 0xfbbf24, rimInt: 0.75, fog: 0xe0f2fe, stars: 0.0 },
-  cyber_neon: { top: 0x090d1e, hor: 0x1e1b4b, bot: 0x020617, sun: 0x38bdf8, sunPos: [-3.5, 5.0, 3.5], sunInt: 1.75, hemiInt: 0.75, rim: 0xf43f5e, rimInt: 1.45, fog: 0x0f172a, stars: 0.85 },
-  inferno_alert: { top: 0x2a0808, hor: 0xb91c1c, bot: 0x180505, sun: 0xfb923c, sunPos: [3.5, 4.5, 3.5], sunInt: 2.4, hemiInt: 0.78, rim: 0xef4444, rimInt: 1.5, fog: 0x450a0a, stars: 0.15 },
-  deep_ocean: { top: 0x082f49, hor: 0x0284c7, bot: 0x041e30, sun: 0x7dd3fc, sunPos: [1.5, 8.0, 2.0], sunInt: 1.9, hemiInt: 1.05, rim: 0x34d399, rimInt: 0.95, fog: 0x0c4a6e, stars: 0.0 },
-  arctic_ice: { top: 0x0ea5e9, hor: 0xe0f2fe, bot: 0xbae6fd, sun: 0xf0f9ff, sunPos: [4.2, 6.2, 3.8], sunInt: 2.1, hemiInt: 1.25, rim: 0x38bdf8, rimInt: 1.0, fog: 0xdbeafe, stars: 0.0 },
-  emerald_victory: { top: 0x064e3b, hor: 0x34d399, bot: 0x022c22, sun: 0xfde047, sunPos: [3.2, 6.5, 3.0], sunInt: 2.35, hemiInt: 1.1, rim: 0xfbbf24, rimInt: 1.35, fog: 0x065f46, stars: 0.25 },
-  volcanic_forge: { top: 0x1c1917, hor: 0xc2410c, bot: 0x0c0a09, sun: 0xf97316, sunPos: [2.0, 4.5, 3.2], sunInt: 2.3, hemiInt: 0.75, rim: 0xfacc15, rimInt: 1.35, fog: 0x29150e, stars: 0.2 },
-  moonlit_mystery: { top: 0x020617, hor: 0x1e293b, bot: 0x090a0f, sun: 0xbae6fd, sunPos: [-3.0, 6.5, 2.5], sunInt: 1.45, hemiInt: 0.65, rim: 0xa855f7, rimInt: 1.15, fog: 0x0f172a, stars: 0.95 }
+  // Clean Natural Pixar / Blender-Cycles Daylight Studio Presets (DEFAULT!)
+  soft_daylight: { top: 0xbae6fd, hor: 0xf8fafc, bot: 0xe2e8f0, sun: 0xfffdf7, sunPos: [3.6, 6.8, 4.4], sunInt: 1.95, hemiInt: 1.32, rim: 0xe0f2fe, rimInt: 0.45, fog: 0xf1f5f9, fogDensity: 0.004, stars: 0.0 },
+  warm_kitchen: { top: 0x93c5fd, hor: 0xfff7ed, bot: 0xfde68a, sun: 0xfffbeb, sunPos: [4.2, 6.0, 3.8], sunInt: 2.0, hemiInt: 1.35, rim: 0xfef3c7, rimInt: 0.48, fog: 0xfff7ed, fogDensity: 0.004, stars: 0.0 },
+  clean_workshop: { top: 0xbae6fd, hor: 0xf5f0e6, bot: 0xd6c7b2, sun: 0xffffff, sunPos: [3.8, 6.8, 4.2], sunInt: 1.95, hemiInt: 1.3, rim: 0xe2e8f0, rimInt: 0.45, fog: 0xf5f0e6, fogDensity: 0.004, stars: 0.0 },
+  outdoor_sunlight: { top: 0x38bdf8, hor: 0xe0f2fe, bot: 0xbae6fd, sun: 0xfffbeb, sunPos: [4.5, 7.5, 4.0], sunInt: 2.15, hemiInt: 1.25, rim: 0xfef08a, rimInt: 0.45, fog: 0xe0f2fe, fogDensity: 0.009, stars: 0.0 },
+  cozy_indoor: { top: 0xfde68a, hor: 0xfef3c7, bot: 0xd6c7b2, sun: 0xfff7ed, sunPos: [3.4, 5.8, 3.8], sunInt: 1.88, hemiInt: 1.3, rim: 0xfdba74, rimInt: 0.45, fog: 0xfef3c7, fogDensity: 0.004, stars: 0.0 },
+  cool_lab: { top: 0xe0f2fe, hor: 0xf8fafc, bot: 0xcbd5e1, sun: 0xffffff, sunPos: [3.5, 7.2, 4.5], sunInt: 1.95, hemiInt: 1.38, rim: 0xbae6fd, rimInt: 0.45, fog: 0xf1f5f9, fogDensity: 0.004, stars: 0.0 },
+  night_dim: { top: 0x0f172a, hor: 0x1e293b, bot: 0x090d16, sun: 0xbae6fd, sunPos: [-3.0, 6.2, 3.2], sunInt: 1.45, hemiInt: 0.78, rim: 0x93c5fd, rimInt: 0.65, fog: 0x0f172a, fogDensity: 0.012, stars: 0.85 },
+  warm_alert: { top: 0x7c2d12, hor: 0xfdba74, bot: 0x451a03, sun: 0xfed7aa, sunPos: [3.5, 5.5, 3.8], sunInt: 2.05, hemiInt: 1.05, rim: 0xfb923c, rimInt: 0.72, fog: 0x7c2d12, fogDensity: 0.009, stars: 0.0 },
+  cyber_dark: { top: 0x090d1e, hor: 0x1e1b4b, bot: 0x020617, sun: 0x38bdf8, sunPos: [-3.5, 5.0, 3.5], sunInt: 1.75, hemiInt: 0.78, rim: 0xf43f5e, rimInt: 1.2, fog: 0x0f172a, fogDensity: 0.014, stars: 0.8 },
+  // Legacy preset keys (backward-compatible)
+  pixar_golden: { top: 0x60a5fa, hor: 0xffedd5, bot: 0xfed7aa, sun: 0xfffbeb, sunPos: [4.2, 6.2, 3.8], sunInt: 2.0, hemiInt: 1.28, rim: 0xfef3c7, rimInt: 0.5, fog: 0xffedd5, fogDensity: 0.006, stars: 0.0 },
+  unreal_studio: { top: 0x93c5fd, hor: 0xf1f5f9, bot: 0xcbd5e1, sun: 0xffffff, sunPos: [3.8, 7.2, 4.2], sunInt: 1.95, hemiInt: 1.32, rim: 0xe0f2fe, rimInt: 0.45, fog: 0xf1f5f9, fogDensity: 0.005, stars: 0.0 },
+  cyber_neon: { top: 0x090d1e, hor: 0x1e1b4b, bot: 0x020617, sun: 0x38bdf8, sunPos: [-3.5, 5.0, 3.5], sunInt: 1.75, hemiInt: 0.75, rim: 0xf43f5e, rimInt: 1.2, fog: 0x0f172a, fogDensity: 0.015, stars: 0.85 },
+  inferno_alert: { top: 0x7c2d12, hor: 0xfb923c, bot: 0x451a03, sun: 0xfed7aa, sunPos: [3.5, 4.8, 3.5], sunInt: 2.1, hemiInt: 0.95, rim: 0xf97316, rimInt: 0.85, fog: 0x451a03, fogDensity: 0.012, stars: 0.0 },
+  deep_ocean: { top: 0x0369a1, hor: 0x38bdf8, bot: 0x082f49, sun: 0xbae6fd, sunPos: [1.5, 8.0, 2.0], sunInt: 1.9, hemiInt: 1.15, rim: 0x7dd3fc, rimInt: 0.65, fog: 0x0c4a6e, fogDensity: 0.014, stars: 0.0 },
+  arctic_ice: { top: 0x38bdf8, hor: 0xf0f9ff, bot: 0xbae6fd, sun: 0xffffff, sunPos: [4.2, 6.2, 3.8], sunInt: 2.0, hemiInt: 1.32, rim: 0xbae6fd, rimInt: 0.55, fog: 0xe0f2fe, fogDensity: 0.007, stars: 0.0 },
+  emerald_victory: { top: 0x60a5fa, hor: 0xecfdf5, bot: 0xa7f3d0, sun: 0xfffbeb, sunPos: [3.5, 6.5, 3.5], sunInt: 2.05, hemiInt: 1.3, rim: 0xfef08a, rimInt: 0.55, fog: 0xecfdf5, fogDensity: 0.005, stars: 0.0 },
+  volcanic_forge: { top: 0x292524, hor: 0xc2410c, bot: 0x1c1917, sun: 0xf97316, sunPos: [2.0, 4.5, 3.2], sunInt: 2.2, hemiInt: 0.85, rim: 0xfacc15, rimInt: 1.1, fog: 0x29150e, fogDensity: 0.015, stars: 0.1 },
+  moonlit_mystery: { top: 0x0f172a, hor: 0x1e293b, bot: 0x090a0f, sun: 0xbae6fd, sunPos: [-3.0, 6.5, 2.5], sunInt: 1.45, hemiInt: 0.72, rim: 0x93c5fd, rimInt: 0.85, fog: 0x0f172a, fogDensity: 0.014, stars: 0.9 }
 };
 
 export class MaouGeminiCinema {
@@ -1267,19 +1755,24 @@ export class MaouGeminiCinema {
     try {
       const pmrem = new THREE.PMREMGenerator(this.renderer);
       const envScene = new THREE.Scene();
-      envScene.background = new THREE.Color(0x1e293b);
-      const box1 = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), new THREE.MeshBasicMaterial({ color: 0xfff7ed, side: THREE.DoubleSide }));
-      box1.position.set(0, 8, 0);
-      box1.rotation.x = Math.PI / 2;
-      envScene.add(box1);
-      const box2 = new THREE.Mesh(new THREE.PlaneGeometry(12, 6), new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide }));
-      box2.position.set(-8, 2, 0);
-      box2.rotation.y = Math.PI / 2;
-      envScene.add(box2);
-      const box3 = new THREE.Mesh(new THREE.PlaneGeometry(12, 6), new THREE.MeshBasicMaterial({ color: 0xfbbf24, side: THREE.DoubleSide }));
-      box3.position.set(8, 3, 2);
-      box3.rotation.y = -Math.PI / 2;
-      envScene.add(box3);
+      // Bright neutral daylight studio HDRI (clean natural metal/ceramic/glass reflections!)
+      envScene.background = new THREE.Color(0xeef2f6);
+      const skylight = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+      skylight.position.set(0, 8, 0);
+      skylight.rotation.x = Math.PI / 2;
+      envScene.add(skylight);
+      const windowPanel = new THREE.Mesh(new THREE.PlaneGeometry(12, 7), new THREE.MeshBasicMaterial({ color: 0xfffbeb, side: THREE.DoubleSide }));
+      windowPanel.position.set(-8, 3, 2);
+      windowPanel.rotation.y = Math.PI / 2;
+      envScene.add(windowPanel);
+      const fillPanel = new THREE.Mesh(new THREE.PlaneGeometry(12, 7), new THREE.MeshBasicMaterial({ color: 0xe0f2fe, side: THREE.DoubleSide }));
+      fillPanel.position.set(8, 3, 2);
+      fillPanel.rotation.y = -Math.PI / 2;
+      envScene.add(fillPanel);
+      const floorBounce = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshBasicMaterial({ color: 0xd6c7b2, side: THREE.DoubleSide }));
+      floorBounce.position.set(0, -6, 0);
+      floorBounce.rotation.x = -Math.PI / 2;
+      envScene.add(floorBounce);
       const rt = pmrem.fromScene(envScene, 0.04);
       pmrem.dispose();
       return rt.texture;
@@ -1305,8 +1798,8 @@ export class MaouGeminiCinema {
   }
 
   applyLightingMood(moodKey) {
-    const m = MOOD_PRESETS[moodKey] || MOOD_PRESETS.pixar_golden;
-    this.scene.fog = new THREE.FogExp2(m.fog, 0.022);
+    const m = MOOD_PRESETS[moodKey] || MOOD_PRESETS.soft_daylight;
+    this.scene.fog = new THREE.FogExp2(m.fog, m.fogDensity ?? 0.005);
     this.hemiLight.intensity = m.hemiInt;
     this.keyLight.color.setHex(m.sun);
     this.keyLight.intensity = m.sunInt;
@@ -1320,6 +1813,279 @@ export class MaouGeminiCinema {
       this.skyMat.uniforms.uSunColor.value.setHex(m.sun);
       this.skyMat.uniforms.uStars.value = m.stars;
     }
+  }
+
+  buildArchitecturalWallsAndShelf(g, walls = {}) {
+    if (!walls.enabled) return;
+
+    const wallTexMap = {
+      ceramic_tile: this.tex.subwayTile,
+      warm_plaster: this.tex.plaster,
+      red_brick: this.tex.brick,
+      wood_panel: this.tex.wood,
+      pegboard: this.tex.pegboard,
+      concrete: this.tex.concrete,
+      lab_panel: this.tex.plaster
+    };
+    const wallMap = wallTexMap[walls.backWallMaterial] || this.tex.plaster;
+    const wallCol = new THREE.Color(walls.backWallColor || "#f4ede2");
+    const wallMat = new THREE.MeshStandardMaterial({
+      color: wallCol,
+      map: wallMap,
+      roughness: walls.backWallMaterial === "ceramic_tile" ? 0.28 : 0.72,
+      metalness: 0.02
+    });
+
+    // Back architectural wall
+    const backWall = new THREE.Mesh(new THREE.BoxGeometry(10.5, 5.8, 0.24), wallMat);
+    backWall.position.set(0, 1.35, -2.18);
+    backWall.receiveShadow = true;
+    g.add(backWall);
+
+    // Optional left corner wall to enclose the room cleanly like a Pixar miniature diorama!
+    if (walls.sideWallEnabled) {
+      const sideMat = new THREE.MeshStandardMaterial({
+        color: wallCol.clone().multiplyScalar(0.95),
+        map: this.tex.plaster,
+        roughness: 0.74
+      });
+      const sideWall = new THREE.Mesh(new THREE.BoxGeometry(0.24, 5.8, 7.6), sideMat);
+      sideWall.position.set(-3.15, 1.35, 1.2);
+      sideWall.receiveShadow = true;
+      g.add(sideWall);
+    }
+
+    // Crisp wooden baseboard & tabletop backsplash trim
+    if (walls.hasBaseboard) {
+      const trimMat = new THREE.MeshStandardMaterial({ color: 0xe7ddd0, roughness: 0.55 });
+      const backTrim = new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.14, 0.08), trimMat);
+      backTrim.position.set(0, 0.06, -2.03);
+      g.add(backTrim);
+      const floorBase = new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.22, 0.1), trimMat);
+      floorBase.position.set(0, -1.54, -2.02);
+      g.add(floorBase);
+    }
+
+    // Framed sunlit daylight window on back-left wall
+    if (walls.hasWindow) {
+      const winGroup = new THREE.Group();
+      winGroup.position.set(-1.55, 1.75, -2.02);
+      const frameMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 });
+      const glassPane = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.36, 1.36),
+        new THREE.MeshBasicMaterial({ color: 0xdbeafe })
+      );
+      winGroup.add(glassPane);
+      const topBar = new THREE.Mesh(new THREE.BoxGeometry(1.54, 0.1, 0.1), frameMat);
+      topBar.position.y = 0.7;
+      const botSill = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.11, 0.18), frameMat);
+      botSill.position.set(0, -0.7, 0.04);
+      const leftBar = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.48, 0.1), frameMat);
+      leftBar.position.x = -0.72;
+      const rightBar = leftBar.clone();
+      rightBar.position.x = 0.72;
+      const midV = new THREE.Mesh(new THREE.BoxGeometry(0.055, 1.38, 0.07), frameMat);
+      const midH = new THREE.Mesh(new THREE.BoxGeometry(1.38, 0.055, 0.07), frameMat);
+      winGroup.add(topBar, botSill, leftBar, rightBar, midV, midH);
+      g.add(winGroup);
+    }
+
+    // Floating wooden wall shelf on back-right with calm, grounded everyday props!
+    if (walls.hasShelf) {
+      const shelfWood = createPbrMaterial("wood_oak", "#b87a42", this.tex, 0);
+      const shelfBoard = new THREE.Mesh(buildRoundedBox(1.85, 0.075, 0.36, 0.015), shelfWood);
+      shelfBoard.position.set(1.18, 1.48, -1.88);
+      shelfBoard.castShadow = true;
+      shelfBoard.receiveShadow = true;
+      g.add(shelfBoard);
+
+      const items = Array.isArray(walls.shelfItems) && walls.shelfItems.length ? walls.shelfItems : ["jar", "plant", "mug"];
+      items.slice(0, 3).forEach((item, i) => {
+        const sx = 0.62 + i * 0.56;
+        const sy = 1.52;
+        const sz = -1.86;
+        if (item === "plant") {
+          const pl = buildCinemaActorPrefab({ prefab: "potted_plant", color: "#c26d4a" }, this.tex);
+          pl.position.set(sx, sy, sz);
+          pl.scale.setScalar(0.55);
+          g.add(pl);
+        } else if (item === "books") {
+          const bCols = ["#3b82f6", "#f59e0b", "#10b981"];
+          bCols.forEach((bc, bi) => {
+            const bk = new THREE.Mesh(buildRoundedBox(0.08, 0.28 + bi * 0.03, 0.2, 0.01), createPbrMaterial("matte_clay", bc, this.tex, 0));
+            bk.position.set(sx - 0.09 + bi * 0.09, sy + 0.14 + bi * 0.015, sz);
+            g.add(bk);
+          });
+        } else if (item === "mug") {
+          const mug = buildCinemaActorPrefab({ prefab: "coffee_espresso", color: "#fef3c7", liquidState: { level: 0 } }, this.tex);
+          mug.position.set(sx, sy, sz);
+          mug.scale.setScalar(0.45);
+          g.add(mug);
+        } else {
+          const jar = buildCinemaActorPrefab({ prefab: "jar_bottle", color: "#f8fafc", secondaryColor: i === 0 ? "#f59e0b" : "#0ea5e9" }, this.tex);
+          jar.position.set(sx, sy, sz);
+          jar.scale.setScalar(0.44);
+          g.add(jar);
+        }
+      });
+    }
+  }
+
+  buildWorldFoundation(wf, legacyEnv) {
+    if (!wf || typeof wf !== "object") {
+      this.buildEnvironment(legacyEnv || "studio_bench");
+      return;
+    }
+
+    const g = this.stageGroup;
+    const room = wf.roomType || "oak_workshop";
+    const surf = wf.surface || {};
+    const walls = wf.walls || {};
+
+    // Outdoor / special world environments
+    if (room === "space_orbit") {
+      this.buildEnvironment("space_orbit");
+      return;
+    }
+    if (room === "underwater_bed") {
+      this.buildEnvironment("deep_underwater");
+      return;
+    }
+    if (room === "volcanic_outdoor") {
+      this.buildEnvironment("volcanic_terrain");
+      return;
+    }
+    if (room === "arctic_outdoor") {
+      this.buildEnvironment("arctic_glacier");
+      return;
+    }
+    if (room === "runway_outdoor" || room === "street_exterior") {
+      this.buildEnvironment(room === "runway_outdoor" ? "runway_tarmac" : "city_street");
+      return;
+    }
+    if (room === "farm_field" || room === "backyard_yard") {
+      const lawn = new THREE.Mesh(
+        new THREE.BoxGeometry(12, 0.5, 10),
+        new THREE.MeshStandardMaterial({ map: this.tex.grass, roughness: 0.82 })
+      );
+      lawn.position.set(0, -0.25, 0);
+      lawn.receiveShadow = true;
+      g.add(lawn);
+      if (walls.enabled) this.buildArchitecturalWallsAndShelf(g, { ...walls, hasWindow: false, hasShelf: false });
+      return;
+    }
+
+    // Real room floor underneath table/counter (visible around table legs!)
+    const floorMat = new THREE.MeshStandardMaterial({
+      color: 0xe5ddd0,
+      map: this.tex.tile,
+      roughness: 0.62
+    });
+    const roomFloor = new THREE.Mesh(new THREE.BoxGeometry(12, 0.25, 9), floorMat);
+    roomFloor.position.set(0, -1.78, 0.2);
+    roomFloor.receiveShadow = true;
+    g.add(roomFloor);
+
+    const w = surf.width || 5.4;
+    const d = surf.depth || 3.1;
+
+    if (room === "kitchen_counter" || surf.type === "kitchen_counter") {
+      // Genuine Kitchen Countertop (top flush at Y = 0.0!) + lower cabinets with handles!
+      const counterTop = new THREE.Mesh(
+        buildRoundedBox(w, 0.14, d, 0.025),
+        new THREE.MeshPhysicalMaterial({
+          color: new THREE.Color(surf.materialColor || "#ebe4d8"),
+          map: this.tex.marbleCounter,
+          roughness: 0.26,
+          clearcoat: 0.35
+        })
+      );
+      counterTop.position.set(0, -0.07, -0.35);
+      counterTop.receiveShadow = true;
+      g.add(counterTop);
+
+      const cabMat = new THREE.MeshStandardMaterial({ color: 0xd8c3a5, roughness: 0.52 });
+      const cabBody = new THREE.Mesh(new THREE.BoxGeometry(w - 0.12, 1.52, d - 0.16), cabMat);
+      cabBody.position.set(0, -0.9, -0.4);
+      cabBody.receiveShadow = true;
+      g.add(cabBody);
+
+      const handleMat = createPbrMaterial("brushed_steel", "#64748b", this.tex, 0);
+      const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0xc9b08e, roughness: 0.58 });
+      [-1.5, 0, 1.5].forEach((dx) => {
+        const door = new THREE.Mesh(buildRoundedBox(1.32, 1.24, 0.04, 0.012), doorFrameMat);
+        door.position.set(dx, -0.84, d * 0.5 - 0.47);
+        g.add(door);
+        const handle = new THREE.Mesh(buildRoundedBox(0.28, 0.032, 0.045, 0.01), handleMat);
+        handle.position.set(dx, -0.36, d * 0.5 - 0.43);
+        g.add(handle);
+      });
+    } else if (room === "science_lab" || surf.type === "lab_bench") {
+      // Clean bright science lab bench (top flush at Y = 0.0!) + steel legs
+      const benchTop = new THREE.Mesh(
+        buildRoundedBox(w, 0.12, d, 0.022),
+        new THREE.MeshPhysicalMaterial({
+          color: new THREE.Color(surf.materialColor || "#f1f5f9"),
+          roughness: 0.24,
+          clearcoat: 0.3
+        })
+      );
+      benchTop.position.set(0, -0.06, -0.3);
+      benchTop.receiveShadow = true;
+      g.add(benchTop);
+
+      const steelMat = createPbrMaterial("brushed_steel", "#94a3b8", this.tex, 0);
+      const apron = new THREE.Mesh(new THREE.BoxGeometry(w - 0.25, 0.16, d - 0.25), steelMat);
+      apron.position.set(0, -0.18, -0.3);
+      g.add(apron);
+      [[-w * 0.43, -d * 0.4 - 0.3], [w * 0.43, -d * 0.4 - 0.3], [-w * 0.43, d * 0.4 - 0.3], [w * 0.43, d * 0.4 - 0.3]].forEach(([lx, lz]) => {
+        const leg = new THREE.Mesh(buildRoundedBox(0.11, 1.55, 0.11, 0.015), steelMat);
+        leg.position.set(lx, -0.88, lz);
+        g.add(leg);
+      });
+    } else if (room === "house_cross_section" || surf.type === "concrete_floor") {
+      const slab = new THREE.Mesh(
+        new THREE.BoxGeometry(w + 1.2, 0.22, d + 0.8),
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color(surf.materialColor || "#cbd5e1"),
+          map: this.tex.concrete,
+          roughness: 0.65
+        })
+      );
+      slab.position.set(0, -0.11, -0.2);
+      slab.receiveShadow = true;
+      g.add(slab);
+    } else {
+      // Genuine Beveled Wooden Table (top flush at Y = 0.0!) + Under-Apron + 4 Solid Oak Legs!
+      const woodMat = new THREE.MeshPhysicalMaterial({
+        color: new THREE.Color(surf.materialColor || "#c2864b"),
+        map: this.tex.wood,
+        roughness: 0.38,
+        clearcoat: 0.22
+      });
+      const tableTop = new THREE.Mesh(buildRoundedBox(w, 0.14, d, 0.03), woodMat);
+      tableTop.position.set(0, -0.07, -0.28);
+      tableTop.receiveShadow = true;
+      g.add(tableTop);
+
+      const apronMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(surf.materialColor || "#a66c38").multiplyScalar(0.86),
+        map: this.tex.wood,
+        roughness: 0.5
+      });
+      const apron = new THREE.Mesh(new THREE.BoxGeometry(w - 0.36, 0.2, d - 0.36), apronMat);
+      apron.position.set(0, -0.22, -0.28);
+      g.add(apron);
+
+      [[-w * 0.42, -d * 0.38 - 0.28], [w * 0.42, -d * 0.38 - 0.28], [-w * 0.42, d * 0.38 - 0.28], [w * 0.42, d * 0.38 - 0.28]].forEach(([lx, lz]) => {
+        const leg = new THREE.Mesh(buildRoundedBox(0.14, 1.56, 0.14, 0.02), apronMat);
+        leg.position.set(lx, -0.88, lz);
+        leg.castShadow = true;
+        g.add(leg);
+      });
+    }
+
+    this.buildArchitecturalWallsAndShelf(g, walls);
   }
 
   buildEnvironment(envType) {
@@ -1515,6 +2281,32 @@ export class MaouGeminiCinema {
         g.add(seg);
         items.push({ mesh: seg, seed: i });
       }
+    } else if (vfx.type === "pour_stream") {
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: col,
+        roughness: 0.15,
+        clearcoat: 0.8,
+        transparent: true,
+        opacity: 0.9
+      });
+      for (let i = 0; i < 14; i++) {
+        const drop = new THREE.Mesh(new THREE.SphereGeometry(0.028 + (i % 2) * 0.008, 10, 8), mat);
+        g.add(drop);
+        items.push({ mesh: drop, seed: i / 14 });
+      }
+    } else if (vfx.type === "condensation_drops") {
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: col,
+        transparent: true,
+        opacity: 0.72,
+        roughness: 0.08,
+        clearcoat: 1.0
+      });
+      for (let i = 0; i < 16; i++) {
+        const bead = new THREE.Mesh(new THREE.SphereGeometry(0.018 + (i % 3) * 0.005, 8, 8), mat);
+        g.add(bead);
+        items.push({ mesh: bead, seed: i * 0.41 });
+      }
     } else if (vfx.type === "energy_flow") {
       const mat = new THREE.MeshBasicMaterial({ color: col });
       for (let i = 0; i < 10; i++) {
@@ -1548,10 +2340,85 @@ export class MaouGeminiCinema {
     this.vfxNodes.push({ spec: vfx, group: g, items });
   }
 
+  measureActorBounds(mesh, scale = 1.0) {
+    let minY = 0;
+    let maxY = 0.6;
+    if (typeof THREE.Box3 === "function") {
+      try {
+        mesh.scale.set(scale, scale, scale);
+        mesh.position.set(0, 0, 0);
+        mesh.updateMatrixWorld?.(true);
+        const box = new THREE.Box3().setFromObject(mesh);
+        if (Number.isFinite(box.min?.y) && Number.isFinite(box.max?.y) && box.max.y > box.min.y) {
+          minY = box.min.y;
+          maxY = box.max.y;
+        }
+      } catch {}
+    }
+    return {
+      groundOffsetY: -minY,
+      height: Math.max(0.08, maxY - minY)
+    };
+  }
+
+  groundActorsToSurfaces() {
+    const byId = new Map();
+    for (const entry of this.actors) {
+      const bounds = this.measureActorBounds(entry.mesh, entry.spec.scale || 1.0);
+      entry.groundOffsetY = bounds.groundOffsetY;
+      entry.height = bounds.height;
+      entry.resolvedSurfaceY = 0;
+      entry.resolvedX = entry.spec.placement?.x ?? entry.spec.startPos?.[0] ?? 0;
+      entry.resolvedZ = entry.spec.placement?.z ?? entry.spec.startPos?.[2] ?? 0;
+      entry.isGrounded = entry.spec.placement?.on !== "floating";
+      byId.set(entry.spec.id, entry);
+      if (entry.spec.assetId) byId.set(entry.spec.assetId, entry);
+    }
+
+    // Two passes resolve surface -> on_top / inside support chains cleanly
+    for (let pass = 0; pass < 2; pass++) {
+      for (const entry of this.actors) {
+        const pl = entry.spec.placement || { on: "surface", x: entry.resolvedX, z: entry.resolvedZ, yOffset: 0 };
+        const on = pl.on || "surface";
+        if (on === "floating") {
+          entry.isGrounded = false;
+          entry.resolvedSurfaceY = entry.spec.startPos?.[1] ?? 0.65;
+        } else if (on === "wall") {
+          entry.isGrounded = true;
+          entry.resolvedZ = -1.92;
+          entry.resolvedSurfaceY = Math.max(0.4, pl.yOffset || 0.85);
+        } else if (on.startsWith("on_top:")) {
+          const parent = byId.get(on.slice(7));
+          entry.isGrounded = true;
+          if (parent && parent !== entry) {
+            entry.resolvedX = parent.resolvedX + (Math.abs(pl.x) < 0.35 ? pl.x : 0);
+            entry.resolvedZ = parent.resolvedZ + (Math.abs(pl.z) < 0.35 ? pl.z : 0);
+            entry.resolvedSurfaceY = parent.resolvedSurfaceY + parent.height + (pl.yOffset || 0);
+          } else {
+            entry.resolvedSurfaceY = pl.yOffset || 0;
+          }
+        } else if (on.startsWith("inside:")) {
+          const parent = byId.get(on.slice(7));
+          entry.isGrounded = true;
+          if (parent && parent !== entry) {
+            entry.resolvedX = parent.resolvedX + (Math.abs(pl.x) < 0.25 ? pl.x : 0);
+            entry.resolvedZ = parent.resolvedZ + (Math.abs(pl.z) < 0.25 ? pl.z : 0);
+            entry.resolvedSurfaceY = parent.resolvedSurfaceY + 0.08 + (pl.yOffset || 0);
+          } else {
+            entry.resolvedSurfaceY = 0.08 + (pl.yOffset || 0);
+          }
+        } else {
+          entry.isGrounded = true;
+          entry.resolvedSurfaceY = pl.yOffset || 0;
+        }
+      }
+    }
+  }
+
   loadBlueprint(sceneKey, blueprint, tSec) {
     if (this.activeSceneKey === sceneKey) return;
 
-    // Capture outgoing frame for smooth Kling GPU transition!
+    // Capture outgoing frame for smooth GPU transition!
     if (this.postPipeline?.supported && this.activeSceneKey) {
       this.postPipeline.capturePreviousFrame(this.scene, this.camera);
       const tMap = { none: 0, zoom_through: 1, whip_pan: 2, flash_impact: 3, cross_dissolve: 4 };
@@ -1563,8 +2430,8 @@ export class MaouGeminiCinema {
 
     this.activeSceneKey = sceneKey;
     this.clearStage();
-    this.applyLightingMood(blueprint.lightingMood || "pixar_golden");
-    this.buildEnvironment(blueprint.environment || "studio_bench");
+    this.applyLightingMood(blueprint.lightingMood || blueprint.worldFoundation?.lightingPreset || "soft_daylight");
+    this.buildWorldFoundation(blueprint.worldFoundation, blueprint.environment || "studio_bench");
 
     for (const actorSpec of blueprint.actors || []) {
       const mesh = buildCinemaActorPrefab(actorSpec, this.tex);
@@ -1572,6 +2439,9 @@ export class MaouGeminiCinema {
       this.stageGroup.add(mesh);
       this.actors.push({ spec: actorSpec, mesh });
     }
+
+    // Snap every solid prop & character cleanly to tabletop/floor/container via Box3!
+    this.groundActorsToSurfaces();
 
     for (const vfx of blueprint.vfxSystems || []) {
       this.buildVfxSystem(vfx);
@@ -1647,10 +2517,11 @@ export class MaouGeminiCinema {
     this.camera.lookAt(this.lookAtVec);
     if (cam.rollTilt) this.camera.rotation.z += cam.rollTilt;
 
-    // 3. Animate All Actors Along Multi-Keyframe Catmull-Rom Splines + Spring Physics + Custom Bone Rigs!
-    const useSpring = optics.springPhysics !== false;
+    // 3. Animate Grounded Actors Along Keyframes + Literal Script Actions + Custom Bone Rigs!
+    const useSpringGlobal = optics.springPhysics === true;
     for (let aIdx = 0; aIdx < this.actors.length; aIdx++) {
-      const { spec, mesh } = this.actors[aIdx];
+      const entry = this.actors[aIdx];
+      const { spec, mesh } = entry;
       if (spec.prefab !== "pipe_curved" && spec.prefab !== "wire_arc") {
         let x, y, z, rx, ry, rz, sc, vel;
         if (Array.isArray(spec.keyframes) && spec.keyframes.length >= 2) {
@@ -1660,7 +2531,7 @@ export class MaouGeminiCinema {
           sc = kf.scale;
           vel = kf.vel;
         } else {
-          const sp = spec.startPos || [0, 0.5, 0];
+          const sp = spec.startPos || [entry.resolvedX, 0, entry.resolvedZ];
           const ep = spec.endPos || sp;
           x = sp[0] + (ep[0] - sp[0]) * easedP;
           y = sp[1] + (ep[1] - sp[1]) * easedP;
@@ -1674,29 +2545,65 @@ export class MaouGeminiCinema {
           vel = [ep[0] - sp[0], ep[1] - sp[1], ep[2] - sp[2]];
         }
 
-        if (sceneElapsedSec < 0.65 && spec.enterStyle !== "none") {
-          const epEnter = sceneElapsedSec / 0.65;
+        // Physical surface grounding: anchor bottom flush onto resolved support surface!
+        if (entry.isGrounded) {
+          x = entry.resolvedX + (x - (spec.startPos?.[0] ?? entry.resolvedX)) * 0.4;
+          z = entry.resolvedZ + (z - (spec.startPos?.[2] ?? entry.resolvedZ)) * 0.4;
+          y = entry.resolvedSurfaceY + (entry.groundOffsetY || 0);
+        }
+
+        // Literal script-synced physical choreography!
+        const sa = spec.scriptAction || "rest";
+        if (sa === "pour_into") {
+          const tiltP = Math.sin(Math.min(1, progress * 1.15) * Math.PI);
+          y += 0.34 * Math.min(1, progress * 2.5);
+          x -= 0.16 * Math.min(1, progress * 2.5);
+          rz += 0.92 * Math.max(0.25, tiltP);
+        } else if (sa === "stir_inside") {
+          const ang = tSec * 4.4;
+          x += Math.cos(ang) * 0.16;
+          z += Math.sin(ang) * 0.16;
+          rx += Math.sin(ang) * 0.18;
+          rz += -Math.cos(ang) * 0.18;
+        } else if (sa === "vibrate_fault") {
+          x += Math.sin(tSec * 46) * 0.025;
+          z += Math.cos(tSec * 41) * 0.018;
+        } else if (sa === "assemble_drop") {
+          const dropU = Math.min(1, sceneElapsedSec / 0.75);
+          y += (1 - easeOutBack(dropU)) * 0.85;
+        } else if (sa === "celebrate_bounce") {
+          y += Math.abs(Math.sin(tSec * 5.2)) * 0.08;
+        } else if (sa === "spin_smooth") {
+          ry += tSec * (spec.speed || 2.2);
+        }
+
+        if (sceneElapsedSec < 0.55 && spec.enterStyle !== "none") {
+          const epEnter = sceneElapsedSec / 0.55;
           if (spec.enterStyle === "pop_bounce") sc *= Math.max(0.05, easeOutBack(epEnter));
-          else if (spec.enterStyle === "drop_impact") y += (1 - easeOutBack(epEnter)) * 1.4;
-          else if (spec.enterStyle === "slide_left") x -= (1 - easeInOutCubic(epEnter)) * 1.8;
-          else if (spec.enterStyle === "slide_right") x += (1 - easeInOutCubic(epEnter)) * 1.8;
-          else if (spec.enterStyle === "emerge_up") y -= (1 - easeOutBack(epEnter)) * 1.1;
+          else if (spec.enterStyle === "drop_impact") y += (1 - easeOutBack(epEnter)) * 0.9;
+          else if (spec.enterStyle === "slide_left") x -= (1 - easeInOutCubic(epEnter)) * 1.4;
+          else if (spec.enterStyle === "slide_right") x += (1 - easeInOutCubic(epEnter)) * 1.4;
+          else if (spec.enterStyle === "emerge_up") y -= (1 - easeOutBack(epEnter)) * 0.65;
         }
 
-        const spd = spec.speed || 2.5;
-        if (spec.loopMotion === "hover" || spec.loopMotion === "breathe") y += Math.sin(tSec * spd) * 0.08;
+        const spd = spec.speed || 2.2;
+        if (spec.loopMotion === "hover" && !entry.isGrounded) y += Math.sin(tSec * spd) * 0.06;
         if (spec.loopMotion === "shake" || spec.loopMotion === "vibrate") {
-          x += Math.sin(tSec * 44) * 0.04;
-          z += Math.cos(tSec * 38) * 0.025;
+          x += Math.sin(tSec * 42) * 0.025;
+          z += Math.cos(tSec * 36) * 0.018;
         }
-        if (spec.loopMotion === "pulse") sc *= 1 + Math.sin(tSec * spd * 1.5) * 0.065;
+        if (spec.loopMotion === "pulse" && !entry.isGrounded) sc *= 1 + Math.sin(tSec * spd * 1.4) * 0.045;
         if (spec.loopMotion === "swim") {
-          x += Math.sin(tSec * spd * 0.7) * 0.35;
-          y += Math.cos(tSec * spd) * 0.06;
+          x += Math.sin(tSec * spd * 0.7) * 0.28;
+          y += Math.cos(tSec * spd) * 0.04;
         }
-        if (spec.loopMotion === "piston") y += Math.abs(Math.sin(tSec * spd * 2)) * 0.16;
+        if (spec.loopMotion === "piston") y += Math.abs(Math.sin(tSec * spd * 2)) * 0.12;
 
-        const deform = computeSpringPhysicsDeform(vel, tSec, aIdx * 1.1, useSpring);
+        // Only apply spring squash-and-stretch to organic/character/flying actors — NEVER rigid bowls/tables!
+        const allowSpring =
+          useSpringGlobal &&
+          (!entry.isGrounded || spec.prefab === "human_protagonist" || spec.prefab.startsWith("fish_") || spec.prefab === "stingray");
+        const deform = computeSpringPhysicsDeform(vel, tSec, aIdx * 1.1, allowSpring);
         mesh.position.set(x, y, z);
         mesh.scale.set(sc * deform.scaleMul[0], sc * deform.scaleMul[1], sc * deform.scaleMul[2]);
 
@@ -1788,6 +2695,25 @@ export class MaouGeminiCinema {
           it.mesh.scale.setScalar(0.55 + u * 2.1);
           it.mesh.material.opacity = (1 - u) * 0.75;
         });
+      } else if (spec.type === "pour_stream") {
+        items.forEach((it) => {
+          const u = (tSec * 1.6 + it.seed) % 1;
+          const x = o[0] + (tgt[0] - o[0]) * u;
+          const z = o[2] + (tgt[2] - o[2]) * u;
+          const y = o[1] + (tgt[1] - o[1]) * (u * u);
+          it.mesh.position.set(x, y, z);
+          it.mesh.scale.setScalar(0.85 + Math.sin(u * Math.PI) * 0.35);
+        });
+      } else if (spec.type === "condensation_drops") {
+        items.forEach((it, idx) => {
+          const ang = (idx / items.length) * Math.PI * 2;
+          const slide = ((tSec * 0.12 + it.seed) % 1) * 0.28;
+          it.mesh.position.set(
+            o[0] + Math.cos(ang) * 0.31,
+            Math.max(0.06, o[1] + 0.16 - slide),
+            o[2] + Math.sin(ang) * 0.31
+          );
+        });
       } else if (spec.type === "energy_flow") {
         items.forEach((it) => {
           const u = (tSec * 0.85 + it.seed) % 1;
@@ -1864,17 +2790,17 @@ export class MaouGeminiCinema {
       transType: this.transType,
       keyframeTex: this.activeKeyframeTex,
       focusDist,
-      dofAperture: optics.dofAperture ?? 0.45,
-      motionVecX: Math.max(-0.015, Math.min(0.015, camVelX * mbScale)),
-      motionVecY: Math.max(-0.015, Math.min(0.015, camVelY * mbScale)),
-      bloomStrength: grade.bloomStrength ?? 0.72,
-      contrast: grade.contrast ?? 1.08,
-      saturation: grade.saturation ?? 1.16,
-      vignette: grade.vignette ?? 0.28,
+      dofAperture: optics.dofAperture ?? 0.18,
+      motionVecX: Math.max(-0.012, Math.min(0.012, camVelX * mbScale)),
+      motionVecY: Math.max(-0.012, Math.min(0.012, camVelY * mbScale)),
+      bloomStrength: grade.bloomStrength ?? 0.16,
+      contrast: grade.contrast ?? 1.05,
+      saturation: grade.saturation ?? 1.08,
+      vignette: grade.vignette ?? 0.13,
       tintHex: grade.tintHex || "#38bdf8",
       lensFlare: Boolean(grade.lensFlare),
       speedLines: Boolean(grade.speedLines),
-      chromatic: (cam.handheldAmp || 0) > 0.03 ? 0.0085 : 0.0
+      chromatic: (cam.handheldAmp || 0) > 0.03 ? 0.004 : 0.0
     });
   }
 }

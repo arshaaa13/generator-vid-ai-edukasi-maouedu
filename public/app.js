@@ -34,9 +34,8 @@ let sceneEnterTimestamp = performance.now();
 let activeAudioSource = null;
 let activePhraseTimers = [];
 let bgmInterval = null;
-const DEFAULT_FREE_MALE_VOICE_ID = "nPczCjzI2devNBz1zQrb"; // ElevenLabs Brian (Deep Resonant Male — Free & Paid API)
 let serverConfig = {
-  elevenlabsVoiceId: DEFAULT_FREE_MALE_VOICE_ID,
+  elevenlabsVoiceId: "nPczCjzI2devNBz1zQrb",
   hasElevenlabsEnvKey: false,
   hasGeminiEnvKey: false
 };
@@ -51,11 +50,13 @@ const autoBuildVideoBtn = document.getElementById("autoBuildVideoBtn");
 const pipelineBar = document.getElementById("pipelineBar");
 const stepResearch = document.getElementById("stepResearch");
 const stepScript = document.getElementById("stepScript");
+const stepVisualResearch = document.getElementById("stepVisualResearch");
 const stepCinema = document.getElementById("stepCinema");
 const stepVoice = document.getElementById("stepVoice");
 const stepReady = document.getElementById("stepReady");
 
 const researchResultsBox = document.getElementById("researchResultsBox");
+const visualFoundationBox = document.getElementById("visualFoundationBox");
 const aiEngineBadge = document.getElementById("aiEngineBadge");
 const tiktokUrlInput = document.getElementById("tiktokUrlInput");
 const analyzeTiktokBtn = document.getElementById("analyzeTiktokBtn");
@@ -90,18 +91,9 @@ const toggleBgm = document.getElementById("toggleBgm");
 
 // Local browser settings (never sent to GitHub)
 function getLocalKeys() {
-  let savedVoice = (localStorage.getItem("maou_el_voice") || "").trim();
-  // Auto-migrate legacy paid-only library voice ID that fails with 402 on ElevenLabs Free API
-  if (savedVoice === "cPoqAvGWCPfCfyPMwe4z") {
-    savedVoice = DEFAULT_FREE_MALE_VOICE_ID;
-    localStorage.setItem("maou_el_voice", savedVoice);
-  }
-  const serverVoice =
-    serverConfig.elevenlabsVoiceId && serverConfig.elevenlabsVoiceId !== "cPoqAvGWCPfCfyPMwe4z"
-      ? serverConfig.elevenlabsVoiceId
-      : DEFAULT_FREE_MALE_VOICE_ID;
   return {
-    elevenlabsVoiceId: savedVoice || serverVoice || DEFAULT_FREE_MALE_VOICE_ID,
+    elevenlabsVoiceId:
+      localStorage.getItem("maou_el_voice") || serverConfig.elevenlabsVoiceId || "nPczCjzI2devNBz1zQrb",
     elevenlabsApiKey: localStorage.getItem("maou_el_key") || "",
     geminiApiKey: localStorage.getItem("maou_gemini_key") || ""
   };
@@ -160,8 +152,8 @@ function base64ToArrayBuffer(base64) {
 
 function setPipelineState(stage) {
   pipelineBar.classList.remove("hidden");
-  const stages = [stepResearch, stepScript, stepCinema, stepVoice, stepReady].filter(Boolean);
-  const order = { research: 0, script: 1, cinema: 2, voice: 3, ready: 4, allDone: 5 };
+  const stages = [stepResearch, stepScript, stepVisualResearch, stepCinema, stepVoice, stepReady].filter(Boolean);
+  const order = { research: 0, script: 1, visualResearch: 2, cinema: 3, voice: 4, ready: 5, allDone: 6 };
   const activeIdx = order[stage] ?? 0;
 
   stages.forEach((el, idx) => {
@@ -247,7 +239,7 @@ function playProceduralSfx(type, destNode = null) {
       osc.start(now);
       osc.stop(now + 0.22);
     }
-  } catch {}
+  } catch { }
 }
 
 function startBgm(destNode = null) {
@@ -360,11 +352,16 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
     renderSceneList();
     updateActiveSceneUI();
 
-    // 3: Compile Kling-Class Gemini Cinema Animation Blueprints (PBR + Shaders + Volumetric VFX)
+    // 3 & 4: Online Visual Reference Research + Grounded Persistent 3D Diorama Compilation
     if (!toggleGeminiCinema || toggleGeminiCinema.checked) {
-      setPipelineState("cinema");
-      autoBuildVideoBtn.textContent = "🎬 Gemini Cinema Merender Animasi...";
-      await renderScenesWithGeminiCinema();
+      setPipelineState("visualResearch");
+      autoBuildVideoBtn.textContent = "🏛️ Riset Referensi Visual & Fondasi 3D...";
+      await renderScenesWithGeminiCinema(null, (phase) => {
+        if (phase === "cinema") {
+          setPipelineState("cinema");
+          autoBuildVideoBtn.textContent = `🎬 Menyusun Koreografi ${currentScript.scenes.length} Scene...`;
+        }
+      });
     }
 
     // 4: Generate voiceovers strictly via ElevenLabs across all scenes (no Google fallback)
@@ -415,7 +412,39 @@ function saveCinemaStyleLesson(lesson, score) {
   } catch {}
 }
 
-async function renderScenesWithGeminiCinema(singleIdx = null) {
+function renderVisualFoundationBox(visualPlan, sceneCount = 0) {
+  if (!visualFoundationBox) return;
+  if (!visualPlan?.worldFoundation) {
+    visualFoundationBox.classList.add("hidden");
+    return;
+  }
+  const wf = visualPlan.worldFoundation;
+  const catalog = Array.isArray(visualPlan.assetCatalog) ? visualPlan.assetCatalog : [];
+  const refs = Array.isArray(visualPlan.visualReferences) ? visualPlan.visualReferences : [];
+
+  const assetsText = catalog
+    .slice(0, 6)
+    .map((a) => `<code>${a.name || a.id}</code>`)
+    .join(" • ");
+
+  const refsHtml = refs.length
+    ? `<div style="margin-top:4px;font-size:0.74rem;"><strong>Referensi Visual:</strong> ${refs
+        .slice(0, 3)
+        .map((r) => `<a class="research-source-link" href="${r.url}" target="_blank" rel="noreferrer">${r.title}</a>`)
+        .join(" • ")}</div>`
+    : "";
+
+  visualFoundationBox.classList.remove("hidden");
+  visualFoundationBox.innerHTML = `
+    <div><strong>🏛️ Fondasi Set 3D Konsisten (${sceneCount || currentScript?.scenes?.length || 0} Scene)</strong></div>
+    <div style="font-size:0.76rem;margin-top:2px;">Set: <code>${wf.roomType}</code> • Cahaya: <code>${wf.lightingPreset}</code> • Dinding: <code>${wf.walls?.enabled ? wf.walls.backWallMaterial : "terbuka"}</code></div>
+    <div style="font-size:0.76rem;margin-top:3px;">${wf.storySummary || ""}</div>
+    ${assetsText ? `<div style="font-size:0.74rem;margin-top:4px;"><strong>Aset Persisten:</strong> ${assetsText}</div>` : ""}
+    ${refsHtml}
+  `;
+}
+
+async function renderScenesWithGeminiCinema(singleIdx = null, onStageChange = null) {
   if (!currentScript?.scenes?.length) return false;
   const keys = getLocalKeys();
   const targetScenes =
@@ -428,10 +457,39 @@ async function renderScenesWithGeminiCinema(singleIdx = null) {
     renderGeminiCinemaBtn.textContent =
       singleIdx !== null
         ? `⏳ Gemini Merender Scene #${singleIdx + 1}...`
-        : "⏳ Gemini Cinema Mengompilasi Animasi HD...";
+        : "🏛️ Riset Visual & Menyusun Set 3D...";
   }
 
   try {
+    // Stage 0: Research real-world visual references & lock 1 coherent room + persistent asset catalog
+    if (singleIdx === null || !currentScript.visualPlan?.worldFoundation) {
+      onStageChange?.("visualResearch");
+      try {
+        const vrResp = await fetch("/api/visual-research", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topic: currentScript.topic || "",
+            title: currentScript.title || "",
+            scenes: currentScript.scenes,
+            geminiApiKey: keys.geminiApiKey
+          })
+        });
+        const vrData = await vrResp.json();
+        if (vrResp.ok && vrData?.worldFoundation) {
+          currentScript.visualPlan = vrData;
+          renderVisualFoundationBox(vrData, currentScript.scenes.length);
+        }
+      } catch (vrErr) {
+        console.warn("Visual research non-fatal warning:", vrErr);
+      }
+    }
+
+    onStageChange?.("cinema");
+    if (renderGeminiCinemaBtn && singleIdx === null) {
+      renderGeminiCinemaBtn.textContent = `🎬 Koreografi ${currentScript.scenes.length} Scene Sesuai Naskah...`;
+    }
+
     const styleMemoryHints = getCinemaStyleMemory()
       .sort((a, b) => (b.score || 0) - (a.score || 0))
       .slice(0, 4)
@@ -444,6 +502,7 @@ async function renderScenesWithGeminiCinema(singleIdx = null) {
         topic: currentScript.topic || "",
         title: currentScript.title || "",
         scenes: targetScenes,
+        visualPlan: currentScript.visualPlan || null,
         geminiApiKey: keys.geminiApiKey,
         enableKeyframes: Boolean(toggleNanoBananaKeyframes?.checked),
         enableCustomRigs: !toggleCustomRigs || Boolean(toggleCustomRigs.checked),
@@ -453,6 +512,15 @@ async function renderScenesWithGeminiCinema(singleIdx = null) {
     const data = await resp.json();
     if (!resp.ok || data.error) {
       throw new Error(data.error || "Gagal merender animasi Gemini Cinema.");
+    }
+
+    if (data.worldFoundation && !currentScript.visualPlan?.worldFoundation) {
+      currentScript.visualPlan = {
+        worldFoundation: data.worldFoundation,
+        assetCatalog: data.assetCatalog || [],
+        visualReferences: data.visualReferences || []
+      };
+      renderVisualFoundationBox(currentScript.visualPlan, currentScript.scenes.length);
     }
 
     if (singleIdx !== null && data.scenes?.[0]) {
@@ -470,8 +538,8 @@ async function renderScenesWithGeminiCinema(singleIdx = null) {
     const rigSuffix = data.customRigCount > 0 ? ` • ${data.customRigCount} Custom Rig` : "";
     const modeTag =
       data.keyframeCount > 0
-        ? `🍌 Nano Banana + Cinema (${data.imageModel})`
-        : `🎬 Gemini Cinema (${data.directorModel}${rigSuffix})`;
+        ? `🍌 Nano Banana + Diorama (${data.imageModel})`
+        : `🏛️ Diorama 3D (${data.directorModel}${rigSuffix} • ${currentScript.scenes.length} Scene)`;
     aiEngineBadge.textContent = modeTag;
     sceneEnterTimestamp = performance.now();
     renderSceneList();
@@ -625,10 +693,10 @@ function renderSceneList() {
         ? `🍌 Gemini AI Keyframe${qcScore}`
         : `🎬 Cinema (${scene.cinemaBlueprint.actors?.length || 0} aktor${hasCustomRig ? " • 🧬Rig" : ""}${qcScore})`
       : scene.visual?.stage3d?.objects?.length
-      ? `🎬 3D AI (${scene.visual.stage3d.objects.length} objek)`
-      : scene.visual?.heroObject
-      ? `🎬 3D @untabiru5`
-      : "";
+        ? `🎬 3D AI (${scene.visual.stage3d.objects.length} objek)`
+        : scene.visual?.heroObject
+          ? `🎬 3D @untabiru5`
+          : "";
     const clipBadge = clipInfo?.videoEl ? "🎥 Klip MP4 Siap" : animBadge;
 
     card.innerHTML = `
@@ -772,7 +840,7 @@ function loadVideoElement(srcUrl) {
     vid.playsInline = true;
     vid.src = srcUrl;
     vid.onloadeddata = () => {
-      vid.play().catch(() => {});
+      vid.play().catch(() => { });
       resolve(vid);
     };
     vid.onerror = () => reject(new Error("Gagal memuat file video MP4."));
@@ -836,7 +904,7 @@ async function ensureSceneAudio(index) {
     if (actx.state === "suspended") {
       try {
         await actx.resume();
-      } catch {}
+      } catch { }
     }
 
     const arrayBuf = base64ToArrayBuffer(data.audioBase64);
@@ -884,15 +952,15 @@ async function playSceneAudioAndWait(index, destNode = null, runId = playbackRun
   if (clip?.videoEl) {
     try {
       clip.videoEl.currentTime = 0;
-      clip.videoEl.play().catch(() => {});
-    } catch {}
+      clip.videoEl.play().catch(() => { });
+    } catch { }
   }
   playProceduralSfx(sc.sfx, destNode);
 
   let audioEntry = null;
   try {
     audioEntry = await ensureSceneAudio(index);
-  } catch {}
+  } catch { }
 
   if (runId !== playbackRunId || !isPlaying) return;
 
@@ -903,7 +971,7 @@ async function playSceneAudioAndWait(index, destNode = null, runId = playbackRun
       if (actx.state === "suspended") {
         try {
           await actx.resume();
-        } catch {}
+        } catch { }
       }
       if (runId !== playbackRunId || !isPlaying) return resolve();
 
@@ -927,7 +995,7 @@ async function playSceneAudioAndWait(index, destNode = null, runId = playbackRun
         vocalPresence.connect(analyserNode);
         try {
           analyserNode.disconnect();
-        } catch {}
+        } catch { }
         analyserNode.connect(destNode || actx.destination);
       } else {
         vocalPresence.connect(destNode || actx.destination);
@@ -937,7 +1005,7 @@ async function playSceneAudioAndWait(index, destNode = null, runId = playbackRun
         try {
           activeAudioSource.onended = null;
           activeAudioSource.stop();
-        } catch {}
+        } catch { }
       }
       activePhraseTimers.forEach((t) => clearTimeout(t));
       activePhraseTimers = [];
@@ -1023,7 +1091,7 @@ function stopPlayback() {
     try {
       activeAudioSource.onended = null;
       activeAudioSource.stop();
-    } catch {}
+    } catch { }
     activeAudioSource = null;
   }
   playFullVideoBtn.textContent = "▶ Putar Full Video";
@@ -1098,13 +1166,12 @@ function drawProceduralEdutainmentScene(ctx, scene, t) {
     scene.phase === "TAPI"
       ? "rgba(225, 29, 72, 0.7)"
       : scene.phase === "JADI"
-      ? "rgba(245, 158, 11, 0.7)"
-      : "rgba(16, 185, 129, 0.7)";
+        ? "rgba(245, 158, 11, 0.7)"
+        : "rgba(16, 185, 129, 0.7)";
   ctx.stroke();
 
-  const textContext = `${currentScript?.topic || ""} ${scene.narration || ""} ${
-    scene.componentLabel || ""
-  }`.toLowerCase();
+  const textContext = `${currentScript?.topic || ""} ${scene.narration || ""} ${scene.componentLabel || ""
+    }`.toLowerCase();
 
   if (textContext.includes("aquarium") || textContext.includes("akuarium")) {
     // Dedicated Glass Aquarium + Sump Filter + Heater + Pingpong Ball Simulation!
@@ -1416,10 +1483,10 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
     scene.mcPose === "sarcastic"
       ? -0.045 + Math.sin(tSec * 4.5) * 0.018
       : scene.mcPose === "explaining"
-      ? 0.035 + Math.sin(tSec * 3.5) * 0.016
-      : scene.mcPose === "eureka"
-      ? Math.sin(tSec * 5.0) * 0.028
-      : Math.sin(tSec * 2.2) * 0.022;
+        ? 0.035 + Math.sin(tSec * 3.5) * 0.016
+        : scene.mcPose === "eureka"
+          ? Math.sin(tSec * 5.0) * 0.028
+          : Math.sin(tSec * 2.2) * 0.022;
 
   ctx.save();
   const cardW = isHero ? 148 : 132;
@@ -1470,8 +1537,8 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
       scene.mcPose === "sarcastic"
         ? "rgba(225, 29, 72, 0.46)"
         : scene.mcPose === "eureka"
-        ? "rgba(245, 158, 11, 0.48)"
-        : "rgba(139, 92, 246, 0.42)";
+          ? "rgba(245, 158, 11, 0.48)"
+          : "rgba(139, 92, 246, 0.42)";
     auraGrad.addColorStop(0, auraColor);
     auraGrad.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = auraGrad;
@@ -1578,10 +1645,10 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
     scene.mcPose === "sarcastic"
       ? "#e11d48"
       : scene.mcPose === "explaining"
-      ? "#fbbf24"
-      : scene.mcPose === "eureka"
-      ? "#10b981"
-      : "#a855f7";
+        ? "#fbbf24"
+        : scene.mcPose === "eureka"
+          ? "#10b981"
+          : "#a855f7";
   ctx.stroke();
 
   const reactionMap = {
@@ -2324,11 +2391,10 @@ async function initStudio() {
 
     const hasEl = serverConfig.hasElevenlabsEnvKey || Boolean(keys.elevenlabsApiKey);
     document.getElementById("voiceStatusDot").classList.toggle("active-el", hasEl);
-    document.getElementById("voiceStatusPill").title = `ElevenLabs Voice ID: ${keys.elevenlabsVoiceId}`;
     document.getElementById("voiceStatusLabel").textContent = hasEl
       ? `ElevenLabs Only (${keys.elevenlabsVoiceId})`
       : `ElevenLabs Belum Diatur (Isi Key di ⚙️ API & Voice)`;
-  } catch {}
+  } catch { }
 
   try {
     geminiCinema = new MaouGeminiCinema(720, 1280);
@@ -2490,8 +2556,7 @@ if (voicePresetSelect) {
 }
 
 document.getElementById("saveSettingsBtn").addEventListener("click", () => {
-  const voiceId =
-    document.getElementById("elevenlabsVoiceIdInput").value.trim() || DEFAULT_FREE_MALE_VOICE_ID;
+  const voiceId = document.getElementById("elevenlabsVoiceIdInput").value.trim() || "cPoqAvGWCPfCfyPMwe4z";
   const elKey = document.getElementById("elevenlabsApiKeyInput").value.trim();
   const gemKey = document.getElementById("geminiApiKeyInput").value.trim();
 
@@ -2501,7 +2566,6 @@ document.getElementById("saveSettingsBtn").addEventListener("click", () => {
 
   const hasEl = serverConfig.hasElevenlabsEnvKey || Boolean(elKey);
   document.getElementById("voiceStatusDot").classList.toggle("active-el", hasEl);
-  document.getElementById("voiceStatusPill").title = `ElevenLabs Voice ID: ${voiceId}`;
   document.getElementById("voiceStatusLabel").textContent = hasEl
     ? `ElevenLabs Only (${voiceId})`
     : `ElevenLabs Belum Diatur (Isi Key di ⚙️ API & Voice)`;

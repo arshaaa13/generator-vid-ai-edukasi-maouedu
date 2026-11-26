@@ -35,8 +35,10 @@ function createLatheGeo(points2D) {
   if (typeof THREE.LatheGeometry !== "function" || !Array.isArray(points2D) || points2D.length < 3) {
     return new THREE.CylinderGeometry(0.2, 0.26, 0.65, 20);
   }
-  const pts = points2D.map(([r, y]) => new THREE.Vector2(Math.max(0.005, Math.abs(r)), y));
-  return new THREE.LatheGeometry(pts, 24);
+  const pts = points2D.map(([r, y]) => new THREE.Vector2(Math.max(0.004, Math.abs(r)), y));
+  const geo = new THREE.LatheGeometry(pts, 28);
+  geo.computeVertexNormals?.();
+  return geo;
 }
 
 function createTubeSplineGeo(points3D, radius = 0.05) {
@@ -125,6 +127,9 @@ export function buildProceduralCustomRig(customRig, createMaterialFn) {
 
     const geo = buildPartGeometry(part);
     const mat = createMaterialFn(part.materialType, part.color, part.emissiveIntensity || 0);
+    if (part.shape === "lathe" && mat) {
+      mat.side = THREE.DoubleSide;
+    }
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = part.materialType !== "glass_crystal" && part.materialType !== "water_clear";
     mesh.receiveShadow = true;

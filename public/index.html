@@ -55,17 +55,19 @@
         </button>
       </div>
 
-      <!-- Live 5-Step Autonomous Pipeline Tracker -->
+      <!-- Live 6-Step Autonomous Pipeline Tracker -->
       <div class="pipeline-bar hidden" id="pipelineBar">
-        <div class="pipe-step" id="stepResearch">1. 🔍 AI Research</div>
+        <div class="pipe-step" id="stepResearch">1. 🔍 Riset Topik</div>
         <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepScript">2. ✍️ Script Raja Iblis</div>
+        <div class="pipe-step" id="stepScript">2. ✍️ Script Bebas</div>
         <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepCinema">3. 🎬 Gemini Cinema Render</div>
+        <div class="pipe-step" id="stepVisualResearch">3. 🏛️ Riset Visual 3D</div>
         <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepVoice">4. 🎙️ ElevenLabs Voice</div>
+        <div class="pipe-step" id="stepCinema">4. 🎬 Animasi Naskah</div>
         <div class="pipe-arrow">→</div>
-        <div class="pipe-step" id="stepReady">5. ✨ Video HD Siap!</div>
+        <div class="pipe-step" id="stepVoice">5. 🎙️ ElevenLabs Voice</div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step" id="stepReady">6. ✨ Video HD Siap!</div>
       </div>
     </div>
   </section>
@@ -85,8 +87,9 @@
           <span class="badge badge-outline" id="aiEngineBadge">Menunggu prompt</span>
         </div>
         <div id="researchResultsBox" class="research-box">
-          Ketik prompt di atas lalu klik <strong>✨ Buat Video Otomatis</strong>. AI akan otomatis meriset fakta ilmiahnya, menulis skrip ala MC Raja Iblis, merekam suara cowok, dan langsung memutar videonya.
+          Ketik prompt di atas lalu klik <strong>✨ Buat Video Otomatis</strong>. AI akan otomatis meriset fakta ilmiahnya, memilih jumlah scene bebas sesuai alur topik (4–12 scene), meriset referensi bentuk ruangan &amp; benda 3D, merekam suara cowok ElevenLabs, dan langsung memutar videonya.
         </div>
+        <div id="visualFoundationBox" class="analysis-box hidden" style="margin-top:8px;"></div>
       </div>
 
       <div class="card">
@@ -107,7 +110,7 @@
         <div class="toggle-list">
           <label class="toggle-item">
             <input type="checkbox" id="toggleGeminiCinema" checked />
-            <span>🎬 <strong>Gemini Cinema AI Render</strong> (PBR + Bokeh DOF + Bloom Kling)</span>
+            <span>🎬 <strong>Gemini 3D Diorama</strong> (Riset Visual + Set Konsisten + Efek Bersih)</span>
           </label>
           <label class="toggle-item">
             <input type="checkbox" id="toggleCustomRigs" checked />
