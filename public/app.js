@@ -13,6 +13,7 @@ import {
 } from "/anime-mappa-engine.js";
 import { exportDeterministicMp4Video } from "/video-engine/mp4-video-exporter.js";
 import { MaouPromptToVideoWorkflow } from "/video-engine/prompt-to-video-workflow.js";
+import { applyClientBaritoneDsp } from "/voice-dsp-client.js";
 
 const canvas = document.getElementById("videoCanvas");
 const ctx = canvas.getContext("2d");
@@ -704,8 +705,8 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
               if (lbl) lastError = lbl;
             }
             onVoiceProgress?.(i + 1, data.scenes.length);
-            if (curKeys.voiceProvider === "gemini_free" && !entry?.cached && i < data.scenes.length - 1) {
-              await new Promise((r) => setTimeout(r, 450));
+            if (curKeys.voiceProvider === "gemini_free" && !entry?.cached && entry?.provider === "gemini_free" && i < data.scenes.length - 1) {
+              await new Promise((r) => setTimeout(r, 650));
             }
           }
           return {
@@ -1492,88 +1493,151 @@ function updateActiveSceneUI() {
 }
 
 let activeElevenlabsVoiceId = "";
+const pendingAudioPromises = new Map();
 
 async function ensureSceneAudio(index) {
   if (sceneAudioBuffers.has(index)) return sceneAudioBuffers.get(index);
-  const scene = currentScript.scenes[index];
+  const scene = currentScript?.scenes?.[index];
+  if (!scene) return null;
   const keys = getLocalKeys();
-  const isFreeGemini = keys.voiceProvider === "gemini_free";
-  const st = document.getElementById(`audioStatus_${index}`);
-  if (st) st.textContent = isFreeGemini ? "⏳ Rekam suara gratis terlatih..." : "⏳ Rekam suara ElevenLabs...";
-
-  const requestedVoiceId = activeElevenlabsVoiceId || keys.elevenlabsVoiceId;
-  let data = {};
-  try {
-    const resp = await fetch("/api/tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text: scene.narration,
-        voiceProvider: keys.voiceProvider,
-        voicePreset: keys.voicePreset,
-        phase: scene.phase || "JADI",
-        customVoiceProfile: keys.trainedVoiceProfile || null,
-        voiceId: requestedVoiceId,
-        elevenlabsApiKey: keys.elevenlabsApiKey,
-        geminiApiKey: keys.geminiApiKey
-      })
-    });
-    data = await resp.json().catch(() => ({ elevenlabsError: `HTTP ${resp.status}` }));
-  } catch (e) {
-    data = { elevenlabsError: e.message || "Gagal terhubung ke endpoint TTS" };
+  const dedupeKey = `${index}::${scene.narration}::${keys.voiceProvider}::${keys.voicePreset}`;
+  if (pendingAudioPromises.has(dedupeKey)) {
+    return await pendingAudioPromises.get(dedupeKey);
   }
 
-  const lbl = document.getElementById("voiceStatusLabel");
-  const dot = document.getElementById("voiceStatusDot");
+  const task = (async () => {
+    const isFreeGemini = keys.voiceProvider === "gemini_free";
+    const st = document.getElementById(`audioStatus_${index}`);
+    if (st) st.textContent = isFreeGemini ? "⏳ Rekam suara gratis terlatih..." : "⏳ Rekam suara ElevenLabs...";
 
-  if ((data.provider === "gemini_free" || data.provider === "elevenlabs") && data.audioBase64) {
-    const actx = getAudioContext();
-    if (actx.state === "suspended") {
-      try {
-        await actx.resume();
-      } catch { }
+    const requestedVoiceId = activeElevenlabsVoiceId || keys.elevenlabsVoiceId;
+    let data = {};
+    try {
+      const resp = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: scene.narration,
+          voiceProvider: keys.voiceProvider,
+          voicePreset: keys.voicePreset,
+          phase: scene.phase || "JADI",
+          customVoiceProfile: keys.trainedVoiceProfile || null,
+          voiceId: requestedVoiceId,
+          elevenlabsApiKey: keys.elevenlabsApiKey,
+          geminiApiKey: keys.geminiApiKey
+        })
+      });
+      data = await resp.json().catch(() => ({ elevenlabsError: `HTTP ${resp.status}` }));
+    } catch (e) {
+      data = { elevenlabsError: e.message || "Gagal terhubung ke endpoint TTS" };
     }
 
-    const arrayBuf = base64ToArrayBuffer(data.audioBase64);
-    const decoded = await actx.decodeAudioData(arrayBuf);
-    if (data.provider === "elevenlabs" && data.voiceId) activeElevenlabsVoiceId = data.voiceId;
+    const lbl = document.getElementById("voiceStatusLabel");
+    const dot = document.getElementById("voiceStatusDot");
 
-    const entry = {
-      buffer: decoded,
-      provider: data.provider,
-      cached: Boolean(data.cached),
-      playbackRate: 1.0
-    };
-    sceneAudioBuffers.set(index, entry);
-    if (st) {
-      if (data.provider === "gemini_free") {
-        const pct = data.estimatedMatchPct || 91;
-        st.textContent = `✅ Gratis ~${pct}% (${data.voiceName || "Algenib"} + DSP)`;
-      } else {
-        st.textContent = data.voiceFallbackNote
-          ? `✅ ElevenLabs Deep Male (${data.voiceId})`
-          : `✅ ElevenLabs (${data.voiceId})`;
+    if (data.provider === "gtts_baritone" && (Array.isArray(data.audioSegmentsBase64) ? data.audioSegmentsBase64.length : data.audioBase64)) {
+      const actx = getAudioContext();
+      if (actx.state === "suspended") {
+        try {
+          await actx.resume();
+        } catch { }
       }
-      st.classList.add("ready");
-    }
-    if (dot) dot.classList.add("active-el");
-    if (lbl) {
-      lbl.textContent =
-        data.provider === "gemini_free"
-          ? `Suara Gratis Terlatih (~${data.estimatedMatchPct || 91}% • ${data.voiceName || "Algenib"})`
-          : `ElevenLabs Active (${data.voiceId})`;
-    }
-    return entry;
-  }
+      const segments = Array.isArray(data.audioSegmentsBase64) && data.audioSegmentsBase64.length
+        ? data.audioSegmentsBase64
+        : [data.audioBase64];
+      const decodedChunks = [];
+      let totalSamples = 0;
+      let sampleRate = actx.sampleRate || 24000;
+      for (const b64 of segments) {
+        const arrBuf = base64ToArrayBuffer(b64);
+        const segBuf = await actx.decodeAudioData(arrBuf);
+        sampleRate = segBuf.sampleRate || sampleRate;
+        const chan = segBuf.getChannelData(0);
+        decodedChunks.push(chan);
+        totalSamples += chan.length;
+      }
+      const merged = new Float32Array(totalSamples);
+      let writeOffset = 0;
+      for (const ch of decodedChunks) {
+        merged.set(ch, writeOffset);
+        writeOffset += ch.length;
+      }
+      const baritone = data.applyClientBaritoneDsp ? applyClientBaritoneDsp(merged, sampleRate, -5.8, 1.06) : merged;
+      const outBuf = actx.createBuffer(1, baritone.length, sampleRate);
+      outBuf.getChannelData(0).set(baritone);
 
-  const errMsg = data.elevenlabsError || data.error || "Gagal menghasilkan audio";
-  if (st) {
-    st.textContent = `⚠️ Suara gagal: ${String(errMsg).slice(0, 62)}`;
-    st.classList.remove("ready");
+      const entry = {
+        buffer: outBuf,
+        provider: "gtts_baritone",
+        cached: Boolean(data.cached),
+        playbackRate: 1.0
+      };
+      sceneAudioBuffers.set(index, entry);
+      if (st) {
+        st.textContent = "⚡ Bebas Kuota (Baritone DSP)";
+        st.classList.add("ready");
+      }
+      if (dot) dot.classList.add("active-el");
+      if (lbl) lbl.textContent = "Cadangan Bebas Kuota Aktif (Limit Gemini terlewati)";
+      return entry;
+    }
+
+    if ((data.provider === "gemini_free" || data.provider === "elevenlabs") && data.audioBase64) {
+      const actx = getAudioContext();
+      if (actx.state === "suspended") {
+        try {
+          await actx.resume();
+        } catch { }
+      }
+
+      const arrayBuf = base64ToArrayBuffer(data.audioBase64);
+      const decoded = await actx.decodeAudioData(arrayBuf);
+      if (data.provider === "elevenlabs" && data.voiceId) activeElevenlabsVoiceId = data.voiceId;
+
+      const entry = {
+        buffer: decoded,
+        provider: data.provider,
+        cached: Boolean(data.cached),
+        playbackRate: 1.0
+      };
+      sceneAudioBuffers.set(index, entry);
+      if (st) {
+        if (data.provider === "gemini_free") {
+          const pct = data.estimatedMatchPct || 91;
+          st.textContent = `✅ Gratis ~${pct}% (${data.voiceName || "Algenib"} + DSP)`;
+        } else {
+          st.textContent = data.voiceFallbackNote
+            ? `✅ ElevenLabs Deep Male (${data.voiceId})`
+            : `✅ ElevenLabs (${data.voiceId})`;
+        }
+        st.classList.add("ready");
+      }
+      if (dot) dot.classList.add("active-el");
+      if (lbl) {
+        lbl.textContent =
+          data.provider === "gemini_free"
+            ? `Suara Gratis Terlatih (~${data.estimatedMatchPct || 91}% • ${data.voiceName || "Algenib"})`
+            : `ElevenLabs Active (${data.voiceId})`;
+      }
+      return entry;
+    }
+
+    const errMsg = data.elevenlabsError || data.error || "Gagal menghasilkan audio";
+    if (st) {
+      st.textContent = `⚠️ Suara gagal: ${String(errMsg).slice(0, 62)}`;
+      st.classList.remove("ready");
+    }
+    if (dot) dot.classList.remove("active-el");
+    if (lbl) lbl.textContent = `TTS Error — cek API key di ⚙️ API & Voice`;
+    return null;
+  })();
+
+  pendingAudioPromises.set(dedupeKey, task);
+  try {
+    return await task;
+  } finally {
+    pendingAudioPromises.delete(dedupeKey);
   }
-  if (dot) dot.classList.remove("active-el");
-  if (lbl) lbl.textContent = `TTS Error — cek API key di ⚙️ API & Voice`;
-  return null;
 }
 
 async function playSceneAudioAndWait(index, destNode = null, runId = playbackRunId) {
