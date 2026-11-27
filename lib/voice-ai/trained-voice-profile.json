@@ -1,0 +1,106 @@
+{
+  "version": "1.0.0",
+  "calibratedAt": "2026-11-27T18:22:00+07:00",
+  "targetReference": {
+    "provider": "elevenlabs",
+    "voiceIds": ["cPoqAvGWCPfCfyPMwe4z", "nPczCjzI2devNBz1zQrb"],
+    "persona": "Maou Vaelen — Deep gravelly charismatic young-adult demon overlord & resonant explainer narrator",
+    "targetF0RangeHz": [78, 96],
+    "targetRmsDb": -15.5
+  },
+  "defaultPresetId": "maou_overlord",
+  "presets": {
+    "maou_overlord": {
+      "id": "maou_overlord",
+      "label": "✨ Raja Iblis Terlatih (~91% Match • Algenib + DSP)",
+      "geminiVoiceName": "Algenib",
+      "measuredRawF0Hz": 84.2,
+      "estimatedMatchPct": 91,
+      "stylePrefix": "Speak in a very deep, gravelly, warm chesty baritone young-adult Indonesian male narrator voice — calm, charismatic, authoritative dark demon overlord explaining to a friend with natural Jakarta conversational rhythm, never robotic",
+      "phaseDirections": {
+        "HOOK": "intriguing sly smirk, low resonant hook delivery, strong emphasis on the mystery",
+        "TAPI": "ominous dramatic shift, slightly sarcastic warning tone with crisp pause after TAPI",
+        "JADI": "confident analytical overlord explaining clearly and energetically",
+        "CLIMAX": "triumphant commanding climax delivery with powerful chest resonance"
+      },
+      "dsp": {
+        "pitchSemitones": 0.0,
+        "speakingRate": 1.04,
+        "bassBoostDb": 4.2,
+        "midCutDb": -2.2,
+        "presenceBoostDb": 3.0,
+        "saturationDrive": 0.16,
+        "targetRmsDb": -15.5
+      }
+    },
+    "maou_chill": {
+      "id": "maou_chill",
+      "label": "🔥 Raja Iblis Santai (Umbriel + Deep DSP)",
+      "geminiVoiceName": "Umbriel",
+      "measuredRawF0Hz": 90.9,
+      "estimatedMatchPct": 88,
+      "stylePrefix": "Speak in an easy-going, warm, deep Indonesian male storyteller voice — relaxed, cool, friendly yet confident host",
+      "phaseDirections": {
+        "HOOK": "casual curious friend pulling the listener in",
+        "TAPI": "playful dramatic twist with wry smile",
+        "JADI": "smooth clear explanation with steady flow",
+        "CLIMAX": "warm satisfying conclusion"
+      },
+      "dsp": {
+        "pitchSemitones": -1.1,
+        "speakingRate": 1.04,
+        "bassBoostDb": 4.0,
+        "midCutDb": -2.0,
+        "presenceBoostDb": 2.8,
+        "saturationDrive": 0.14,
+        "targetRmsDb": -15.5
+      }
+    },
+    "maou_intense": {
+      "id": "maou_intense",
+      "label": "⚔️ Raja Iblis Sakuga (Fenrir + Deep DSP)",
+      "geminiVoiceName": "Fenrir",
+      "measuredRawF0Hz": 98.0,
+      "estimatedMatchPct": 87,
+      "stylePrefix": "Speak in a dynamic, sharp, deep anime male narrator voice — high charisma, intense dramatic conviction",
+      "phaseDirections": {
+        "HOOK": "sharp punchy anime opening hook",
+        "TAPI": "tense sudden battle reveal",
+        "JADI": "energetic passionate explanation",
+        "CLIMAX": "epic booming climax declaration"
+      },
+      "dsp": {
+        "pitchSemitones": -1.6,
+        "speakingRate": 1.03,
+        "bassBoostDb": 4.2,
+        "midCutDb": -2.2,
+        "presenceBoostDb": 3.0,
+        "saturationDrive": 0.18,
+        "targetRmsDb": -15.5
+      }
+    },
+    "maou_narrator": {
+      "id": "maou_narrator",
+      "label": "📖 Narrator Berat Tenang (Charon + Deep DSP)",
+      "geminiVoiceName": "Charon",
+      "measuredRawF0Hz": 108.1,
+      "estimatedMatchPct": 86,
+      "stylePrefix": "Speak in a calm, steady, deep authoritative Indonesian documentary narrator voice with clean diction",
+      "phaseDirections": {
+        "HOOK": "calm intriguing documentary opening",
+        "TAPI": "serious problem statement",
+        "JADI": "clear methodical scientific explanation",
+        "CLIMAX": "authoritative closing takeaway"
+      },
+      "dsp": {
+        "pitchSemitones": -2.2,
+        "speakingRate": 1.02,
+        "bassBoostDb": 4.5,
+        "midCutDb": -2.4,
+        "presenceBoostDb": 2.8,
+        "saturationDrive": 0.14,
+        "targetRmsDb": -15.5
+      }
+    }
+  }
+}

@@ -138,13 +138,49 @@ function syncRenderModeUI(mode) {
 
 // Local browser settings (never sent to GitHub)
 function getLocalKeys() {
+  const savedVoiceMode = localStorage.getItem("maou_voice_mode");
+  const defaultVoiceMode =
+    serverConfig.defaultVoiceProvider === "elevenlabs"
+      ? "elevenlabs"
+      : `free:${serverConfig.defaultFreePreset || "maou_overlord"}`;
+  const voiceMode = savedVoiceMode || defaultVoiceMode;
+  const isEl = voiceMode === "elevenlabs";
+  let trainedVoiceProfile = null;
+  try {
+    const rawProf = localStorage.getItem("maou_trained_voice_profile");
+    if (rawProf) trainedVoiceProfile = JSON.parse(rawProf);
+  } catch {}
   return {
+    voiceMode,
+    voiceProvider: isEl ? "elevenlabs" : "gemini_free",
+    voicePreset: isEl ? "maou_overlord" : voiceMode.replace(/^free:/, "") || "maou_overlord",
+    trainedVoiceProfile,
     elevenlabsVoiceId:
       localStorage.getItem("maou_el_voice") || serverConfig.elevenlabsVoiceId || "nPczCjzI2devNBz1zQrb",
     elevenlabsApiKey: localStorage.getItem("maou_el_key") || "",
     geminiApiKey: localStorage.getItem("maou_gemini_key") || "",
     accessPin: localStorage.getItem("maou_access_pin") || ""
   };
+}
+
+function updateVoiceStatusUI(keysArg = null) {
+  const keys = keysArg || getLocalKeys();
+  const dot = document.getElementById("voiceStatusDot");
+  const lbl = document.getElementById("voiceStatusLabel");
+  const trainBadge = document.getElementById("voiceTrainBadge");
+  if (keys.voiceProvider === "gemini_free") {
+    const prof = keys.trainedVoiceProfile;
+    const matchPct = prof?.estimatedMatchPct || (keys.voicePreset === "maou_overlord" ? 91 : 88);
+    const vName = prof?.geminiVoiceName || (keys.voicePreset === "maou_chill" ? "Umbriel" : keys.voicePreset === "maou_intense" ? "Fenrir" : keys.voicePreset === "maou_narrator" ? "Charon" : "Algenib");
+    const hasGem = serverConfig.hasGeminiEnvKey || Boolean(keys.geminiApiKey);
+    if (dot) dot.classList.toggle("active-el", hasGem);
+    if (lbl) lbl.textContent = hasGem ? `Suara Gratis Terlatih (~${matchPct}% • ${vName})` : "Gemini Key Belum Diatur";
+    if (trainBadge) trainBadge.textContent = `Profil: ${vName} (~${matchPct}%)`;
+  } else {
+    const hasEl = serverConfig.hasElevenlabsEnvKey || Boolean(keys.elevenlabsApiKey);
+    if (dot) dot.classList.toggle("active-el", hasEl);
+    if (lbl) lbl.textContent = hasEl ? `ElevenLabs (${keys.elevenlabsVoiceId})` : "ElevenLabs Belum Diatur";
+  }
 }
 
 function buildDirectorHeaders() {
@@ -656,8 +692,10 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
         onVoiceSynthesis: async (data, onVoiceProgress) => {
           let readyCount = 0;
           let lastError = "";
+          const curKeys = getLocalKeys();
           for (let i = 0; i < data.scenes.length; i++) {
-            autoBuildVideoBtn.textContent = `🎙️ 6/7 ElevenLabs ${i + 1}/${data.scenes.length}...`;
+            const labelProvider = curKeys.voiceProvider === "elevenlabs" ? "ElevenLabs" : "Suara Gratis (~91%)";
+            autoBuildVideoBtn.textContent = `🎙️ 6/7 ${labelProvider} ${i + 1}/${data.scenes.length}...`;
             const entry = await ensureSceneAudio(i);
             if (entry?.buffer) {
               readyCount++;
@@ -666,10 +704,13 @@ async function runAutonomousPromptBuild(promptText, autoPlayAfter = true) {
               if (lbl) lastError = lbl;
             }
             onVoiceProgress?.(i + 1, data.scenes.length);
+            if (curKeys.voiceProvider === "gemini_free" && !entry?.cached && i < data.scenes.length - 1) {
+              await new Promise((r) => setTimeout(r, 450));
+            }
           }
           return {
             readyCount,
-            voiceId: activeElevenlabsVoiceId || keys.elevenlabsVoiceId,
+            voiceId: curKeys.voiceProvider === "gemini_free" ? curKeys.voicePreset : (activeElevenlabsVoiceId || curKeys.elevenlabsVoiceId),
             lastError
           };
         },
@@ -1455,10 +1496,11 @@ let activeElevenlabsVoiceId = "";
 async function ensureSceneAudio(index) {
   if (sceneAudioBuffers.has(index)) return sceneAudioBuffers.get(index);
   const scene = currentScript.scenes[index];
-  const st = document.getElementById(`audioStatus_${index}`);
-  if (st) st.textContent = "⏳ Rekam suara ElevenLabs...";
-
   const keys = getLocalKeys();
+  const isFreeGemini = keys.voiceProvider === "gemini_free";
+  const st = document.getElementById(`audioStatus_${index}`);
+  if (st) st.textContent = isFreeGemini ? "⏳ Rekam suara gratis terlatih..." : "⏳ Rekam suara ElevenLabs...";
+
   const requestedVoiceId = activeElevenlabsVoiceId || keys.elevenlabsVoiceId;
   let data = {};
   try {
@@ -1467,19 +1509,24 @@ async function ensureSceneAudio(index) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         text: scene.narration,
+        voiceProvider: keys.voiceProvider,
+        voicePreset: keys.voicePreset,
+        phase: scene.phase || "JADI",
+        customVoiceProfile: keys.trainedVoiceProfile || null,
         voiceId: requestedVoiceId,
-        elevenlabsApiKey: keys.elevenlabsApiKey
+        elevenlabsApiKey: keys.elevenlabsApiKey,
+        geminiApiKey: keys.geminiApiKey
       })
     });
     data = await resp.json().catch(() => ({ elevenlabsError: `HTTP ${resp.status}` }));
   } catch (e) {
-    data = { elevenlabsError: e.message || "Gagal terhubung ke endpoint ElevenLabs" };
+    data = { elevenlabsError: e.message || "Gagal terhubung ke endpoint TTS" };
   }
 
   const lbl = document.getElementById("voiceStatusLabel");
   const dot = document.getElementById("voiceStatusDot");
 
-  if (data.provider === "elevenlabs" && data.audioBase64) {
+  if ((data.provider === "gemini_free" || data.provider === "elevenlabs") && data.audioBase64) {
     const actx = getAudioContext();
     if (actx.state === "suspended") {
       try {
@@ -1489,33 +1536,43 @@ async function ensureSceneAudio(index) {
 
     const arrayBuf = base64ToArrayBuffer(data.audioBase64);
     const decoded = await actx.decodeAudioData(arrayBuf);
-    if (data.voiceId) activeElevenlabsVoiceId = data.voiceId;
+    if (data.provider === "elevenlabs" && data.voiceId) activeElevenlabsVoiceId = data.voiceId;
 
     const entry = {
       buffer: decoded,
-      provider: "elevenlabs",
+      provider: data.provider,
+      cached: Boolean(data.cached),
       playbackRate: 1.0
     };
     sceneAudioBuffers.set(index, entry);
     if (st) {
-      st.textContent = data.voiceFallbackNote
-        ? `✅ ElevenLabs Deep Male (${data.voiceId})`
-        : `✅ ElevenLabs (${data.voiceId})`;
+      if (data.provider === "gemini_free") {
+        const pct = data.estimatedMatchPct || 91;
+        st.textContent = `✅ Gratis ~${pct}% (${data.voiceName || "Algenib"} + DSP)`;
+      } else {
+        st.textContent = data.voiceFallbackNote
+          ? `✅ ElevenLabs Deep Male (${data.voiceId})`
+          : `✅ ElevenLabs (${data.voiceId})`;
+      }
       st.classList.add("ready");
     }
     if (dot) dot.classList.add("active-el");
-    if (lbl) lbl.textContent = `ElevenLabs Active (${data.voiceId})`;
+    if (lbl) {
+      lbl.textContent =
+        data.provider === "gemini_free"
+          ? `Suara Gratis Terlatih (~${data.estimatedMatchPct || 91}% • ${data.voiceName || "Algenib"})`
+          : `ElevenLabs Active (${data.voiceId})`;
+    }
     return entry;
   }
 
-  // Strictly ElevenLabs-only: report error clearly without falling back to Google TTS
-  const errMsg = data.elevenlabsError || data.error || "Gagal menghubungi ElevenLabs";
+  const errMsg = data.elevenlabsError || data.error || "Gagal menghasilkan audio";
   if (st) {
-    st.textContent = `⚠️ ElevenLabs gagal: ${String(errMsg).slice(0, 62)}`;
+    st.textContent = `⚠️ Suara gagal: ${String(errMsg).slice(0, 62)}`;
     st.classList.remove("ready");
   }
   if (dot) dot.classList.remove("active-el");
-  if (lbl) lbl.textContent = `ElevenLabs Error — cek kuota / API key di ⚙️ API & Voice`;
+  if (lbl) lbl.textContent = `TTS Error — cek API key di ⚙️ API & Voice`;
   return null;
 }
 
@@ -3045,28 +3102,32 @@ async function initStudio() {
       veoHeroToggleWrap.classList.toggle("hidden", !serverConfig.enableVeoHeroShots);
     }
     const keys = getLocalKeys();
+    const voiceModeEl = document.getElementById("voiceModeSelect");
+    const elSection = document.getElementById("elevenlabsVoiceSection");
+    const trainerBox = document.getElementById("voiceTrainerBox");
+    if (voiceModeEl) voiceModeEl.value = keys.voiceMode;
+    if (elSection) elSection.classList.toggle("hidden", keys.voiceProvider !== "elevenlabs");
+    if (trainerBox) trainerBox.classList.toggle("hidden", keys.voiceProvider === "elevenlabs");
+
     const voiceInputEl = document.getElementById("elevenlabsVoiceIdInput");
     const voicePresetEl = document.getElementById("elevenlabsVoicePreset");
-    voiceInputEl.value = keys.elevenlabsVoiceId;
+    if (voiceInputEl) voiceInputEl.value = keys.elevenlabsVoiceId;
     if (voicePresetEl) {
       const hasPreset = Array.from(voicePresetEl.options).some(
         (o) => o.value && o.value !== "__custom__" && o.value === keys.elevenlabsVoiceId
       );
       voicePresetEl.value = hasPreset ? keys.elevenlabsVoiceId : "__custom__";
-      voiceInputEl.classList.toggle("hidden", hasPreset);
+      if (voiceInputEl) voiceInputEl.classList.toggle("hidden", hasPreset);
     }
-    document.getElementById("elevenlabsApiKeyInput").value = keys.elevenlabsApiKey;
+    const elKeyEl = document.getElementById("elevenlabsApiKeyInput");
+    if (elKeyEl) elKeyEl.value = keys.elevenlabsApiKey;
     document.getElementById("geminiApiKeyInput").value = keys.geminiApiKey;
     const pinInp = document.getElementById("appAccessPinInput");
     if (pinInp) pinInp.value = keys.accessPin;
     const brainPinInp = document.getElementById("brainAccessPinInput");
     if (brainPinInp) brainPinInp.value = keys.accessPin;
 
-    const hasEl = serverConfig.hasElevenlabsEnvKey || Boolean(keys.elevenlabsApiKey);
-    document.getElementById("voiceStatusDot").classList.toggle("active-el", hasEl);
-    document.getElementById("voiceStatusLabel").textContent = hasEl
-      ? `ElevenLabs Only (${keys.elevenlabsVoiceId})`
-      : `ElevenLabs Belum Diatur (Isi Key di ⚙️ API & Voice)`;
+    updateVoiceStatusUI(keys);
   } catch { }
 
   try {
@@ -3259,12 +3320,105 @@ if (voicePresetSelect) {
   });
 }
 
+const voiceModeSelect = document.getElementById("voiceModeSelect");
+if (voiceModeSelect) {
+  voiceModeSelect.addEventListener("change", () => {
+    const isEl = voiceModeSelect.value === "elevenlabs";
+    document.getElementById("elevenlabsVoiceSection")?.classList.toggle("hidden", !isEl);
+    document.getElementById("voiceTrainerBox")?.classList.toggle("hidden", isEl);
+  });
+}
+
+let voiceTrainSampleDataUrl = "";
+document.getElementById("voiceTrainSampleInput")?.addEventListener("change", (e) => {
+  const file = e.target.files?.[0];
+  const lbl = document.getElementById("voiceTrainSampleName");
+  if (!file) {
+    voiceTrainSampleDataUrl = "";
+    if (lbl) lbl.textContent = "Opsional: pakai contoh audio ElevenLabs";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    voiceTrainSampleDataUrl = String(reader.result || "");
+    if (lbl) lbl.textContent = `✅ ${file.name}`;
+  };
+  reader.readAsDataURL(file);
+});
+
+document.getElementById("resetTrainedVoiceBtn")?.addEventListener("click", () => {
+  localStorage.removeItem("maou_trained_voice_profile");
+  const statusBox = document.getElementById("voiceTrainStatusBox");
+  if (statusBox) statusBox.textContent = "↺ Direset ke profil terlatih bawaan (Algenib + Broadcast DSP ~91%).";
+  sceneAudioBuffers.clear();
+  updateVoiceStatusUI();
+});
+
+document.getElementById("trainVoiceBtn")?.addEventListener("click", async () => {
+  const btn = document.getElementById("trainVoiceBtn");
+  const statusBox = document.getElementById("voiceTrainStatusBox");
+  const player = document.getElementById("voiceTrainPreviewAudio");
+  const desc = document.getElementById("voiceTrainDescInput")?.value.trim() || "";
+  const modeVal = document.getElementById("voiceModeSelect")?.value || "free:maou_overlord";
+  const presetId = modeVal.startsWith("free:") ? modeVal.replace(/^free:/, "") : "maou_overlord";
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "⏳ Melatih & Mengkalibrasi DSP...";
+  }
+  if (statusBox) statusBox.textContent = "Menganalisa karakter vokal, pitch F0 (Hz), & merender preview...";
+
+  try {
+    const keys = getLocalKeys();
+    const resp = await fetch("/api/voice-train", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        referenceAudioDataUrl: voiceTrainSampleDataUrl,
+        targetDescription: desc,
+        presetId,
+        geminiApiKey: keys.geminiApiKey
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || "Gagal melatih suara gratis.");
+
+    if (data.trainedProfile) {
+      localStorage.setItem("maou_trained_voice_profile", JSON.stringify(data.trainedProfile));
+      localStorage.setItem("maou_voice_mode", `free:${presetId}`);
+      if (voiceModeSelect) voiceModeSelect.value = `free:${presetId}`;
+    }
+    sceneAudioBuffers.clear();
+    updateVoiceStatusUI();
+
+    if (player && data.previewAudioBase64) {
+      player.src = `data:${data.previewMimeType || "audio/wav"};base64,${data.previewAudioBase64}`;
+      player.classList.remove("hidden");
+      player.play().catch(() => {});
+    }
+    if (statusBox) {
+      const tp = data.trainedProfile || {};
+      const ac = data.acoustics || {};
+      statusBox.innerHTML = `✅ <strong>Terlatih (~${tp.estimatedMatchPct || 91}% Match)</strong> • Base: <code>${tp.geminiVoiceName || "Algenib"}</code> • Pitch F0: <code>${ac.medianF0Hz || "-"} Hz</code> • Loudness: <code>${ac.rmsDb || "-"} dB</code><br/>${escapeHtml(tp.targetAnalysisSummary || tp.criticFeedback || "")}`;
+    }
+  } catch (err) {
+    if (statusBox) statusBox.textContent = `⚠️ Gagal melatih suara: ${err.message}`;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "🎓 Latih & Tes Dengarkan Suara";
+    }
+  }
+});
+
 document.getElementById("saveSettingsBtn").addEventListener("click", () => {
-  const voiceId = document.getElementById("elevenlabsVoiceIdInput").value.trim() || "nPczCjzI2devNBz1zQrb";
-  const elKey = document.getElementById("elevenlabsApiKeyInput").value.trim();
+  const voiceMode = document.getElementById("voiceModeSelect")?.value || "free:maou_overlord";
+  const voiceId = document.getElementById("elevenlabsVoiceIdInput")?.value.trim() || "nPczCjzI2devNBz1zQrb";
+  const elKey = document.getElementById("elevenlabsApiKeyInput")?.value.trim() || "";
   const gemKey = document.getElementById("geminiApiKeyInput").value.trim();
   const pinVal = document.getElementById("appAccessPinInput")?.value.trim() || "";
 
+  localStorage.setItem("maou_voice_mode", voiceMode);
   localStorage.setItem("maou_el_voice", voiceId);
   localStorage.setItem("maou_el_key", elKey);
   localStorage.setItem("maou_gemini_key", gemKey);
@@ -3273,11 +3427,7 @@ document.getElementById("saveSettingsBtn").addEventListener("click", () => {
   const brainPinInp = document.getElementById("brainAccessPinInput");
   if (brainPinInp) brainPinInp.value = pinVal;
 
-  const hasEl = serverConfig.hasElevenlabsEnvKey || Boolean(elKey);
-  document.getElementById("voiceStatusDot").classList.toggle("active-el", hasEl);
-  document.getElementById("voiceStatusLabel").textContent = hasEl
-    ? `ElevenLabs Only (${voiceId})`
-    : `ElevenLabs Belum Diatur (Isi Key di ⚙️ API & Voice)`;
+  updateVoiceStatusUI();
 
   activeElevenlabsVoiceId = "";
   sceneAudioBuffers.clear();

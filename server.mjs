@@ -28,6 +28,8 @@ import {
   recordSceneFeedback,
   rollbackDirectorPlaybook
 } from "./lib/video-ai/director-brain.js";
+import { getTrainedVoiceProfile } from "./lib/voice-ai/gemini-tts-engine.js";
+import { calibrateFreeVoiceProfile } from "./lib/voice-ai/voice-trainer.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -93,6 +95,9 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/api/config" && req.method === "GET") {
       return sendJson(res, 200, {
         elevenlabsVoiceId: process.env.ELEVENLABS_VOICE_ID || CHARACTER_BIBLE.defaultVoiceId,
+        defaultVoiceProvider: CHARACTER_BIBLE.defaultVoiceProvider || "gemini_free",
+        defaultFreePreset: CHARACTER_BIBLE.defaultFreePreset || "maou_overlord",
+        trainedVoiceProfile: getTrainedVoiceProfile(),
         hasElevenlabsEnvKey: Boolean(process.env.ELEVENLABS_API_KEY),
         hasGeminiEnvKey: Boolean(process.env.GEMINI_API_KEY),
         enableVeoHeroShots: isVeoHeroEnabled(),
@@ -301,7 +306,26 @@ const server = http.createServer(async (req, res) => {
       const result = await synthesizeSpeechStateless({
         text: body.text,
         voiceId: body.voiceId,
-        elevenlabsApiKey: body.elevenlabsApiKey || ""
+        elevenlabsApiKey: body.elevenlabsApiKey || "",
+        voiceProvider: body.voiceProvider || "gemini_free",
+        voicePreset: body.voicePreset || "maou_overlord",
+        phase: body.phase || "JADI",
+        geminiApiKey: body.geminiApiKey || "",
+        customVoiceProfile: body.customVoiceProfile || null
+      });
+      return sendJson(res, 200, result);
+    }
+
+    if (pathname === "/api/voice-train" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      const result = await calibrateFreeVoiceProfile({
+        referenceAudioDataUrl: body?.referenceAudioDataUrl || "",
+        targetDescription: body?.targetDescription || "",
+        presetId: body?.presetId || "maou_overlord",
+        sampleText:
+          body?.sampleText ||
+          "Eh bro, lu pernah mikir nggak kenapa mesin ini bisa muter secepat kilat? TAPI... ternyata ada rahasia fisika gila di baliknya!",
+        geminiApiKey: body?.geminiApiKey || ""
       });
       return sendJson(res, 200, result);
     }

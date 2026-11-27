@@ -23,7 +23,7 @@
           <span class="badge badge-crimson">ANIME 2D STUDIO MAPPA • 3D EDUKASI KLASIK</span>
         </div>
         <p class="brand-sub">
-          Ciri Khas Terkunci: <strong>MC Raja Iblis (Modern Overlord)</strong> • Suara Cowok ElevenLabs: <code>Brian (nPczCjzI2devNBz1zQrb)</code>
+          Ciri Khas Terkunci: <strong>MC Raja Iblis (Modern Overlord)</strong> • Suara Gratis Terlatih (~91% Match): <code>Algenib + Broadcast DSP</code> (atau ElevenLabs)
         </p>
       </div>
     </div>
@@ -227,12 +227,47 @@
   <div class="modal-backdrop hidden" id="settingsModal">
     <div class="modal">
       <div class="modal-header">
-        <h3>⚙️ Pengaturan Suara ElevenLabs & Gemini AI</h3>
+        <h3>⚙️ Pengaturan Suara Gratis Terlatih, ElevenLabs &amp; Gemini AI</h3>
         <button class="btn-close" id="closeSettingsBtn">✕</button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body" style="max-height:76vh;overflow-y:auto;">
         <div class="field-group">
-          <label class="field-label">🎙️ Pilih Suara Cowok ElevenLabs (Aktif di Paket Free & Berbayar)</label>
+          <label class="field-label">🎙️ Pilih Provider &amp; Karakter Suara MC Raja Iblis</label>
+          <select id="voiceModeSelect" style="width:100%;padding:9px 11px;border-radius:8px;background:#0f172a;color:#f8fafc;border:1px solid rgba(255,255,255,0.16);margin-bottom:6px;">
+            <option value="free:maou_overlord">✨ Suara Gratis Terlatih (~91% Match • Algenib Deep Overlord + DSP)</option>
+            <option value="free:maou_chill">🔥 Suara Gratis Terlatih (~88% Match • Umbriel Santai + DSP)</option>
+            <option value="free:maou_intense">⚔️ Suara Gratis Terlatih (~87% Match • Fenrir Anime Intens + DSP)</option>
+            <option value="free:maou_narrator">📖 Suara Gratis Terlatih (~86% Match • Charon Narrator + DSP)</option>
+            <option value="elevenlabs">🎙️ ElevenLabs API (Pakai Key &amp; Kuota ElevenLabs Sendiri)</option>
+          </select>
+          <small class="field-hint">
+            Default memakai <strong>Suara Gratis Gemini Terlatih (~91% Match)</strong> dengan EQ + Broadcast DSP — gratis pakai <code>GEMINI_API_KEY</code> tanpa habis kuota ElevenLabs.
+          </small>
+        </div>
+
+        <div class="brain-section" id="voiceTrainerBox">
+          <div class="brain-section-header">
+            <strong>🎓 Latih &amp; Samakan Suara Gratis (~90% Target ElevenLabs)</strong>
+            <button type="button" class="btn btn-secondary btn-sm" id="resetTrainedVoiceBtn">↺ Reset Default</button>
+          </div>
+          <input type="text" id="voiceTrainDescInput" placeholder="Target gaya suara (cth: berat serak pelan berwibawa kayak Kallixis ElevenLabs)..." />
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+              🎧 Upload Contoh Suara Target (MP3/WAV Opsional)
+              <input type="file" id="voiceTrainSampleInput" accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/webm,audio/mp4" class="hidden" />
+            </label>
+            <span id="voiceTrainSampleName" class="field-hint">Opsional: pakai contoh audio ElevenLabs</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button type="button" class="btn btn-gold btn-sm" id="trainVoiceBtn">🎓 Latih &amp; Tes Dengarkan Suara</button>
+            <span id="voiceTrainBadge" class="badge badge-outline">Profil: Algenib (~91%)</span>
+          </div>
+          <audio id="voiceTrainPreviewAudio" controls class="hidden" style="width:100%;height:34px;margin-top:4px;"></audio>
+          <div id="voiceTrainStatusBox" class="field-hint"></div>
+        </div>
+
+        <div class="field-group hidden" id="elevenlabsVoiceSection">
+          <label class="field-label">🎙️ Pilih Suara Cowok ElevenLabs (Aktif di Paket Free &amp; Berbayar)</label>
           <select id="elevenlabsVoicePreset" style="width:100%;padding:9px 11px;border-radius:8px;background:#0f172a;color:#f8fafc;border:1px solid rgba(255,255,255,0.16);margin-bottom:6px;">
             <option value="nPczCjzI2devNBz1zQrb">Brian — Deep Resonant Narrator (Rekomendasi • Free API OK)</option>
             <option value="pNInz6obpgDQGcFmaJgB">Adam — Dominant Firm Male (Free API OK)</option>
@@ -242,17 +277,8 @@
             <option value="__custom__">Custom Voice ID (khusus paket berbayar / voice sendiri)</option>
           </select>
           <input type="text" id="elevenlabsVoiceIdInput" class="hidden" value="nPczCjzI2devNBz1zQrb" placeholder="Masukkan Custom Voice ID..." />
-          <small class="field-hint">
-            Default memakai suara premade <strong>Brian (nPczCjzI2devNBz1zQrb)</strong> agar tidak kena error <em>"Free users cannot use library voices via the API"</em>.
-          </small>
-        </div>
-
-        <div class="field-group">
-          <label class="field-label">🔑 ElevenLabs API Key (Opsional — atau set di Vercel Env Vars)</label>
+          <label class="field-label" style="margin-top:6px;">🔑 ElevenLabs API Key (Jika Memilih ElevenLabs)</label>
           <input type="password" id="elevenlabsApiKeyInput" placeholder="sk_..." />
-          <small class="field-hint">
-            Disimpan aman di browser kamu (`localStorage`) & tidak dikirim ke GitHub. Studio dikunci 100% menggunakan suara ElevenLabs (tidak pernah beralih ke suara Google).
-          </small>
         </div>
 
         <div class="field-group">
