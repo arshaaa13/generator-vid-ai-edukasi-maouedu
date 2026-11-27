@@ -1562,7 +1562,7 @@ async function ensureSceneAudio(index) {
         merged.set(ch, writeOffset);
         writeOffset += ch.length;
       }
-      const baritone = data.applyClientBaritoneDsp ? applyClientBaritoneDsp(merged, sampleRate, -5.8, 1.06) : merged;
+      const baritone = data.applyClientBaritoneDsp ? applyClientBaritoneDsp(merged, sampleRate, -3.6, 1.02) : merged;
       const outBuf = actx.createBuffer(1, baritone.length, sampleRate);
       outBuf.getChannelData(0).set(baritone);
 

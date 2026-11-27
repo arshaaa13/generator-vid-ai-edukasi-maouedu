@@ -79,9 +79,9 @@ function wsolaStretch(samples, rate, sr) {
       let bestCorr = -Infinity;
       const minOff = Math.max(-searchRadius, -anaPos);
       const maxOff = Math.min(searchRadius, samples.length - winSize - anaPos - 1);
-      for (let off = minOff; off <= maxOff; off += 3) {
+      for (let off = minOff; off <= maxOff; off += 1) {
         let c = 0;
-        for (let j = 0; j < synHop; j += 3) {
+        for (let j = 0; j < synHop; j += 2) {
           c += out[synPos + j] * samples[anaPos + off + j];
         }
         if (c > bestCorr) {
