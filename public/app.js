@@ -2111,12 +2111,12 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
   const hasAnimatedMcVideo = Boolean(mcAnimatedVideo && mcAnimatedVideo.readyState >= 2);
 
   // Map 3D scene pose/phase to canonical mc_default.jpg-locked 2D anime poses,
-  // biased toward his Presenter / Explainer role in Mode 3D!
+  // biased toward Maou Vaelen's Sovereign Overlord & Sarcastic Ruler persona!
   const resolve3DPresenterPoseKey = () => {
-    if (scene.mcPose === "sarcastic" || scene.phase === "TAPI") return "pose_shock_panic";
+    if (scene.mcPose === "sarcastic") return "pose_default_smirk";
+    if (scene.phase === "TAPI") return "pose_shock_panic";
     if (scene.mcPose === "eureka" || scene.phase === "CLIMAX") return "pose_climax_domain";
     if (scene.mcPose === "explaining" || scene.phase === "JADI") return "pose_explaining";
-    // When speaking/explaining the 3D diorama in default/HOOK, switch smoothly to pointing/explaining!
     if (voice > 0.08 || isPlaying) return "pose_explaining";
     return "pose_default_smirk";
   };
@@ -2148,38 +2148,40 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
 
     ctx.save();
 
-    // 1. Subtle Stage Contact Shadow + Rim Glow behind presenter silhouette (zero box!)
+    // 1. Overlord Sovereign Rim Aura behind presenter silhouette (zero box!)
     const auraGrad = ctx.createRadialGradient(
       hostX,
       bottomY - drawH * 0.48,
       drawW * 0.08,
       hostX,
       bottomY - drawH * 0.48,
-      drawW * 0.62
+      drawW * 0.66
     );
+    const isSarcasticMood = scene.mcPose === "sarcastic" || scene.phase === "TAPI";
     const rimTint =
-      poseKey === "pose_shock_panic"
-        ? "rgba(225, 29, 72, 0.28)"
+      isSarcasticMood
+        ? "rgba(225, 29, 72, 0.36)"
         : poseKey === "pose_climax_domain"
-          ? "rgba(16, 185, 129, 0.28)"
-          : "rgba(245, 158, 11, 0.26)";
+          ? "rgba(245, 158, 11, 0.34)"
+          : "rgba(245, 158, 11, 0.28)";
     auraGrad.addColorStop(0, rimTint);
+    auraGrad.addColorStop(0.65, isSarcasticMood ? "rgba(136, 19, 55, 0.14)" : "rgba(180, 83, 9, 0.10)");
     auraGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
     ctx.fillStyle = auraGrad;
     ctx.beginPath();
-    ctx.ellipse(hostX, bottomY - drawH * 0.48, drawW * 0.56, drawH * 0.48, 0, 0, Math.PI * 2);
+    ctx.ellipse(hostX, bottomY - drawH * 0.48, drawW * 0.58, drawH * 0.50, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 2. Clean Presenter Pointer Beam toward the 3D Diorama Subject when explaining
-    if (poseKey === "pose_explaining") {
+    // 2. Clean Overlord Sovereign Command Beam toward the 3D Diorama Subject
+    if (poseKey === "pose_explaining" || scene.phase === "JADI") {
       const handX = isRight ? hostX - drawW * 0.24 : hostX + drawW * 0.30;
       const handY = bottomY - drawH * 0.43;
       const focusX = W * 0.55;
       const focusY = H * 0.43;
 
       ctx.save();
-      ctx.strokeStyle = `rgba(251, 191, 36, ${0.42 + voice * 0.45})`;
-      ctx.lineWidth = 2.2 + voice * 1.5;
+      ctx.strokeStyle = `rgba(251, 191, 36, ${0.46 + voice * 0.45})`;
+      ctx.lineWidth = 2.4 + voice * 1.5;
       ctx.setLineDash([7, 5]);
       ctx.lineDashOffset = -tSec * 48;
       ctx.beginPath();
@@ -2188,16 +2190,23 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Target reticle pulse on 3D object
-      const pulseR = 6 + Math.sin(tSec * 7) * 2 + voice * 4;
-      ctx.strokeStyle = "rgba(253, 224, 71, 0.85)";
+      // Overlord diamond + circular targeting reticle on 3D object
+      const pulseR = 7 + Math.sin(tSec * 7) * 2 + voice * 4;
+      ctx.strokeStyle = "rgba(253, 224, 71, 0.9)";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(focusX, focusY, pulseR, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(focusX, focusY - pulseR - 4);
+      ctx.lineTo(focusX + pulseR + 4, focusY);
+      ctx.lineTo(focusX, focusY + pulseR + 4);
+      ctx.lineTo(focusX - pulseR - 4, focusY);
+      ctx.closePath();
+      ctx.stroke();
       ctx.fillStyle = "#fde047";
       ctx.beginPath();
-      ctx.arc(focusX, focusY, 2.8, 0, Math.PI * 2);
+      ctx.arc(focusX, focusY, 3, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -2210,6 +2219,27 @@ function drawMcRajaIblisPresenter(ctx, scene, tSec) {
 
     drawLiving2DAnimeHostCel(ctx, keyedPose, poseKey, hostX, bottomY, drawW, drawH, step12, voice, false);
     ctx.restore();
+
+    // 4. Compact Overlord Sovereign Micro-Tag cleanly above horns on Sarcastic / Verdict beats
+    if (isSarcasticMood || scene.phase === "CLIMAX") {
+      const badgeText = scene.phase === "CLIMAX" ? "👑 VONIS PENGUASA" : "😏 DASAR MANUSIA...";
+      ctx.save();
+      ctx.font = "900 9.5px 'JetBrains Mono', monospace";
+      const bw = ctx.measureText(badgeText).width + 16;
+      const bx = isRight ? Math.min(W - bw - 14, hostX - bw / 2) : Math.max(14, hostX - bw / 2);
+      const by = Math.max(195, bottomY - drawH - 18);
+      drawRoundedRect(ctx, bx, by, bw, 21, 6);
+      ctx.fillStyle = "rgba(11, 13, 22, 0.94)";
+      ctx.fill();
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = scene.phase === "CLIMAX" ? "#f59e0b" : "#e11d48";
+      ctx.stroke();
+      ctx.fillStyle = scene.phase === "CLIMAX" ? "#fde047" : "#fda4af";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(badgeText, bx + 8, by + 10.5);
+      ctx.restore();
+    }
 
     ctx.restore();
     return;
@@ -2249,28 +2279,33 @@ function drawSelamatStamp(ctx, scene, tSec) {
   const W = canvas.width;
 
   ctx.save();
-  ctx.translate(W / 2, 152);
-  ctx.rotate(-0.08);
+  ctx.translate(W / 2, 154);
+  ctx.rotate(-0.07);
   const scale = 1 + Math.sin(tSec * 5) * 0.03;
   ctx.scale(scale, scale);
 
-  drawRoundedRect(ctx, -125, -28, 250, 56, 10);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
+  // Obsidian & Gold Royal Demon King Decree Frame around SELAMAT!
+  drawRoundedRect(ctx, -138, -34, 276, 68, 12);
+  ctx.fillStyle = "rgba(11, 13, 22, 0.94)";
   ctx.fill();
-  ctx.lineWidth = 4;
+  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = "#f59e0b";
+  ctx.stroke();
+
+  drawRoundedRect(ctx, -130, -26, 260, 52, 8);
+  ctx.lineWidth = 2;
   ctx.strokeStyle = "#10b981";
   ctx.stroke();
 
-  drawRoundedRect(ctx, -117, -21, 234, 42, 6);
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "#059669";
-  ctx.stroke();
-
-  ctx.fillStyle = "#059669";
-  ctx.font = "900 28px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillStyle = "#fde047";
+  ctx.font = "900 10px 'JetBrains Mono', monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("SELAMAT!", 0, 2);
+  ctx.fillText("👑 VONIS RAJA IBLIS", 0, -15);
+
+  ctx.fillStyle = "#34d399";
+  ctx.font = "900 27px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillText("SELAMAT!", 0, 10);
   ctx.restore();
 }
 
@@ -2419,60 +2454,71 @@ function drawTopVideoHeader(ctx, scene) {
   const W = canvas.width;
   ctx.save();
   const phaseColors = {
-    HOOK: { bg: "#1d4ed8", text: "⚡ MULAI PRAKTEK" },
-    TAPI: { bg: "#e11d48", text: "⚠️ TAPI... (GAGAL!)" },
-    JADI: { bg: "#d97706", text: "💡 JADI... (TRIKNYA!)" },
-    CLIMAX: { bg: "#059669", text: "🏆 BERHASIL!" }
+    HOOK: { bg: "#1d4ed8", text: "⚡ PRAKTEK MANUSIA" },
+    TAPI: { bg: "#e11d48", text: "😏 TAPI... (HANCUR!)" },
+    JADI: { bg: "#d97706", text: "👁️ TRIK PENGUASA!" },
+    CLIMAX: { bg: "#059669", text: "👑 SELAMAT! (BERHASIL)" }
   };
   const pInfo = phaseColors[scene.phase] || phaseColors.HOOK;
 
-  drawRoundedRect(ctx, 24, 24, 215, 34, 999);
+  drawRoundedRect(ctx, 22, 24, 224, 34, 10);
   ctx.fillStyle = pInfo.bg;
   ctx.fill();
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.4;
   ctx.strokeStyle = "#090a0f";
   ctx.stroke();
 
   ctx.fillStyle = "#ffffff";
-  ctx.font = "800 12.5px 'Plus Jakarta Sans', sans-serif";
+  ctx.font = "900 12px 'Plus Jakarta Sans', sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(pInfo.text, 24 + 107.5, 41);
+  ctx.fillText(pInfo.text, 22 + 112, 41);
 
-  drawRoundedRect(ctx, W - 175, 24, 151, 34, 999);
-  ctx.fillStyle = "rgba(15, 18, 28, 0.85)";
+  drawRoundedRect(ctx, W - 184, 24, 162, 34, 10);
+  ctx.fillStyle = "rgba(11, 13, 22, 0.92)";
   ctx.fill();
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = "rgba(245, 158, 11, 0.5)";
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#f59e0b";
   ctx.stroke();
 
-  ctx.fillStyle = "#fde68a";
-  ctx.font = "800 11.5px 'Plus Jakarta Sans', sans-serif";
-  ctx.fillText("👑 @MaouEdu.ID", W - 100, 41);
+  ctx.fillStyle = "#fde047";
+  ctx.font = "900 11.5px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillText("👑 @MaouEdu.ID", W - 103, 41);
   ctx.restore();
 }
 
 function draw3dCalloutBadge(ctx, scene) {
   if (!scene.componentLabel) return;
   const W = canvas.width;
-  const tagText = `●  ${scene.componentLabel.toUpperCase()}`;
+  const tagText = `◆  ${scene.componentLabel.toUpperCase()}`;
+  const isDanger = scene.phase === "TAPI";
+  const isWin = scene.phase === "CLIMAX";
+  const accent = isDanger ? "#e11d48" : isWin ? "#10b981" : "#f59e0b";
   ctx.save();
-  ctx.font = "800 13.5px 'Plus Jakarta Sans', sans-serif";
-  const tw = Math.min(W - 44, ctx.measureText(tagText).width + 28);
+  ctx.font = "900 13px 'Plus Jakarta Sans', sans-serif";
+  const tw = Math.min(W - 44, ctx.measureText(tagText).width + 32);
   const tx = (W - tw) / 2;
   const ty = 72;
 
-  drawRoundedRect(ctx, tx, ty, tw, 34, 10);
-  ctx.fillStyle = scene.phase === "TAPI" ? "#e11d48" : scene.phase === "CLIMAX" ? "#10b981" : "#f59e0b";
+  drawRoundedRect(ctx, tx + 2, ty + 3, tw, 34, 8);
+  ctx.fillStyle = "rgba(9, 10, 15, 0.55)";
   ctx.fill();
-  ctx.lineWidth = 2.5;
-  ctx.strokeStyle = "#090a0f";
+
+  drawRoundedRect(ctx, tx, ty, tw, 34, 8);
+  ctx.fillStyle = "rgba(11, 13, 22, 0.94)";
+  ctx.fill();
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = accent;
   ctx.stroke();
 
-  ctx.fillStyle = scene.phase === "TAPI" ? "#ffffff" : "#090a0f";
+  drawRoundedRect(ctx, tx + 4, ty + 5, 5, 24, 2);
+  ctx.fillStyle = accent;
+  ctx.fill();
+
+  ctx.fillStyle = isDanger ? "#fda4af" : isWin ? "#6ee7b7" : "#fde68a";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(tagText, W / 2, ty + 17, tw - 16);
+  ctx.fillText(tagText, W / 2 + 2, ty + 17, tw - 22);
   ctx.restore();
 }
 
@@ -2497,23 +2543,23 @@ function drawDekodaHookCard(ctx, visual, tSec, sceneElapsedSec) {
   ctx.fillStyle = "rgba(9, 10, 15, 0.28)";
   ctx.fill();
 
-  // Warm @dekodaid cream plaque
-  drawRoundedRect(ctx, x, y, cardW, cardH, 12);
-  ctx.fillStyle = "#fffbeb";
+  // Obsidian & Amber Sovereign Card (@dekodaid x MaouEdu)
+  drawRoundedRect(ctx, x, y, cardW, cardH, 10);
+  ctx.fillStyle = "rgba(11, 13, 22, 0.94)";
   ctx.fill();
-  ctx.lineWidth = 2.4;
-  ctx.strokeStyle = "#1e293b";
+  ctx.lineWidth = 2.2;
+  ctx.strokeStyle = "#f59e0b";
   ctx.stroke();
 
-  ctx.fillStyle = "#0f172a";
-  ctx.font = "900 13px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillStyle = "#f8fafc";
+  ctx.font = "900 12.5px 'Plus Jakarta Sans', sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
   ctx.fillText(hc.title, x + 12, y + 9, cardW - 24);
 
   if (hc.subtitle) {
-    ctx.fillStyle = "#0284c7";
-    ctx.font = "800 11px 'Plus Jakarta Sans', sans-serif";
+    ctx.fillStyle = "#fde047";
+    ctx.font = "800 10.5px 'Plus Jakarta Sans', sans-serif";
     ctx.fillText(hc.subtitle, x + 12, y + 30, cardW - 24);
   }
   ctx.restore();
@@ -2530,32 +2576,32 @@ function drawBelajarInfoPills(ctx, visual, phase, tSec) {
     const x = 18;
     const y = startY + idx * (cardH + 8);
     const accent =
-      card.tone === "warn" ? "#e11d48" : card.tone === "good" ? "#10b981" : "#0284c7";
+      card.tone === "warn" ? "#e11d48" : card.tone === "good" ? "#10b981" : "#f59e0b";
 
     ctx.save();
     drawRoundedRect(ctx, x + 2, y + 3, cardW, cardH, 10);
-    ctx.fillStyle = "rgba(9, 10, 15, 0.26)";
+    ctx.fillStyle = "rgba(9, 10, 15, 0.4)";
     ctx.fill();
 
     drawRoundedRect(ctx, x, y, cardW, cardH, 10);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
+    ctx.fillStyle = "rgba(11, 13, 22, 0.92)";
     ctx.fill();
-    ctx.lineWidth = 2.2;
-    ctx.strokeStyle = "#090a0f";
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = accent;
     ctx.stroke();
 
     // Colored left indicator bar
-    drawRoundedRect(ctx, x + 5, y + 6, 6, cardH - 12, 3);
+    drawRoundedRect(ctx, x + 5, y + 6, 5, cardH - 12, 3);
     ctx.fillStyle = accent;
     ctx.fill();
 
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.fillStyle = "#475569";
+    ctx.fillStyle = "#94a3b8";
     ctx.font = "800 9.5px 'Plus Jakarta Sans', sans-serif";
     ctx.fillText(String(card.label || "INFO").toUpperCase(), x + 18, y + 7, cardW - 26);
 
-    ctx.fillStyle = card.tone === "warn" ? "#be123c" : card.tone === "good" ? "#047857" : "#0f172a";
+    ctx.fillStyle = card.tone === "warn" ? "#fda4af" : card.tone === "good" ? "#6ee7b7" : "#f8fafc";
     ctx.font = "900 12.5px 'Plus Jakarta Sans', sans-serif";
     ctx.fillText(String(card.value || ""), x + 18, y + 21, cardW - 26);
     ctx.restore();

@@ -16,12 +16,12 @@
       "geminiVoiceName": "Algenib",
       "measuredRawF0Hz": 84.2,
       "estimatedMatchPct": 91,
-      "stylePrefix": "Speak in a very deep, gravelly, warm chesty baritone young-adult Indonesian male narrator voice — calm, charismatic, authoritative dark demon overlord explaining to a friend with natural Jakarta conversational rhythm, never robotic",
+      "stylePrefix": "Speak in a very deep, gravelly, warm chesty baritone young-adult Indonesian male narrator voice — sovereign dark demon overlord looking down with dry sarcasm and effortless authority, sharp Jakarta conversational rhythm, never robotic",
       "phaseDirections": {
-        "HOOK": "intriguing sly smirk, low resonant hook delivery, strong emphasis on the mystery",
-        "TAPI": "ominous dramatic shift, slightly sarcastic warning tone with crisp pause after TAPI",
-        "JADI": "confident analytical overlord explaining clearly and energetically",
-        "CLIMAX": "triumphant commanding climax delivery with powerful chest resonance"
+        "HOOK": "amused sovereign smirk mocking clueless humans, deep charismatic baritone hook with sharp emphasis on the absurdity",
+        "TAPI": "cutting sarcastic mockery of mortal failure, crisp condescending pause after TAPI with ominous dark amusement",
+        "JADI": "commanding supreme overlord lecturing effortlessly with cold intellect and chesty certainty",
+        "CLIMAX": "grand sovereign demon king decree of victory, majestic resonant chest voice declaring the final verdict"
       },
       "dsp": {
         "pitchSemitones": 0.0,
@@ -39,12 +39,12 @@
       "geminiVoiceName": "Umbriel",
       "measuredRawF0Hz": 90.9,
       "estimatedMatchPct": 88,
-      "stylePrefix": "Speak in an easy-going, warm, deep Indonesian male storyteller voice — relaxed, cool, friendly yet confident host",
+      "stylePrefix": "Speak in an easy-going, deep, wryly sarcastic Indonesian male demon king storyteller voice — cool, regal, amused by mortal mistakes",
       "phaseDirections": {
-        "HOOK": "casual curious friend pulling the listener in",
-        "TAPI": "playful dramatic twist with wry smile",
-        "JADI": "smooth clear explanation with steady flow",
-        "CLIMAX": "warm satisfying conclusion"
+        "HOOK": "dryly amused overlord teasing human curiosity",
+        "TAPI": "playful sarcastic roast with wry royal smirk",
+        "JADI": "smooth superior explanation with effortless flow",
+        "CLIMAX": "confident sovereign sign-off"
       },
       "dsp": {
         "pitchSemitones": -1.1,
@@ -62,12 +62,12 @@
       "geminiVoiceName": "Fenrir",
       "measuredRawF0Hz": 98.0,
       "estimatedMatchPct": 87,
-      "stylePrefix": "Speak in a dynamic, sharp, deep anime male narrator voice — high charisma, intense dramatic conviction",
+      "stylePrefix": "Speak in a sharp, commanding, deep anime demon overlord male voice — supreme pride, biting sarcasm, high dramatic conviction",
       "phaseDirections": {
-        "HOOK": "sharp punchy anime opening hook",
-        "TAPI": "tense sudden battle reveal",
-        "JADI": "energetic passionate explanation",
-        "CLIMAX": "epic booming climax declaration"
+        "HOOK": "cutting cold-open hook from an amused supreme demon ruler",
+        "TAPI": "ferocious sarcastic backlash calling out mortal stupidity",
+        "JADI": "intense commanding lecture breaking down the real physics",
+        "CLIMAX": "epic booming overlord decree announcing total domination"
       },
       "dsp": {
         "pitchSemitones": -1.6,

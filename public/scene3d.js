@@ -188,6 +188,170 @@ function createCapacitorLabelTexture() {
   return new THREE.CanvasTexture(c);
 }
 
+// MaouEdu Sovereign Signature: Dark Obsidian Cutting-Mat Blueprint Grid (@xirooo4k x Overlord War Room!)
+function createBlueprintGridTexture() {
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 512;
+  const g = c.getContext("2d");
+  g.fillStyle = "#121a2b";
+  g.fillRect(0, 0, 512, 512);
+
+  // Subtle radial vignette glow
+  if (typeof g.createRadialGradient === "function") {
+    const rad = g.createRadialGradient(256, 256, 24, 256, 256, 280);
+    rad.addColorStop(0, "rgba(245, 158, 11, 0.22)");
+    rad.addColorStop(0.55, "rgba(56, 189, 248, 0.14)");
+    rad.addColorStop(1, "rgba(9, 10, 15, 0.35)");
+    g.fillStyle = rad;
+    g.fillRect(0, 0, 512, 512);
+  }
+
+  // Minor grid lines (bright tactical cyan blueprint)
+  g.strokeStyle = "rgba(56, 189, 248, 0.52)";
+  g.lineWidth = 2.6;
+  for (let i = 0; i <= 512; i += 32) {
+    g.beginPath();
+    g.moveTo(i, 0);
+    g.lineTo(i, 512);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(0, i);
+    g.lineTo(512, i);
+    g.stroke();
+  }
+
+  // Major grid lines (warm amber gold registration lines)
+  g.strokeStyle = "rgba(245, 158, 11, 0.78)";
+  g.lineWidth = 4.2;
+  for (let i = 0; i <= 512; i += 128) {
+    g.beginPath();
+    g.moveTo(i, 0);
+    g.lineTo(i, 512);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(0, i);
+    g.lineTo(512, i);
+    g.stroke();
+  }
+
+  // Framing corners + precision ruler ticks
+  g.strokeStyle = "#f59e0b";
+  g.lineWidth = 8;
+  if (typeof g.strokeRect === "function") g.strokeRect(8, 8, 496, 496);
+  g.fillStyle = "rgba(253, 224, 71, 0.92)";
+  g.font = "900 18px monospace";
+  g.fillText("MAOUEDU // OVERLORD LAB 04", 22, 34);
+  g.fillText("SCALE 1:12", 386, 488);
+  const bTex = new THREE.CanvasTexture(c);
+  if (typeof THREE.RepeatWrapping !== "undefined") {
+    bTex.wrapS = THREE.RepeatWrapping;
+    bTex.wrapT = THREE.RepeatWrapping;
+  }
+  return bTex;
+}
+
+// Hazard Tape Trim Texture (@untabiru5 x @anatomibenda construction diorama borders!)
+function createWarningStripeTexture() {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 64;
+  const g = c.getContext("2d");
+  g.fillStyle = "#111827";
+  g.fillRect(0, 0, 256, 64);
+  g.fillStyle = "#f59e0b";
+  for (let x = -64; x < 320; x += 48) {
+    g.beginPath();
+    g.moveTo(x, 64);
+    g.lineTo(x + 24, 64);
+    g.lineTo(x + 56, 0);
+    g.lineTo(x + 32, 0);
+    if (typeof g.closePath === "function") g.closePath();
+    g.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 1);
+  return tex;
+}
+
+// Crisp 3D Placard Texture (@kapten.arsitek x @xirooo4k dimensional labels inside WebGL!)
+function createCalloutLabelTexture(text = "550°C", accentHex = "#f59e0b") {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 96;
+  const g = c.getContext("2d");
+  g.fillStyle = "#0b0f19";
+  g.fillRect(0, 0, 256, 96);
+  g.strokeStyle = accentHex;
+  g.lineWidth = 8;
+  if (typeof g.strokeRect === "function") g.strokeRect(4, 4, 248, 88);
+  g.fillStyle = accentHex;
+  g.fillRect(4, 4, 14, 88);
+  g.fillStyle = "#f8fafc";
+  g.font = "900 30px sans-serif";
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  const display = String(text || "")
+    .replace(/µ|μ/g, "__MU__")
+    .toUpperCase()
+    .replace(/__MU__/g, "µ")
+    .slice(0, 18);
+  g.fillText(display, 134, 49, 212);
+  return new THREE.CanvasTexture(c);
+}
+
+// @dekodaid x @xirooo4k Stylized Ink-Edge Silhouette Outliner (safe under mocks & real WebGL!)
+function applyInkOutline(root, colorHex = 0x090a0f, thresholdDeg = 28) {
+  if (!root || typeof THREE.EdgesGeometry !== "function" || typeof THREE.LineSegments !== "function") return;
+  const edgeMat = new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 0.72 });
+  const toAttach = [];
+  root.traverse((ch) => {
+    if (!ch || !ch.isMesh || !ch.geometry || ch.userData?.noOutline) return;
+    if (ch.material?.transparent || (ch.material?.opacity ?? 1) < 0.92) return;
+    const gType = ch.geometry.type || "";
+    if (/SphereGeometry|PlaneGeometry/i.test(gType)) return;
+    if (!ch.geometry.attributes?.position) return;
+    toAttach.push(ch);
+  });
+  for (const m of toAttach) {
+    try {
+      const edges = new THREE.EdgesGeometry(m.geometry, thresholdDeg);
+      const lines = new THREE.LineSegments(edges, edgeMat.clone());
+      lines.userData = { isInkOutline: true };
+      m.add(lines);
+    } catch { }
+  }
+}
+
+// Sovereign Obsidian & Brushed-Gold Diorama Plinth Rim (@xirooo4k x MaouEdu Ciri Khas!)
+function addSovereignPlinth(group, w = 5.4, d = 3.2, yTop = 0.0, accentHex = 0xf59e0b, hazardTex = null) {
+  const rimH = 0.14;
+  const plinth = new THREE.Mesh(
+    createRoundedBoxGeometry(w, rimH, d, 0.04),
+    new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.45, roughness: 0.48 })
+  );
+  plinth.position.set(0, yTop - rimH / 2 - 0.01, 0.05);
+  plinth.receiveShadow = true;
+  group.add(plinth);
+
+  // Perimeter gold trim strip + optional hazard strip on front cutaway bevel
+  const frontBarMat = hazardTex
+    ? new THREE.MeshStandardMaterial({ map: hazardTex, roughness: 0.55 })
+    : new THREE.MeshStandardMaterial({ color: accentHex, metalness: 0.65, roughness: 0.3 });
+  const frontBar = new THREE.Mesh(new THREE.BoxGeometry(w * 0.98, 0.045, 0.05), frontBarMat);
+  frontBar.position.set(0, yTop - 0.03, 0.05 + d / 2 + 0.01);
+  group.add(frontBar);
+
+  const goldMat = new THREE.MeshStandardMaterial({ color: accentHex, metalness: 0.78, roughness: 0.25 });
+  [[-w / 2 + 0.12, 0.05 - d / 2 + 0.12], [w / 2 - 0.12, 0.05 - d / 2 + 0.12], [-w / 2 + 0.12, 0.05 + d / 2 - 0.12], [w / 2 - 0.12, 0.05 + d / 2 - 0.12]].forEach(([cx, cz]) => {
+    const corner = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.05, 0.24), goldMat);
+    corner.position.set(cx, yTop + 0.005, cz);
+    group.add(corner);
+  });
+}
+
 // Smooth Blender-Style Rounded Bevel Box Geometry
 function createRoundedBoxGeometry(w = 1, h = 1, d = 1, r = 0.08) {
   const rad = Math.min(r, w * 0.28, h * 0.28, d * 0.28);
@@ -1035,7 +1199,181 @@ function createAircraftJetMesh(color = "#1e293b", heated = false) {
 }
 
 // ============================================================================
-// 4. MAIN MAOU 3D DIORAMA STAGE v3 (@untabiru5 x @dhotscliper + GEMINI 3D!)
+// 3B. VT SYNTHESIS PREFABS (@kapten.arsitek, @xirooo4k, @dekodaid)
+// ============================================================================
+function createVectorArrowsMesh(from = [-0.6, 0.5, 0], to = [0.6, 0.5, 0], count = 3, color = "#ef4444", size = 0.14, speed = 1.8) {
+  const g = new THREE.Group();
+  const c = new THREE.Color(color);
+  const f = new THREE.Vector3(from[0] ?? -0.6, from[1] ?? 0.5, from[2] ?? 0);
+  const t = new THREE.Vector3(to[0] ?? 0.6, to[1] ?? 0.5, to[2] ?? 0);
+  const dir = new THREE.Vector3(t.x - f.x, t.y - f.y, t.z - f.z);
+  const len = Math.max(0.2, Math.hypot(dir.x, dir.y, dir.z));
+  const arrows = [];
+  const mat = new THREE.MeshStandardMaterial({
+    color: c,
+    emissive: c.clone().multiplyScalar(0.55),
+    roughness: 0.25,
+    metalness: 0.2
+  });
+
+  for (let i = 0; i < count; i++) {
+    const unit = new THREE.Group();
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(size * 0.16, size * 0.16, size * 1.15, 8), mat);
+    shaft.position.y = -size * 0.45;
+    unit.add(shaft);
+    const head = new THREE.Mesh(new THREE.ConeGeometry(size * 0.42, size * 0.72, 10), mat);
+    head.position.y = size * 0.36;
+    unit.add(head);
+
+    if (typeof THREE.Quaternion === "function" && typeof THREE.Vector3 === "function") {
+      const nDir = new THREE.Vector3(dir.x / len, dir.y / len, dir.z / len);
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), nDir);
+      unit.quaternion?.copy(q);
+    } else {
+      unit.rotation.z = -Math.atan2(dir.x, dir.y);
+    }
+    g.add(unit);
+    arrows.push({ mesh: unit, tOffset: i / Math.max(1, count) });
+  }
+  g.userData.vectorArrows = { from: f, to: t, speed, arrows };
+  return g;
+}
+
+function createSpotlightConeMesh(radius = 0.65, h = 1.65, color = "#fde047") {
+  const g = new THREE.Group();
+  const c = new THREE.Color(color);
+  const head = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius * 0.22, radius * 0.3, 0.16, 14),
+    new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.75, roughness: 0.3 })
+  );
+  head.position.y = h / 2 + 0.06;
+  g.add(head);
+
+  const lens = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius * 0.2, radius * 0.2, 0.04, 12),
+    new THREE.MeshBasicMaterial({ color: c })
+  );
+  lens.position.y = h / 2 - 0.02;
+  g.add(lens);
+
+  const coneMat = new THREE.MeshBasicMaterial({
+    color: c,
+    transparent: true,
+    opacity: 0.19,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  });
+  const cone = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.14, radius, h, 20, 1, true), coneMat);
+  cone.userData.noOutline = true;
+  g.add(cone);
+
+  const floorDisc = new THREE.Mesh(
+    new THREE.TorusGeometry(radius * 0.92, 0.026, 8, 28),
+    new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85 })
+  );
+  floorDisc.rotation.x = Math.PI / 2;
+  floorDisc.position.y = -h / 2 + 0.02;
+  floorDisc.userData.noOutline = true;
+  g.add(floorDisc);
+
+  g.userData.spotlightCone = { cone, coneMat, floorDisc };
+  return g;
+}
+
+function createExplodeStackMesh(w = 1.15, d = 0.85, layers = 4, baseColor = "#38bdf8", accentColor = "#f59e0b", explodeAmount = 0.28) {
+  const g = new THREE.Group();
+  const count = Math.max(2, Math.min(5, layers || 4));
+  const palette = ["#1e293b", accentColor, baseColor, "#0f172a", "#94a3b8"];
+  const stackLayers = [];
+
+  for (let i = 0; i < count; i++) {
+    const layer = new THREE.Group();
+    const isHeatFin = i === count - 2 && count >= 3;
+    const isTopShroud = i === count - 1;
+    const lw = w * (isTopShroud ? 0.98 : 0.82 + i * 0.04);
+    const ld = d * (isTopShroud ? 0.96 : 0.8 + i * 0.04);
+    const lh = i === 0 ? 0.09 : 0.07;
+
+    const plate = new THREE.Mesh(
+      createRoundedBoxGeometry(lw, lh, ld, 0.02),
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(palette[i % palette.length]),
+        metalness: i === 1 || isHeatFin ? 0.65 : 0.25,
+        roughness: 0.34,
+        emissive: i === 1 ? new THREE.Color(accentColor).multiplyScalar(0.25) : new THREE.Color(0x000000)
+      })
+    );
+    plate.castShadow = true;
+    layer.add(plate);
+
+    if (isHeatFin) {
+      for (let f = -3; f <= 3; f++) {
+        const fin = new THREE.Mesh(
+          new THREE.BoxGeometry(lw * 0.9, 0.07, 0.025),
+          new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.8, roughness: 0.22 })
+        );
+        fin.position.set(0, 0.06, f * (ld * 0.11));
+        layer.add(fin);
+      }
+    }
+    if (isTopShroud) {
+      const fan = buildFanMesh(Math.min(lw, ld) * 0.34, 4, accentColor);
+      fan.rotation.x = -Math.PI / 2;
+      fan.position.y = 0.055;
+      layer.add(fan);
+      g.userData.spinChild = fan;
+    }
+
+    const baseLocalY = (i - (count - 1) / 2) * 0.11;
+    layer.position.y = baseLocalY;
+    g.add(layer);
+    stackLayers.push({ mesh: layer, baseLocalY, idx: i });
+  }
+
+  // Vertical guide rails showing assembly axis (@xirooo4k CAD look!)
+  const railMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.45 });
+  [[-w * 0.46, -d * 0.44], [w * 0.46, -d * 0.44], [-w * 0.46, d * 0.44], [w * 0.46, d * 0.44]].forEach(([rx, rz]) => {
+    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, count * (explodeAmount + 0.12), 6), railMat);
+    rail.userData.noOutline = true;
+    rail.position.set(rx, 0.18, rz);
+    g.add(rail);
+  });
+
+  g.userData.explodeStack = { layers: stackLayers, explodeAmount };
+  return g;
+}
+
+function createCalloutPinMesh(h = 0.8, label = "500°C", color = "#f59e0b") {
+  const g = new THREE.Group();
+  const c = new THREE.Color(color);
+  const stem = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.014, 0.014, h, 8),
+    new THREE.MeshBasicMaterial({ color: c })
+  );
+  stem.position.y = h / 2;
+  stem.userData.noOutline = true;
+  g.add(stem);
+
+  const dot = new THREE.Mesh(
+    new THREE.SphereGeometry(0.055, 10, 10),
+    new THREE.MeshBasicMaterial({ color: c })
+  );
+  dot.position.y = 0.02;
+  g.add(dot);
+
+  const tex = createCalloutLabelTexture(label, color);
+  const placard = new THREE.Mesh(
+    new THREE.BoxGeometry(0.76, 0.28, 0.045),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35, metalness: 0.1 })
+  );
+  placard.position.set(0, h + 0.14, 0);
+  g.add(placard);
+  g.userData.calloutPin = { placard, baseY: h + 0.14 };
+  return g;
+}
+
+// ============================================================================
+// 4. MAIN MAOU 3D DIORAMA STAGE v4 (MaouEdu Sovereign 3D Overlord Studio)
 // ============================================================================
 export class Maou3DStage {
   constructor(width = 540, height = 960) {
@@ -1087,6 +1425,12 @@ export class Maou3DStage {
     this.scene.add(fill);
     this.fillLight = fill;
 
+    // Overlord Back-Rim Accent Light (warm gold or crimson phase separation!)
+    const rim = new THREE.DirectionalLight(0xf59e0b, 0.85);
+    rim.position.set(-2.6, 4.2, -4.2);
+    this.scene.add(rim);
+    this.rimLight = rim;
+
     this.brickTex = createBrickTexture();
     this.tileTex = createTileTexture();
     this.woodTex = createWoodTexture();
@@ -1096,6 +1440,8 @@ export class Maou3DStage {
     this.arowanaTex = createArowanaScaleTexture();
     this.solarTex = createSolarGridTexture();
     this.capTex = createCapacitorLabelTexture();
+    this.blueprintTex = createBlueprintGridTexture();
+    this.hazardTex = createWarningStripeTexture();
 
     this.worker = createHumanWorkerRig();
     this.worker.root.position.set(0.0, 0.0, -0.92);
@@ -1109,6 +1455,7 @@ export class Maou3DStage {
     this.customNodes = [];
     this.customFlows = [];
     this.customParticles = [];
+    this.customVectors = [];
   }
 
   get domElement() {
@@ -1117,8 +1464,8 @@ export class Maou3DStage {
 
   clearDiorama() {
     this.dioramaGroup.traverse((child) => {
-      if (child.isMesh) {
-        if (child.geometry) child.geometry.dispose();
+      if (child.isMesh || child.isLineSegments) {
+        if (child.geometry) child.geometry.dispose?.();
         if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose?.());
         else child.material?.dispose?.();
       }
@@ -1130,9 +1477,10 @@ export class Maou3DStage {
     this.customNodes = [];
     this.customFlows = [];
     this.customParticles = [];
+    this.customVectors = [];
   }
 
-  // Unified @untabiru5 / @dekodaid / @belajar.iai Environments (Surface aligned cleanly at Y = 0.0!)
+  // Unified MaouEdu Sovereign Diorama Environments (Surface aligned cleanly at Y = 0.0!)
   buildEnvironmentStage(envType, skyMode = "day") {
     this.applySkyLighting(skyMode);
 
@@ -1189,6 +1537,7 @@ export class Maou3DStage {
       );
       houseBack.position.set(0, 0.76, -1.25);
       houseBack.receiveShadow = true;
+      applyInkOutline(houseBack, 0x1e293b, 30);
       this.dioramaGroup.add(houseBack);
 
       const floorSlab = new THREE.Mesh(
@@ -1205,6 +1554,7 @@ export class Maou3DStage {
           new THREE.MeshStandardMaterial({ color: 0xfef9c3, roughness: 0.7 })
         );
         sideW.position.set(wx, 0.76, -0.58);
+        applyInkOutline(sideW, 0x1e293b, 30);
         this.dioramaGroup.add(sideW);
       });
 
@@ -1213,10 +1563,12 @@ export class Maou3DStage {
       const leftSlope = new THREE.Mesh(new THREE.BoxGeometry(2.35, 0.12, 2.65), roofMat);
       leftSlope.position.set(-0.95, 1.85, -0.15);
       leftSlope.rotation.z = 0.44;
+      applyInkOutline(leftSlope, 0x0f172a, 28);
       this.dioramaGroup.add(leftSlope);
       const rightSlope = new THREE.Mesh(new THREE.BoxGeometry(2.35, 0.12, 2.65), roofMat);
       rightSlope.position.set(0.95, 1.85, -0.15);
       rightSlope.rotation.z = -0.44;
+      applyInkOutline(rightSlope, 0x0f172a, 28);
       this.dioramaGroup.add(rightSlope);
 
       // Bed Prop on left side of upstairs bedroom
@@ -1225,6 +1577,7 @@ export class Maou3DStage {
         new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.7 })
       );
       bedFrame.position.set(-1.12, 0.16, -0.55);
+      applyInkOutline(bedFrame);
       this.dioramaGroup.add(bedFrame);
       const mattress = new THREE.Mesh(
         createRoundedBoxGeometry(0.78, 0.14, 0.68, 0.03),
@@ -1242,6 +1595,9 @@ export class Maou3DStage {
       lowerBulb.position.set(0, -0.22, -0.3);
       this.dioramaGroup.add(lowerBulb);
       this.dioramaParts.roomBulbMat = roomBulbMat;
+
+      // Sovereign Collector Bedrock Trim + Hazard Cutaway Lip
+      addSovereignPlinth(this.dioramaGroup, 8.75, 5.25, -2.02, 0xf59e0b, this.hazardTex);
     } else if (envType === "runway_tarmac") {
       // Airport Tarmac Runway + Hills + Hangar (@dekodaid SR-71!)
       const runway = new THREE.Mesh(
@@ -1272,6 +1628,7 @@ export class Maou3DStage {
         new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.7 })
       );
       hangar.position.set(-2.1, 0.52, -3.4);
+      applyInkOutline(hangar);
       this.dioramaGroup.add(hangar);
 
       const towerStem = new THREE.Mesh(
@@ -1279,13 +1636,17 @@ export class Maou3DStage {
         new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.5 })
       );
       towerStem.position.set(2.25, 0.92, -3.6);
+      applyInkOutline(towerStem);
       this.dioramaGroup.add(towerStem);
       const towerCab = new THREE.Mesh(
         new THREE.CylinderGeometry(0.42, 0.32, 0.38, 12),
         new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.3 })
       );
       towerCab.position.set(2.25, 1.95, -3.6);
+      applyInkOutline(towerCab);
       this.dioramaGroup.add(towerCab);
+
+      addSovereignPlinth(this.dioramaGroup, 9.6, 4.7, -0.26, 0x38bdf8, this.hazardTex);
     } else if (envType === "kitchen_tile") {
       if (skyMode === "day") {
         this.scene.background = new THREE.Color(0xfff7ed);
@@ -1314,6 +1675,23 @@ export class Maou3DStage {
       counter.position.set(0, -0.35, 0.15);
       counter.receiveShadow = true;
       this.dioramaGroup.add(counter);
+
+      // MaouEdu Overlord Blueprint Cutting-Mat Inlay on foreground prep surface
+      const prepMat = new THREE.Mesh(
+        new THREE.BoxGeometry(3.8, 0.018, 2.35),
+        new THREE.MeshStandardMaterial({
+          map: this.blueprintTex,
+          emissiveMap: this.blueprintTex,
+          emissive: new THREE.Color(0xffffff),
+          emissiveIntensity: 0.42,
+          roughness: 0.38,
+          metalness: 0.12
+        })
+      );
+      prepMat.position.set(0, 0.032, 0.05);
+      prepMat.receiveShadow = true;
+      this.dioramaGroup.add(prepMat);
+      addSovereignPlinth(this.dioramaGroup, 4.1, 2.55, 0.0, 0xf59e0b, null);
     } else if (envType === "backyard_cutaway") {
       if (skyMode === "day") {
         this.scene.background = new THREE.Color(0xbae6fd);
@@ -1327,6 +1705,14 @@ export class Maou3DStage {
       soilBlock.position.set(0, -0.66, 0.2);
       soilBlock.receiveShadow = true;
       this.dioramaGroup.add(soilBlock);
+
+      // @anatomibenda Lower Clay/Bedrock Cutaway Strata + Hazard Construction Trim
+      const strataClay = new THREE.Mesh(
+        new THREE.BoxGeometry(8.26, 0.36, 6.26),
+        new THREE.MeshStandardMaterial({ color: 0x572e18, roughness: 0.95 })
+      );
+      strataClay.position.set(0, -1.08, 0.2);
+      this.dioramaGroup.add(strataClay);
 
       const grassLawn = new THREE.Mesh(
         new THREE.BoxGeometry(8.3, 0.08, 6.3),
@@ -1342,6 +1728,8 @@ export class Maou3DStage {
       );
       houseWall.position.set(0, 1.55, -2.6);
       this.dioramaGroup.add(houseWall);
+
+      addSovereignPlinth(this.dioramaGroup, 8.45, 6.45, -1.24, 0xf59e0b, this.hazardTex);
     } else if (envType === "farm_trench") {
       if (skyMode === "day") {
         this.scene.background = new THREE.Color(0x7dd3fc);
@@ -1369,6 +1757,7 @@ export class Maou3DStage {
         new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.8 })
       );
       hutBody.position.set(-1.65, 0.35, -4.1);
+      applyInkOutline(hutBody);
       this.dioramaGroup.add(hutBody);
       const hutRoof = new THREE.Mesh(
         new THREE.ConeGeometry(0.95, 0.55, 4),
@@ -1376,6 +1765,7 @@ export class Maou3DStage {
       );
       hutRoof.position.set(-1.65, 0.96, -4.1);
       hutRoof.rotation.y = Math.PI / 4;
+      applyInkOutline(hutRoof);
       this.dioramaGroup.add(hutRoof);
 
       this.dioramaGroup.add(createCoconutPalm(-0.1, -4.6, 1.25));
@@ -1405,40 +1795,87 @@ export class Maou3DStage {
       lawn.position.set(0, -0.35, 0);
       lawn.receiveShadow = true;
       this.dioramaGroup.add(lawn);
+      addSovereignPlinth(this.dioramaGroup, 5.2, 3.2, 0.0, 0xf59e0b, this.hazardTex);
     } else {
+      // Flagship Default Stage: MaouEdu Overlord Obsidian-Gold Cutting Mat x Warm Workbench (@xirooo4k x @untabiru5!)
       if (skyMode === "day") {
-        this.scene.background = new THREE.Color(0xfefce8);
-        this.scene.fog = new THREE.FogExp2(0xfefce8, 0.018);
+        this.scene.background = new THREE.Color(0x131926);
+        this.scene.fog = new THREE.FogExp2(0x131926, 0.025);
       }
 
       const backWall = new THREE.Mesh(
-        new THREE.BoxGeometry(8.5, 4.8, 0.25),
-        new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.75 })
+        new THREE.BoxGeometry(8.8, 5.2, 0.25),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.78 })
       );
-      backWall.position.set(0, 1.9, -2.25);
+      backWall.position.set(0, 2.0, -2.35);
       backWall.receiveShadow = true;
       this.dioramaGroup.add(backWall);
 
-      const desk = new THREE.Mesh(
-        new THREE.BoxGeometry(7.6, 0.72, 4.2),
-        new THREE.MeshStandardMaterial({ map: this.woodTex, roughness: 0.45 })
+      // Architectural Pegboard + Illuminated Accent Rails on back wall (@xirooo4k x MaouEdu!)
+      const pegPanel = new THREE.Mesh(
+        createRoundedBoxGeometry(4.8, 2.45, 0.08, 0.03),
+        new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.3, roughness: 0.55 })
       );
-      desk.position.set(0, -0.36, 0.15);
+      pegPanel.position.set(0, 1.35, -2.18);
+      applyInkOutline(pegPanel, 0xf59e0b, 35);
+      this.dioramaGroup.add(pegPanel);
+
+      const ledBarTop = new THREE.Mesh(
+        new THREE.BoxGeometry(4.4, 0.05, 0.06),
+        new THREE.MeshBasicMaterial({ color: 0xf59e0b })
+      );
+      ledBarTop.position.set(0, 2.42, -2.12);
+      this.dioramaGroup.add(ledBarTop);
+
+      const cyanShelf = new THREE.Mesh(
+        new THREE.BoxGeometry(2.6, 0.06, 0.24),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, emissive: 0x0284c7, emissiveIntensity: 0.35 })
+      );
+      cyanShelf.position.set(-0.7, 1.82, -2.02);
+      this.dioramaGroup.add(cyanShelf);
+
+      const desk = new THREE.Mesh(
+        new THREE.BoxGeometry(7.8, 0.72, 4.4),
+        new THREE.MeshStandardMaterial({ map: this.woodTex, roughness: 0.48 })
+      );
+      desk.position.set(0, -0.37, 0.15);
       desk.receiveShadow = true;
       this.dioramaGroup.add(desk);
+
+      // Centered Dark-Obsidian Cutting-Mat Blueprint Grid Pad (sits cleanly above beveled plinth!)
+      const cutMat = new THREE.Mesh(
+        new THREE.BoxGeometry(4.36, 0.018, 2.56),
+        new THREE.MeshStandardMaterial({
+          map: this.blueprintTex,
+          emissiveMap: this.blueprintTex,
+          emissive: new THREE.Color(0xffffff),
+          emissiveIntensity: 0.45,
+          roughness: 0.38,
+          metalness: 0.12
+        })
+      );
+      cutMat.position.set(0, 0.032, 0.05);
+      cutMat.receiveShadow = true;
+      this.dioramaGroup.add(cutMat);
+
+      addSovereignPlinth(this.dioramaGroup, 4.65, 2.85, 0.0, 0xf59e0b, this.hazardTex);
     }
   }
 
   applySkyLighting(skyMode = "day") {
     if (skyMode === "night") {
-      this.scene.background = new THREE.Color(0x0f172a);
-      this.scene.fog = new THREE.FogExp2(0x0f172a, 0.022);
-      if (this.hemiLight) this.hemiLight.intensity = 0.62;
+      this.scene.background = new THREE.Color(0x0b0f1a);
+      this.scene.fog = new THREE.FogExp2(0x0b0f1a, 0.022);
+      if (this.hemiLight) this.hemiLight.intensity = 0.72;
       if (this.sunLight) {
         this.sunLight.color.setHex(0x93c5fd);
-        this.sunLight.intensity = 0.75;
+        this.sunLight.intensity = 0.92;
       }
-      if (this.fillLight) this.fillLight.intensity = 0.45;
+      if (this.fillLight) this.fillLight.intensity = 0.52;
+      if (this.rimLight) {
+        this.rimLight.color.setHex(0x38bdf8);
+        this.rimLight.intensity = 1.15;
+      }
       const starMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
       for (let i = 0; i < 16; i++) {
         const star = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), starMat);
@@ -1446,14 +1883,18 @@ export class Maou3DStage {
         this.dioramaGroup.add(star);
       }
     } else if (skyMode === "heat_alert") {
-      this.scene.background = new THREE.Color(0xfed7aa);
-      this.scene.fog = new THREE.FogExp2(0xfdba74, 0.025);
+      this.scene.background = new THREE.Color(0x450a0a);
+      this.scene.fog = new THREE.FogExp2(0x7c2d12, 0.026);
       if (this.hemiLight) this.hemiLight.intensity = 1.1;
       if (this.sunLight) {
         this.sunLight.color.setHex(0xfb923c);
-        this.sunLight.intensity = 1.8;
+        this.sunLight.intensity = 1.85;
       }
-      if (this.fillLight) this.fillLight.intensity = 0.48;
+      if (this.fillLight) this.fillLight.intensity = 0.52;
+      if (this.rimLight) {
+        this.rimLight.color.setHex(0xf43f5e);
+        this.rimLight.intensity = 1.45;
+      }
     } else {
       this.scene.background = new THREE.Color(0xbae6fd);
       this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.018);
@@ -1462,7 +1903,11 @@ export class Maou3DStage {
         this.sunLight.color.setHex(0xfffbeb);
         this.sunLight.intensity = 1.65;
       }
-      if (this.fillLight) this.fillLight.intensity = 0.52;
+      if (this.fillLight) this.fillLight.intensity = 0.58;
+      if (this.rimLight) {
+        this.rimLight.color.setHex(0xf59e0b);
+        this.rimLight.intensity = 0.85;
+      }
     }
   }
 
@@ -1483,22 +1928,22 @@ export class Maou3DStage {
       (hero === "ice_cream"
         ? "kitchen_tile"
         : hero === "betta_fish"
-        ? "wood_desk"
-        : hero === "arowana_fish"
-        ? visual.setting === "aquarium"
           ? "wood_desk"
-          : "backyard_cutaway"
-        : hero === "stingray_pond"
-        ? "backyard_cutaway"
-        : hero === "bitcoin_bunker"
-        ? "house_bunker"
-        : hero === "supersonic_jet"
-        ? "runway_tarmac"
-        : hero === "rice_fish"
-        ? "farm_trench"
-        : hero === "rocket"
-        ? "outdoor_sky"
-        : "wood_desk");
+          : hero === "arowana_fish"
+            ? visual.setting === "aquarium"
+              ? "wood_desk"
+              : "backyard_cutaway"
+            : hero === "stingray_pond"
+              ? "backyard_cutaway"
+              : hero === "bitcoin_bunker"
+                ? "house_bunker"
+                : hero === "supersonic_jet"
+                  ? "runway_tarmac"
+                  : hero === "rice_fish"
+                    ? "farm_trench"
+                    : hero === "rocket"
+                      ? "outdoor_sky"
+                      : "wood_desk");
 
     const skyMode = s3d.skyMode || "day";
     this.buildEnvironmentStage(envType, skyMode);
@@ -1629,10 +2074,16 @@ export class Maou3DStage {
       });
       station.add(conesGroup);
       this.dioramaParts.conesGroup = conesGroup;
+
+      const coldArrows = createVectorArrowsMesh([-0.55, 0.55, 0.25], [-0.88, 0.85, 0.25], 2, "#38bdf8", 0.11, 1.8);
+      station.add(coldArrows);
+      this.dioramaParts.iceColdArrows = coldArrows;
+      this.dioramaParts.curatedVectors = [coldArrows];
+      applyInkOutline(station);
       return;
     }
 
-    // C. CURATED KIPAS ANGIN & SLOTTED COPPER STATOR DIORAMA (Exact ref_2.jpg!)
+    // C. CURATED KIPAS ANGIN & SLOTTED COPPER STATOR DIORAMA (Exact ref_2.jpg x @kapten.arsitek!)
     if (hero === "fan_blades") {
       const motorGroup = new THREE.Group();
       motorGroup.position.set(0, 0.72, 0.1);
@@ -1708,6 +2159,17 @@ export class Maou3DStage {
       cap.castShadow = true;
       motorGroup.add(cap);
       this.dioramaParts.capacitor = cap;
+
+      const capPin = createCalloutPinMesh(0.48, "1,5 µF TORSI", "#f59e0b");
+      capPin.position.set(1.08, -0.18, 0.18);
+      motorGroup.add(capPin);
+
+      const torqueArrows = createVectorArrowsMesh([1.05, -0.05, 0.2], [0.22, 0.15, 0.2], 3, "#38bdf8", 0.11, 2.0);
+      motorGroup.add(torqueArrows);
+      this.dioramaParts.torqueArrows = torqueArrows;
+      this.dioramaParts.curatedVectors = [torqueArrows];
+
+      applyInkOutline(motorGroup);
       return;
     }
 
@@ -1962,7 +2424,7 @@ export class Maou3DStage {
       return;
     }
 
-    // G. CURATED MINING BITCOIN HOUSE + BUNKER + PLTU MINI (@belajar.iai!)
+    // G. CURATED MINING BITCOIN HOUSE + BUNKER + PLTU MINI (@belajar.iai x MaouEdu!)
     if (hero === "bitcoin_bunker") {
       // Upstairs ASIC miner rig on bedroom desk
       const desk = new THREE.Mesh(
@@ -1970,10 +2432,12 @@ export class Maou3DStage {
         new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.6 })
       );
       desk.position.set(0.75, 0.21, -0.55);
+      applyInkOutline(desk);
       this.dioramaGroup.add(desk);
 
       const roomMiner = createMinerRigMesh(0.58, 0.46, 0.42, "#475569", false);
       roomMiner.position.set(0.75, 0.66, -0.52);
+      applyInkOutline(roomMiner);
       this.dioramaGroup.add(roomMiner);
       this.dioramaParts.roomMiner = roomMiner;
 
@@ -1985,8 +2449,20 @@ export class Maou3DStage {
       // Bunker Underground Miner + Dielectric Immersion Tank
       const bunkerMiner = createMinerRigMesh(0.68, 0.52, 0.48, "#334155", true);
       bunkerMiner.position.set(-0.55, -1.04, -0.25);
+      applyInkOutline(bunkerMiner);
       this.dioramaGroup.add(bunkerMiner);
       this.dioramaParts.bunkerMiner = bunkerMiner;
+
+      // @kapten.arsitek Heat Convection Vector Arrows rising from bunker tank + @xirooo4k Overhead Spotlight
+      const heatArrows = createVectorArrowsMesh([-0.55, -1.05, 0.12], [-0.55, -0.25, 0.12], 3, "#f97316", 0.12, 1.9);
+      this.dioramaGroup.add(heatArrows);
+      this.dioramaParts.heatArrows = heatArrows;
+      this.dioramaParts.curatedVectors = [heatArrows];
+
+      const bunkerSpot = createSpotlightConeMesh(0.58, 1.15, "#fde047");
+      bunkerSpot.position.set(0.28, -0.78, -0.25);
+      this.dioramaGroup.add(bunkerSpot);
+      this.dioramaParts.bunkerSpot = bunkerSpot;
 
       // Rooftop Solar Panels (slope right!)
       const solarGroup = new THREE.Group();
@@ -1997,6 +2473,7 @@ export class Maou3DStage {
         );
         sp.position.set(0.92, 1.98, sz);
         sp.rotation.z = -0.44;
+        applyInkOutline(sp);
         solarGroup.add(sp);
       });
       this.dioramaGroup.add(solarGroup);
@@ -2010,6 +2487,7 @@ export class Maou3DStage {
 
       const turbine = createTurbineGenMesh(0.32, 8, "#e2e8f0", true);
       turbine.position.set(1.05, -0.82, -0.25);
+      applyInkOutline(turbine);
       pltuGroup.add(turbine);
       this.dioramaParts.turbine = turbine;
 
@@ -2023,14 +2501,26 @@ export class Maou3DStage {
       return;
     }
 
-    // H. CURATED SR-71 BLACKBIRD + THERMAL EXPANSION PLATES (@dekodaid!)
+    // H. CURATED SR-71 BLACKBIRD + THERMAL EXPANSION PLATES (@dekodaid x @kapten.arsitek!)
     if (hero === "supersonic_jet") {
       const isHeated = visual.solutionVisual === "afterburner_heat" || visual.solutionVisual === "thermal_expand" || visual.solutionVisual === "sealed_jet" || phase === "CLIMAX";
       const jet = createAircraftJetMesh("#1e293b", isHeated);
       jet.position.set(0, 0.42, -0.1);
       jet.scale.setScalar(1.05);
+      applyInkOutline(jet, 0x0f172a, 28);
       this.dioramaGroup.add(jet);
       this.dioramaParts.jet = jet;
+
+      // Aerodynamic shock / thermal expansion 3D vectors & callout pin
+      const airArrows = createVectorArrowsMesh([1.25, 0.62, 0.18], [-1.25, 0.48, 0.18], 3, isHeated ? "#f97316" : "#38bdf8", 0.12, 2.4);
+      this.dioramaGroup.add(airArrows);
+      this.dioramaParts.airArrows = airArrows;
+      this.dioramaParts.curatedVectors = [airArrows];
+
+      const jetPin = createCalloutPinMesh(0.65, isHeated ? "315°C SEGEL!" : "CELAH DINGIN", isHeated ? "#f97316" : "#38bdf8");
+      jetPin.position.set(0.35, 0.52, -0.1);
+      this.dioramaGroup.add(jetPin);
+      this.dioramaParts.jetPin = jetPin;
 
       const fuelPuddle = new THREE.Mesh(
         new THREE.CylinderGeometry(0.45, 0.48, 0.02, 18),
@@ -2043,6 +2533,7 @@ export class Maou3DStage {
       const plateRig = createThermalPlatesMesh(1.48, 0.98, visual.solutionVisual === "thermal_expand" || phase === "CLIMAX", "#94a3b8");
       plateRig.position.set(0, 0.48, 0.65);
       plateRig.rotation.x = 0.62;
+      applyInkOutline(plateRig);
       this.dioramaGroup.add(plateRig);
       this.dioramaParts.plateRig = plateRig;
       return;
@@ -2065,6 +2556,13 @@ export class Maou3DStage {
             metalness: o.metallic ? 0.65 : 0.18,
             roughness: o.metallic ? 0.26 : 0.42
           });
+
+      if (o.kind === "vector_arrows") {
+        const va = createVectorArrowsMesh(o.from, o.to, o.count || 3, o.color || "#ef4444", o.size || 0.14, o.speed || 1.8);
+        this.dioramaGroup.add(va);
+        this.customVectors.push({ group: va, ...va.userData.vectorArrows });
+        return;
+      }
 
       if (o.kind === "flow") {
         const balls = [];
@@ -2100,7 +2598,20 @@ export class Maou3DStage {
       }
 
       let mesh = null;
-      if (o.kind === "glass_tank") {
+      if (o.kind === "spotlight_cone") {
+        mesh = createSpotlightConeMesh(o.radius || 0.65, o.h || 1.65, o.color || "#fde047");
+      } else if (o.kind === "explode_stack") {
+        mesh = createExplodeStackMesh(
+          o.w || 1.15,
+          o.d || 0.85,
+          o.layers || 4,
+          o.color || "#38bdf8",
+          o.accentColor || "#f59e0b",
+          o.explodeAmount ?? 0.28
+        );
+      } else if (o.kind === "callout_pin") {
+        mesh = createCalloutPinMesh(o.h || 0.8, o.label || "500°C", o.color || "#f59e0b");
+      } else if (o.kind === "glass_tank") {
         const g = new THREE.Group();
         const w = o.w || 1.5;
         const h = o.h || 0.9;
@@ -2313,8 +2824,11 @@ export class Maou3DStage {
 
       mesh.position.set(o.x || 0, o.y ?? 0.45, o.z || 0);
       mesh.rotation.set(o.rx || 0, o.ry || 0, o.rz || 0);
-      mesh.castShadow = !o.glass;
+      mesh.castShadow = !o.glass && o.kind !== "spotlight_cone";
       mesh.receiveShadow = true;
+      if (o.inkOutline !== false && !o.glass && o.kind !== "particles" && o.kind !== "sound_rings" && o.kind !== "spotlight_cone" && o.kind !== "callout_pin") {
+        applyInkOutline(mesh);
+      }
       this.dioramaGroup.add(mesh);
 
       const hw = o.w ? o.w / 2 : (o.radius || 0.35);
@@ -2322,6 +2836,8 @@ export class Maou3DStage {
       const hd = o.d ? o.d / 2 : (o.radius || 0.35);
       this.customNodes.push({
         mesh,
+        baseMat: mat,
+        baseColor: baseColor.clone(),
         baseX: o.x || 0,
         baseY: o.y ?? 0.45,
         baseZ: o.z || 0,
@@ -2335,13 +2851,15 @@ export class Maou3DStage {
         enter: o.enter || "pop",
         motion: o.motion || "none",
         speed: o.speed || 2.5,
+        explodeY: o.explodeY || 0,
+        thermalGlow: Boolean(o.thermalGlow),
         seed: idx * 0.9
       });
     });
   }
 
   computeActiveBounds(visual, hero, envType, shot) {
-    if (hero === "custom_stage" && (this.customNodes.length > 0 || this.customFlows.length > 0)) {
+    if (hero === "custom_stage" && (this.customNodes.length > 0 || this.customFlows.length > 0 || this.customVectors.length > 0)) {
       let minX = Infinity, maxX = -Infinity;
       let minY = Infinity, maxY = -Infinity;
       let minZ = Infinity, maxZ = -Infinity;
@@ -2349,7 +2867,7 @@ export class Maou3DStage {
         minX = Math.min(minX, n.baseX - (n.halfW || 0.4));
         maxX = Math.max(maxX, n.baseX + (n.halfW || 0.4));
         minY = Math.min(minY, n.baseY - (n.halfH || 0.35));
-        maxY = Math.max(maxY, n.baseY + (n.halfH || 0.35));
+        maxY = Math.max(maxY, n.baseY + (n.halfH || 0.35) + Math.max(0, n.explodeY || 0));
         minZ = Math.min(minZ, n.baseZ - (n.halfD || 0.35));
         maxZ = Math.max(maxZ, n.baseZ + (n.halfD || 0.35));
       }
@@ -2360,6 +2878,14 @@ export class Maou3DStage {
         maxY = Math.max(maxY, fl.from[1], fl.to[1]);
         minZ = Math.min(minZ, fl.from[2], fl.to[2]);
         maxZ = Math.max(maxZ, fl.from[2], fl.to[2]);
+      }
+      for (const va of this.customVectors) {
+        minX = Math.min(minX, va.from.x, va.to.x);
+        maxX = Math.max(maxX, va.from.x, va.to.x);
+        minY = Math.min(minY, va.from.y, va.to.y);
+        maxY = Math.max(maxY, va.from.y, va.to.y);
+        minZ = Math.min(minZ, va.from.z, va.to.z);
+        maxZ = Math.max(maxZ, va.from.z, va.to.z);
       }
       if (Number.isFinite(minX)) {
         return {
@@ -2565,7 +3091,7 @@ export class Maou3DStage {
         wk.root.position.set(-0.25, 0.0, -0.58);
       }
     } else if (hero === "supersonic_jet") {
-      wk.root.position.set(-1.35, 0.0, 0.35);
+      wk.root.position.set(1.15, 0.0, -0.55);
     } else {
       wk.root.position.set(0, -0.32, -0.88);
     }
@@ -2608,7 +3134,20 @@ export class Maou3DStage {
       wk.toolGroup.visible = action === "stir" || action === "heat" || this.worker.capingHat.visible;
     }
 
-    // 3. ANIMATE CUSTOM GEMINI 3D TIMELINE OBJECTS
+    // 3. ANIMATE CUSTOM GEMINI 3D TIMELINE OBJECTS (+ VT-INSPIRED VECTORS / SPOTLIGHT / EXPLODE / THERMAL!)
+    if (this.rimLight) {
+      if (phase === "TAPI") {
+        this.rimLight.color.setHex(0xf43f5e);
+        this.rimLight.intensity = 1.25 + Math.sin(tSec * 7) * 0.25;
+      } else if (phase === "CLIMAX") {
+        this.rimLight.color.setHex(0xfbbf24);
+        this.rimLight.intensity = 1.2;
+      } else if (skyMode === "day") {
+        this.rimLight.color.setHex(0xf59e0b);
+        this.rimLight.intensity = 0.85;
+      }
+    }
+
     for (const node of this.customNodes) {
       let ex = node.baseX;
       let ey = node.baseY;
@@ -2623,6 +3162,11 @@ export class Maou3DStage {
         else if (node.enter === "slide_right") ex += (1 - p) * 1.6;
       }
 
+      if (node.explodeY) {
+        const expProgress = Math.min(1, sceneElapsedSec / 0.85);
+        ey += node.explodeY * easeOutBack(expProgress);
+      }
+
       if (node.motion === "float" || node.motion === "bob") ey += Math.sin(tSec * 2.8 + node.seed) * 0.09;
       if (node.motion === "shake") {
         ex += Math.sin(tSec * 48 + node.seed) * 0.045;
@@ -2632,6 +3176,35 @@ export class Maou3DStage {
 
       node.mesh.position.set(ex, ey, ez);
       node.mesh.scale.setScalar(scale);
+
+      // @dekodaid Dynamic Thermal Heat Shift (cool tone -> glowing molten crimson/orange!)
+      if (node.thermalGlow && node.baseMat?.emissive) {
+        const heatT = Math.min(1, 0.35 + sceneElapsedSec * 0.65);
+        node.baseMat.emissive.setRGB?.(heatT * 0.85, heatT * 0.22, 0.02);
+      }
+
+      // @xirooo4k Exploded Multi-Layer Hardware Teardown Stack
+      if (node.mesh.userData?.explodeStack) {
+        const st = node.mesh.userData.explodeStack;
+        const expP = Math.min(1, sceneElapsedSec / 0.85);
+        const factor = easeOutBack(expP);
+        st.layers.forEach((lr) => {
+          lr.mesh.position.y = lr.baseLocalY + lr.idx * st.explodeAmount * factor;
+        });
+      }
+
+      // @xirooo4k Volumetric Overhead Spotlight Cone Breathing
+      if (node.mesh.userData?.spotlightCone) {
+        const sp = node.mesh.userData.spotlightCone;
+        if (sp.coneMat) sp.coneMat.opacity = 0.14 + Math.sin(tSec * 3.5) * 0.05;
+        if (sp.floorDisc) sp.floorDisc.scale.setScalar(0.95 + Math.sin(tSec * 4.2) * 0.06);
+      }
+
+      // @kapten.arsitek Floating 3D Callout Pin Bob
+      if (node.mesh.userData?.calloutPin) {
+        const cp = node.mesh.userData.calloutPin;
+        cp.placard.position.y = cp.baseY + Math.sin(tSec * 2.6 + node.seed) * 0.03;
+      }
 
       if (node.mesh.userData?.spinChild) {
         node.mesh.userData.spinChild.rotation.z = tSec * (node.speed || 9.5);
@@ -2659,6 +3232,20 @@ export class Maou3DStage {
       } else if (node.motion === "spin_reverse") {
         node.mesh.rotation.y = node.baseRy - tSec * Math.abs(node.speed);
       }
+    }
+
+    // @kapten.arsitek Pulsing 3D Force/Flow Vector Arrows
+    for (const va of this.customVectors) {
+      va.arrows.forEach((ar) => {
+        const u = (ar.tOffset + tSec * (va.speed || 1.8) * 0.42) % 1;
+        ar.mesh.position.set(
+          va.from.x + (va.to.x - va.from.x) * u,
+          va.from.y + (va.to.y - va.from.y) * u,
+          va.from.z + (va.to.z - va.from.z) * u
+        );
+        const s = 0.85 + Math.sin(u * Math.PI) * 0.35;
+        ar.mesh.scale.setScalar(s);
+      });
     }
 
     for (const fl of this.customFlows) {
@@ -2705,6 +3292,7 @@ export class Maou3DStage {
           p.whiskGroup.position.z = Math.sin(tSec * 4) * 0.16;
         }
       }
+      if (p.iceColdArrows) p.iceColdArrows.visible = phase === "JADI" || visual.solutionVisual === "salt_frost_aura";
       if (p.mixMat) p.mixMat.color.set(isFrozen ? "#bae6fd" : visual.accentColor || "#f9a8d4");
     } else if (hero === "fan_blades") {
       const isSpinning = phase === "CLIMAX" || (phase === "JADI" && sceneNum >= 5) || visual.solutionVisual === "sparkle_shield";
@@ -2717,6 +3305,7 @@ export class Maou3DStage {
       }
       if (p.motorGroup) p.motorGroup.position.x = isHumming ? Math.sin(tSec * 52) * 0.04 : 0;
       if (p.capacitor) p.capacitor.visible = sceneNum >= 4;
+      if (p.torqueArrows) p.torqueArrows.visible = sceneNum >= 4 || isSpinning;
     } else if (hero === "arowana_fish" || hero === "betta_fish" || hero === "ornamental_fish" || hero === "catfish") {
       const isMurky = visual.problemVisual === "murky_mud" || (phase === "TAPI" && sceneNum >= 3);
       const isFighting = visual.problemVisual === "fish_fighting" || (p.isCupang && phase === "TAPI" && sceneNum === 2);
@@ -2804,6 +3393,8 @@ export class Maou3DStage {
         p.bunkerMiner.visible = sceneNum >= 3;
         (p.bunkerMiner.userData?.spinFans || []).forEach((f) => { f.rotation.z = tSec * 12; });
       }
+      if (p.heatArrows) p.heatArrows.visible = sceneNum >= 4 && !p.pltuGroup?.visible;
+      if (p.bunkerSpot) p.bunkerSpot.visible = sceneNum >= 7 || visual.solutionVisual === "pltu_loop";
       if (p.solarGroup) p.solarGroup.visible = sceneNum >= 5;
       if (p.pltuGroup) p.pltuGroup.visible = sceneNum >= 7 || visual.solutionVisual === "pltu_loop" || visual.solutionVisual === "house_lit";
       if (p.turbine && p.turbine.userData?.spinChild && p.pltuGroup?.visible) {
@@ -2823,6 +3414,8 @@ export class Maou3DStage {
           p.jet.position.y = 0.56 + Math.sin(tSec * 4) * 0.05;
         }
       }
+      if (p.airArrows) p.airArrows.visible = !showMacro;
+      if (p.jetPin) p.jetPin.visible = !showMacro;
       if (p.fuelPuddle) p.fuelPuddle.visible = !showMacro && (visual.problemVisual === "fuel_leak" || sceneNum === 1);
       if (p.plateRig) {
         p.plateRig.visible = showMacro;
@@ -2833,6 +3426,21 @@ export class Maou3DStage {
           });
         }
       }
+    }
+
+    // Animate any curated VT vector_arrows (shared across worlds)
+    for (const vecGroup of p.curatedVectors || []) {
+      const va = vecGroup?.userData?.vectorArrows;
+      if (!va || !vecGroup.visible) continue;
+      va.arrows.forEach((ar) => {
+        const u = (ar.tOffset + tSec * (va.speed || 1.8) * 0.42) % 1;
+        ar.mesh.position.set(
+          va.from.x + (va.to.x - va.from.x) * u,
+          va.from.y + (va.to.y - va.from.y) * u,
+          va.from.z + (va.to.z - va.from.z) * u
+        );
+        ar.mesh.scale.setScalar(0.85 + Math.sin(u * Math.PI) * 0.35);
+      });
     }
 
     this.renderer.render(this.scene, this.camera);
